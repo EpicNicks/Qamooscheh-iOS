@@ -75,7 +75,7 @@ final class CdnClientTests: XCTestCase {
     func testContentURLRejectsHostReplacementAndEscapes() {
         let bad = [
             "https://evil.example/a.mp3", "//evil.example/a.mp3", "/abs/a.mp3", "javascript:alert(1)",
-            "mailto:x@y.z", "../../../../audio/abc.mp3", "../../../../../x", "a/../../../../b.mp3", "", "a\\b", "a//b", "./a.mp3",
+            "mailto:x@y.z", "../../../../audio/abc.mp3", "../../../../../x", "a/../../../../../b.mp3", "", "a\\b", "a//b", "./a.mp3",
         ]
         for path in bad {
             XCTAssertThrowsError(try makeClient().contentURL(courseCode: "fa", version: 3, relativePath: path), path) { error in
