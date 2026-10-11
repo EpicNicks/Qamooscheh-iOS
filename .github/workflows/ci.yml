@@ -11,7 +11,8 @@ concurrency:
 
 jobs:
   # The single place that pins the macOS image and Xcode. The simulator is
-  # picked dynamically on the runner (first available iPhone) and logged.
+  # picked on the runner from runtimes matching the selected Xcode's iOS SDK.
+  # Xcode 16.4 (iOS 18.5 SDK) is installed on the macos-15 image with a matching runtime.
   config:
     runs-on: ubuntu-latest
     outputs:
@@ -21,7 +22,7 @@ jobs:
       - id: pin
         run: |
           echo "runner=macos-15" >> "$GITHUB_OUTPUT"
-          echo "xcode=16.2" >> "$GITHUB_OUTPUT"
+          echo "xcode=16.4" >> "$GITHUB_OUTPUT"
 
   packages:
     needs: config
@@ -32,7 +33,12 @@ jobs:
         package: [QModel, QDomain, QNetwork, QData, QGrader, QDesign, QKeyboard, QFeatures]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+      - name: select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+          ls /Applications | grep Xcode
+          xcodebuild -version
+          xcodebuild -showsdks
       - name: swift test
         working-directory: Packages/${{ matrix.package }}
         run: swift test
@@ -42,14 +48,23 @@ jobs:
     runs-on: ${{ needs.config.outputs.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+      - name: select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+          ls /Applications | grep Xcode
+          xcodebuild -version
+          xcodebuild -showsdks
       - name: pick simulator
         run: |
+          xcrun simctl list runtimes
           xcrun simctl list devices available
-          UDID=$(xcrun simctl list devices available iPhone | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
-          if [ -z "$UDID" ]; then echo "no available iPhone simulator"; exit 1; fi
+          SDKVER=$(xcodebuild -showsdks | grep -Eo 'iphonesimulator[0-9]+(\.[0-9]+)?' | head -n 1 | sed 's/iphonesimulator//')
+          echo "Selected Xcode iOS simulator SDK: $SDKVER"
+          if [ -z "$SDKVER" ]; then echo "no iOS simulator SDK"; exit 1; fi
+          UDID=$(xcrun simctl list devices available | awk -v ver="$SDKVER" '/^-- /{insec = ($0 == "-- iOS " ver " --")} insec && /iPhone/' | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
+          if [ -z "$UDID" ]; then echo "no available iPhone simulator for iOS $SDKVER"; exit 1; fi
           echo "DEST=platform=iOS Simulator,id=$UDID" >> "$GITHUB_ENV"
-          echo "Chosen destination: platform=iOS Simulator,id=$UDID"
+          echo "Chosen destination: platform=iOS Simulator,id=$UDID (iOS $SDKVER)"
       - run: brew install xcodegen
       - run: xcodegen generate
       - name: build for testing
@@ -76,14 +91,23 @@ jobs:
     runs-on: ${{ needs.config.outputs.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+      - name: select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+          ls /Applications | grep Xcode
+          xcodebuild -version
+          xcodebuild -showsdks
       - name: pick simulator
         run: |
+          xcrun simctl list runtimes
           xcrun simctl list devices available
-          UDID=$(xcrun simctl list devices available iPhone | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
-          if [ -z "$UDID" ]; then echo "no available iPhone simulator"; exit 1; fi
+          SDKVER=$(xcodebuild -showsdks | grep -Eo 'iphonesimulator[0-9]+(\.[0-9]+)?' | head -n 1 | sed 's/iphonesimulator//')
+          echo "Selected Xcode iOS simulator SDK: $SDKVER"
+          if [ -z "$SDKVER" ]; then echo "no iOS simulator SDK"; exit 1; fi
+          UDID=$(xcrun simctl list devices available | awk -v ver="$SDKVER" '/^-- /{insec = ($0 == "-- iOS " ver " --")} insec && /iPhone/' | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
+          if [ -z "$UDID" ]; then echo "no available iPhone simulator for iOS $SDKVER"; exit 1; fi
           echo "DEST=platform=iOS Simulator,id=$UDID" >> "$GITHUB_ENV"
-          echo "Chosen destination: platform=iOS Simulator,id=$UDID"
+          echo "Chosen destination: platform=iOS Simulator,id=$UDID (iOS $SDKVER)"
       - run: brew install xcodegen
       - run: xcodegen generate
       - name: snapshot tests
