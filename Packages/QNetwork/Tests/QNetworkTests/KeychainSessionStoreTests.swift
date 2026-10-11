@@ -20,6 +20,17 @@ private struct FailingKeychainClient: KeychainClient {
     func delete() throws { throw KeychainError(status: -25308) }
 }
 
+private final class FailingSetKeychainClient: KeychainClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private var data: Data?
+
+    init(data: Data?) { self.data = data }
+
+    func get() throws -> Data? { lock.lock(); defer { lock.unlock() }; return data }
+    func set(_ data: Data) throws { throw KeychainError(status: -25308) }
+    func delete() throws { lock.lock(); defer { lock.unlock() }; data = nil }
+}
+
 final class KeychainSessionStoreTests: XCTestCase {
     private func session(_ token: String = "access-1") -> StoredSession {
         StoredSession(
@@ -80,5 +91,15 @@ final class KeychainSessionStoreTests: XCTestCase {
 
     func testErrorDescriptionHasNoTokens() {
         XCTAssertEqual(KeychainError(status: -25300).description, "Keychain error -25300")
+    }
+
+    func testFailedSaveDeletesStaleItem() async {
+        let seed = KeychainSessionStore(client: FakeKeychainClient())
+        await seed.save(session("old"))
+        let old = Data("old-blob".utf8)
+        let store = KeychainSessionStore(client: FailingSetKeychainClient(data: old))
+        await store.save(session("new"))
+        let loaded = await store.load()
+        XCTAssertNil(loaded)
     }
 }

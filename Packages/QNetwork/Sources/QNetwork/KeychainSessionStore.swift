@@ -61,7 +61,13 @@ public actor KeychainSessionStore: SessionStore {
             refreshToken: session.refreshToken
         )
         guard let data = try? JSONEncoder().encode(blob) else { return }
-        try? client.set(data)
+        do {
+            try client.set(data)
+        } catch {
+            // A failed write would leave the rotated-out refresh token stored; replaying it
+            // trips reuse detection and revokes every session. Worst case is now sign-out.
+            try? client.delete()
+        }
     }
 
     public func clear() async {
