@@ -55,7 +55,14 @@ public struct CourseDownloader: Sendable {
         onProgress: @escaping @Sendable (DownloadProgress) -> Void = { _ in }
     ) async throws {
         if isComplete(courseCode: courseCode, version: version, manifestSha256: manifestSha256) { return }
-        let manifest = try await cdn.courseManifest(courseCode: courseCode, version: version, manifestSha256: manifestSha256)
+        let manifestURL = try cdn.contentURL(courseCode: courseCode, version: version, relativePath: "manifest.json")
+        let manifestKey = try key(for: manifestURL, courseCode: courseCode, version: version)
+        let manifestData = try await fetchData(manifestURL)
+        let manifestActual = Sha256.hex(manifestData)
+        guard manifestActual.lowercased() == manifestSha256.lowercased() else {
+            throw ManifestHashMismatchError(expected: manifestSha256, actual: manifestActual)
+        }
+        let manifest = try QJSON.makeDecoder().decode(CourseManifest.self, from: manifestData)
         let tracker = Tracker(onProgress)
         let decoder = QJSON.makeDecoder()
 
@@ -119,6 +126,8 @@ public struct CourseDownloader: Sendable {
         try await fetchAll(try extra.map(locate), tracker)
 
         try Task.checkCancellation()
+        // The reader needs the manifest offline; store it before the marker.
+        try store.write(manifestData, to: manifestKey)
         try ContentStoreKeys.markComplete(store, courseCode: courseCode, version: version, manifestSha256: manifestSha256)
     }
 
@@ -170,6 +179,15 @@ public struct CourseDownloader: Sendable {
         }
     }
 
+    private func fetchData(_ url: URL) async throws -> Data {
+        let (data, response) = try await session.data(from: url)
+        guard let http = response as? HTTPURLResponse else { throw InvalidResponseError() }
+        guard (200..<300).contains(http.statusCode) else {
+            throw CdnFetchError(url: url.absoluteString, status: http.statusCode)
+        }
+        return data
+    }
+
     private func fetchOne(_ target: Target, _ tracker: Tracker) async throws {
         let expected = target.expectedSha256
         if let existing = try store.read(target.key) {
@@ -180,11 +198,7 @@ public struct CourseDownloader: Sendable {
                 return
             }
         }
-        let (data, response) = try await session.data(from: target.url)
-        guard let http = response as? HTTPURLResponse else { throw InvalidResponseError() }
-        guard (200..<300).contains(http.statusCode) else {
-            throw CdnFetchError(url: target.url.absoluteString, status: http.statusCode)
-        }
+        let data = try await fetchData(target.url)
         if let expected {
             let actual = Sha256.hex(data)
             guard actual == expected else {

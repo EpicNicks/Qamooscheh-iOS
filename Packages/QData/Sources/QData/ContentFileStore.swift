@@ -42,8 +42,8 @@ public enum ContentStoreKeys {
     }
 }
 
-/// FileManager-backed store rooted at a directory. Writes go to a ".part"
-/// sibling and are renamed into place.
+/// FileManager-backed store rooted at a directory. Writes are atomic
+/// (unique temp file, then atomic replace).
 public struct FileContentStore: ContentFileStore {
     private let root: URL
 
@@ -64,12 +64,10 @@ public struct FileContentStore: ContentFileStore {
 
     public func write(_ data: Data, to key: String) throws {
         let url = try fileURL(key)
-        let manager = FileManager.default
-        try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let partial = url.appendingPathExtension("part")
-        try data.write(to: partial)
-        if manager.fileExists(atPath: url.path) { try manager.removeItem(at: url) }
-        try manager.moveItem(at: partial, to: url)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        // Data's atomic write uses a unique temp file and an atomic replace,
+        // so concurrent writers of the same key are safe.
+        try data.write(to: url, options: .atomic)
     }
 
     public func remove(_ key: String) throws {

@@ -91,7 +91,7 @@ final class CourseDownloaderTests: XCTestCase {
             "course/fa/v3/units/u1.json", "course/fa/v3/lexemes.json", "course/fa/v3/verbs.json",
             "course/fa/v3/themes.json", "course/fa/v3/audio.json", "course/fa/v3/skills/s1.json",
             "course/fa/v3/lessons/l1.json", "audio/\(audio).mp3", "audio/\(variant).mp3",
-            "course/fa/v3/.complete",
+            "course/fa/v3/.complete", "course/fa/v3/manifest.json",
         ]
     }
 
@@ -104,6 +104,7 @@ final class CourseDownloaderTests: XCTestCase {
 
         XCTAssertEqual(store.keys, expectedKeys(audioSha, variantSha))
         XCTAssertTrue(downloader.isComplete(courseCode: "fa", version: 3, manifestSha256: manifestSha))
+        XCTAssertEqual(try store.read("course/fa/v3/manifest.json"), Data(manifestJSON.utf8))
         let last = try XCTUnwrap(log.all.last)
         XCTAssertEqual(last.done, last.discovered)
         XCTAssertEqual(last.done, 9)
