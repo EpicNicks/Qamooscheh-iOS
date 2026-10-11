@@ -12,6 +12,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "QNetwork", dependencies: ["QModel"]),
-        .testTarget(name: "QNetworkTests", dependencies: ["QNetwork"]),
+        .testTarget(name: "QNetworkTests", dependencies: ["QNetwork", "QModel"]),
     ]
 )
