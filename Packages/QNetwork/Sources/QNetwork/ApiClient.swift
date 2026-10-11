@@ -85,7 +85,18 @@ public actor ApiClient {
 
         var accessToken: String? = stored?.accessToken
         if let stored = stored, isExpiringSoon(stored.accessTokenExpiresAt) {
-            accessToken = try await refreshAccessToken()
+            do {
+                accessToken = try await refreshAccessToken()
+            } catch is SessionExpiredError {
+                throw SessionExpiredError()
+            } catch is StaleRefreshError {
+                // The session changed mid-refresh; use whoever is signed in now.
+                guard let current = await store.load() else { throw SessionExpiredError() }
+                accessToken = current.accessToken
+            } catch {
+                // Transient refresh failure (5xx/408/429/network): the access token
+                // may still be valid, so send with it. A 401 takes the normal path.
+            }
         }
 
         var result = try await perform(method, path, bodyData: bodyData, accessToken: accessToken)
@@ -98,7 +109,7 @@ public actor ApiClient {
             if let current = current, current != accessToken {
                 retryToken = current
             } else {
-                retryToken = try await refreshAccessToken()
+                retryToken = try await refreshOrCurrent()
             }
             result = try await perform(method, path, bodyData: bodyData, accessToken: retryToken)
         }
@@ -140,6 +151,17 @@ public actor ApiClient {
 
     private func url(for path: String) -> URL {
         URL(string: baseURL.absoluteString + path) ?? baseURL.appendingPathComponent(path)
+    }
+
+    /// Refreshes, but if the session was replaced mid-flight returns the new
+    /// session's token instead of failing; throws SessionExpiredError if none remains.
+    private func refreshOrCurrent() async throws -> String {
+        do {
+            return try await refreshAccessToken()
+        } catch is StaleRefreshError {
+            guard let current = await store.load() else { throw SessionExpiredError() }
+            return current.accessToken
+        }
     }
 
     /// Refreshes once at a time; concurrent callers share the in-flight task.
