@@ -15,6 +15,8 @@ Items run strictly one after another; `needs-user` stops the queue. Agents share
 4. Report one line per item: merged, held (reasons) or needs-user. Read only ledger files of held items.
 5. After a merge: update the item's `ios` key in the backend `features.yaml` (once that key exists), close the issue.
 
+Without the Workflow tool, follow `ORCHESTRATOR.md` (a paste-ready orchestrator prompt).
+
 ## Rules
 - No local Swift toolchain: CI is the compiler. Prefer logic in SwiftPM packages so `swift test` proves it.
 - Never hand-edit a generated `.xcodeproj`; edit `project.yml`.
