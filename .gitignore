@@ -4,3 +4,7 @@
 .build/
 DerivedData/
 .DS_Store
+xcuserdata/
+.swiftpm/
+*.xcresult
+__Snapshots__/
