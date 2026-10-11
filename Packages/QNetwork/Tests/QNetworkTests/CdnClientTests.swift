@@ -54,8 +54,36 @@ final class CdnClientTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requests[0].url?.absoluteString, "https://cdn.test/course/fa/v3/units/u1.json")
     }
 
-    func testContentURLClimbsOutOfVersionRoot() {
-        let url = makeClient().contentURL(courseCode: "fa", version: 3, relativePath: "../../../audio/abc.mp3")
-        XCTAssertEqual(url?.absoluteString, "https://cdn.test/audio/abc.mp3")
+    func testContentURLResolvesRelativePath() throws {
+        let url = try makeClient().contentURL(courseCode: "fa", version: 3, relativePath: "audio/abc.mp3")
+        XCTAssertEqual(url.absoluteString, "https://cdn.test/course/fa/v3/audio/abc.mp3")
+    }
+
+    func testContentURLRejectsHostReplacementAndEscapes() {
+        let bad = [
+            "https://evil.example/a.mp3", "//evil.example/a.mp3", "/abs/a.mp3", "javascript:alert(1)",
+            "mailto:x@y.z", "../../../audio/abc.mp3", "a/../b.mp3", "", "a\\b",
+        ]
+        for path in bad {
+            XCTAssertThrowsError(try makeClient().contentURL(courseCode: "fa", version: 3, relativePath: path), path) { error in
+                XCTAssertEqual(error as? InvalidContentPathError, InvalidContentPathError(path: path))
+            }
+        }
+    }
+
+    func testCourseCodeIsPercentEncodedPerSegment() {
+        XCTAssertEqual(makeClient().courseRoot(courseCode: "a/b?c#d", version: 3),
+                       "https://cdn.test/course/a%2Fb%3Fc%23d/v3")
+    }
+
+    func testBaseURLTrailingSlashIsNormalised() {
+        let client = CdnClient(baseURL: URL(string: "https://cdn.test/")!, session: StubURLProtocol.makeSession())
+        XCTAssertEqual(client.courseRoot(courseCode: "fa", version: 3), "https://cdn.test/course/fa/v3")
+    }
+
+    func testArtifactPathSegmentsAreEncoded() async throws {
+        StubURLProtocol.install { _ in StubResponse(200, "{\"id\":\"u1\",\"path\":\"p\"}") }
+        let _: ManifestRef = try await makeClient().artifact(courseCode: "fa", version: 3, path: "units/a b.json")
+        XCTAssertEqual(StubURLProtocol.requests[0].url?.absoluteString, "https://cdn.test/course/fa/v3/units/a%20b.json")
     }
 }

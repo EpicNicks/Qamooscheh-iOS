@@ -146,6 +146,130 @@ final class ApiClientTests: XCTestCase {
         }
     }
 
+    func testConcurrent401sShareExactlyOneRefresh() async throws {
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" { return StubResponse(200, self.refreshJSON(access: "new")) }
+            if self.auth(request) == "Bearer new" { return StubResponse(200, "{\"value\":2}") }
+            return StubResponse(401)
+        }
+        let client = makeClient(store: InMemorySessionStore(session: session()))
+        let total = try await withThrowingTaskGroup(of: Int.self) { group -> Int in
+            for _ in 0..<5 {
+                group.addTask {
+                    let ping: Ping = try await client.send(.get, "/v1/ping")
+                    return ping.value
+                }
+            }
+            var sum = 0
+            for try await value in group { sum += value }
+            return sum
+        }
+        XCTAssertEqual(total, 10)
+        let refreshes = StubURLProtocol.requests.filter { $0.url?.path == "/v1/auth/refresh" }
+        XCTAssertEqual(refreshes.count, 1)
+    }
+
+    func testStaleRefreshRetriesWithCurrentSession() async throws {
+        let store = LockedSessionStore(session: session())
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" {
+                store.replace(self.session(token: "other", refresh: "r9"))
+                return StubResponse(200, self.refreshJSON(access: "new"))
+            }
+            if self.auth(request) == "Bearer other" { return StubResponse(200, "{\"value\":5}") }
+            return StubResponse(401)
+        }
+        let expired = ExpiredFlag()
+        let client = makeClient(store: store, onExpired: { expired.set() })
+        let result: Ping = try await client.send(.get, "/v1/ping")
+        XCTAssertEqual(result, Ping(value: 5))
+        let paths = StubURLProtocol.requests.map { $0.url?.path ?? "" }
+        XCTAssertEqual(paths, ["/v1/ping", "/v1/auth/refresh", "/v1/ping"])
+        XCTAssertEqual(store.snapshot?.accessToken, "other")
+        XCTAssertFalse(expired.value)
+    }
+
+    func testStaleRefreshWithNoSessionSurfacesUnauthenticated() async throws {
+        let store = LockedSessionStore(session: session())
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" {
+                store.replace(nil)
+                return StubResponse(200, self.refreshJSON(access: "new"))
+            }
+            return StubResponse(401)
+        }
+        let expired = ExpiredFlag()
+        let client = makeClient(store: store, onExpired: { expired.set() })
+        do {
+            let _: Ping = try await client.send(.get, "/v1/ping")
+            XCTFail("expected SessionExpiredError")
+        } catch is SessionExpiredError {
+        }
+        XCTAssertNil(store.snapshot)
+        XCTAssertFalse(expired.value)
+    }
+
+    func testAlreadyRotatedTokenRetriesWithoutRefreshing() async throws {
+        let store = LockedSessionStore(session: session())
+        StubURLProtocol.install { request in
+            if self.auth(request) == "Bearer rotated" { return StubResponse(200, "{\"value\":6}") }
+            store.replace(self.session(token: "rotated", refresh: "r2"))
+            return StubResponse(401)
+        }
+        let client = makeClient(store: store)
+        let result: Ping = try await client.send(.get, "/v1/ping")
+        XCTAssertEqual(result, Ping(value: 6))
+        let paths = StubURLProtocol.requests.map { $0.url?.path ?? "" }
+        XCTAssertEqual(paths, ["/v1/ping", "/v1/ping"])
+    }
+
+    func testUpFrontRefreshFailureFallsThroughWithCurrentToken() async throws {
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" { return StubResponse(503) }
+            return StubResponse(200, "{\"value\":4}")
+        }
+        let store = InMemorySessionStore(session: session(expiresIn: 10))
+        let client = makeClient(store: store)
+        let result: Ping = try await client.send(.get, "/v1/ping")
+        XCTAssertEqual(result, Ping(value: 4))
+        let paths = StubURLProtocol.requests.map { $0.url?.path ?? "" }
+        XCTAssertEqual(paths, ["/v1/auth/refresh", "/v1/ping"])
+        XCTAssertEqual(auth(StubURLProtocol.requests[1]), "Bearer old")
+        let remaining = await store.load()
+        XCTAssertNotNil(remaining)
+    }
+
+    func testUpFrontRefreshRejectionStillLogsOut() async throws {
+        StubURLProtocol.install { _ in StubResponse(401) }
+        let store = InMemorySessionStore(session: session(expiresIn: 10))
+        let expired = ExpiredFlag()
+        let client = makeClient(store: store, onExpired: { expired.set() })
+        do {
+            let _: Ping = try await client.send(.get, "/v1/ping")
+            XCTFail("expected SessionExpiredError")
+        } catch is SessionExpiredError {
+        }
+        let remaining = await store.load()
+        XCTAssertNil(remaining)
+        XCTAssertTrue(expired.value)
+        XCTAssertEqual(StubURLProtocol.requests.count, 1)
+    }
+
+    func testUpFrontStaleRefreshSendsWithCurrentSession() async throws {
+        let store = LockedSessionStore(session: session(expiresIn: 10))
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" {
+                store.replace(self.session(token: "other", refresh: "r9"))
+                return StubResponse(200, self.refreshJSON(access: "new"))
+            }
+            return StubResponse(200, "{\"value\":8}")
+        }
+        let client = makeClient(store: store)
+        let result: Ping = try await client.send(.get, "/v1/ping")
+        XCTAssertEqual(result, Ping(value: 8))
+        XCTAssertEqual(auth(StubURLProtocol.requests[1]), "Bearer other")
+    }
+
     func testBodilessErrorFallbackMessage() {
         XCTAssertEqual(ApiError(status: 429, body: nil).localizedDescription,
                        "Too many attempts. Wait a moment and try again.")
@@ -168,4 +292,30 @@ final class ExpiredFlag: @unchecked Sendable {
         defer { lock.unlock() }
         return flag
     }
+}
+
+/// Store whose state can be changed synchronously from a stub handler.
+final class LockedSessionStore: SessionStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: StoredSession?
+
+    init(session: StoredSession?) {
+        current = session
+    }
+
+    func replace(_ session: StoredSession?) {
+        lock.lock()
+        current = session
+        lock.unlock()
+    }
+
+    var snapshot: StoredSession? {
+        lock.lock()
+        defer { lock.unlock() }
+        return current
+    }
+
+    func load() async -> StoredSession? { snapshot }
+    func save(_ session: StoredSession) async { replace(session) }
+    func clear() async { replace(nil) }
 }
