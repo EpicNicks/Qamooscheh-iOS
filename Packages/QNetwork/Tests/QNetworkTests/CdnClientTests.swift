@@ -59,6 +59,19 @@ final class CdnClientTests: XCTestCase {
         XCTAssertEqual(url.absoluteString, "https://cdn.test/course/fa/v3/audio/abc.mp3")
     }
 
+    func testContentURLResolvesPublisherAudioPath() throws {
+        let hash = String(repeating: "ab", count: 32)
+        let url = try makeClient().contentURL(courseCode: "fa", version: 3, relativePath: "../../../audio/\(hash).mp3")
+        XCTAssertEqual(url.absoluteString, "https://cdn.test/audio/\(hash).mp3")
+    }
+
+    func testContentURLWithBasePathStaysUnderBase() throws {
+        let client = CdnClient(baseURL: URL(string: "https://cdn.test/base/")!, session: StubURLProtocol.makeSession())
+        let url = try client.contentURL(courseCode: "fa", version: 3, relativePath: "../../../audio/x.mp3")
+        XCTAssertEqual(url.absoluteString, "https://cdn.test/base/audio/x.mp3")
+        XCTAssertThrowsError(try client.contentURL(courseCode: "fa", version: 3, relativePath: "../../../../audio/x.mp3"))
+    }
+
     func testContentURLRejectsHostReplacementAndEscapes() {
         let bad = [
             "https://evil.example/a.mp3", "//evil.example/a.mp3", "/abs/a.mp3", "javascript:alert(1)",

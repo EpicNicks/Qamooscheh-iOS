@@ -102,20 +102,36 @@ public struct CdnClient: Sendable {
         return try QJSON.makeDecoder().decode(T.self, from: data)
     }
 
-    /// Absolute URL for a content path from unverified child JSON. Only plain
-    /// relative paths are accepted; the result must stay on the CDN origin.
+    /// Absolute URL for a content path from unverified child JSON. The publisher
+    /// emits recording paths such as "../../../audio/<sha256>.mp3" relative to the
+    /// version root, so ".." is resolved here; the result must stay under the CDN
+    /// base path and on the CDN origin.
     public func contentURL(courseCode: String, version: Int, relativePath: String) throws -> URL {
         let invalid = InvalidContentPathError(path: relativePath)
         guard !relativePath.isEmpty, !relativePath.hasPrefix("/"), !relativePath.contains("\\") else { throw invalid }
-        let segments = relativePath.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-        if segments.contains("..") { throw invalid }
+        let input = relativePath.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
         // A colon in the first segment would parse as a URL scheme.
-        if let first = segments.first, first.contains(":") { throw invalid }
-        let text = courseRoot(courseCode: courseCode, version: version) + "/" + CdnClient.encodePath(relativePath)
+        if let first = input.first, first.contains(":") { throw invalid }
+        // Depth below the CDN base: course / <code> / v<N>.
+        var resolved: [String] = ["course", courseCode, "v\(version)"]
+        for segment in input {
+            switch segment {
+            case "", ".":
+                throw invalid
+            case "..":
+                if resolved.isEmpty { throw invalid }
+                resolved.removeLast()
+            default:
+                resolved.append(segment)
+            }
+        }
+        guard !resolved.isEmpty else { throw invalid }
+        let text = base + "/" + resolved.map { CdnClient.encodeSegment($0) }.joined(separator: "/")
         guard let url = URL(string: text),
               url.scheme?.lowercased() == baseURL.scheme?.lowercased(),
               url.host?.lowercased() == baseURL.host?.lowercased(),
-              url.port == baseURL.port
+              url.port == baseURL.port,
+              url.absoluteString.hasPrefix(base + "/")
         else { throw invalid }
         return url
     }
