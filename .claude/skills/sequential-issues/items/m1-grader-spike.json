@@ -1,0 +1,21 @@
+{
+  "name": "m1-grader-spike",
+  "repo": "ios",
+  "branch": "m1-grader-spike",
+  "title": "Grader runtime spike (JavaScriptCore vs WKWebView)",
+  "closes": null,
+  "issue": "Follow docs/PLAN.md 4.1 and Android docs/SPEC.md section 4 plus docs/grader-spike.md. In Packages/QGrader define the Grader protocol and GraderRequest/GraderResponse (field-for-field from the backend GraderContracts.cs). Implement the browser-variant runtime on JavaScriptCore first, falling back to a hidden WKWebView, behind that protocol. Build a fixture test (inputs and expected verdicts taken from the backend tests, listed in the item notes you create) that CI runs. Record per-runtime correctness and p95 timing from CI in docs/grader-spike.md. Do not decide the final variant: put the numbers and a recommendation there and set needsUser.",
+  "allowedPaths": [
+    "^Packages/QGrader/",
+    "^docs/",
+    "^\\.github/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs M0 merged and the grader fixture source named by the user",
+  "approved": false,
+  "reviewer": "opus"
+}

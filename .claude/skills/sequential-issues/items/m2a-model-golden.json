@@ -1,0 +1,19 @@
+{
+  "name": "m2a-model-golden",
+  "repo": "ios",
+  "branch": "m2a-model-golden",
+  "title": "Wire types and golden JSON tests",
+  "closes": null,
+  "issue": "Port the API wire types and content types to Packages/QModel as Codable structs/enums from the backend C# *Contracts.cs files (not the TS). Read web src/types/api.ts and content.ts only to cross-check names. Add golden-JSON round-trip tests using sample payloads you write from API_SPEC.md. Android reference: core/model.",
+  "allowedPaths": [
+    "^Packages/QModel/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs M0 merged",
+  "approved": false,
+  "reviewer": "sonnet"
+}

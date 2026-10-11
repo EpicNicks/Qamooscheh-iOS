@@ -1,0 +1,19 @@
+{
+  "name": "m2b-network-auth",
+  "repo": "ios",
+  "branch": "m2b-network-auth",
+  "title": "API client, auth refresh, CDN verify",
+  "closes": null,
+  "issue": "Packages/QNetwork: URLSession client, actor that on 401 refreshes once and retries, logout on refresh failure (web src/api/httpClient.ts, Android core/network); CDN client that SHA-256 verifies course manifests with CryptoKit (web src/api/content.ts, src/lib/sha256.ts). Test with a stub URLProtocol, no real network.",
+  "allowedPaths": [
+    "^Packages/QNetwork/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2a merged",
+  "approved": false,
+  "reviewer": "sonnet"
+}

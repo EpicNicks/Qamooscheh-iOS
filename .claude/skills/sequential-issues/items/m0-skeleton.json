@@ -1,0 +1,24 @@
+{
+  "name": "m0-skeleton",
+  "repo": "ios",
+  "branch": "m0-skeleton",
+  "title": "Project skeleton, packages and CI",
+  "closes": null,
+  "issue": "Create the repo skeleton per docs/PLAN.md sections 2, 3 and 7. (1) project.yml for XcodeGen: iOS 17, app target App/ (bundle id com.parsling.ios, dev variant .dev), a tab shell with five empty tabs Learn, Library, Review, Leagues, Profile. (2) Packages QModel, QDomain, QNetwork, QData, QGrader, QDesign, QKeyboard, QFeatures per the dependency arrows in the plan, each with a Package.swift and one trivial passing test. (3) .github/workflows/ci.yml with jobs packages (matrix swift test), app (xcodegen + xcodebuild build and test on a pinned simulator) and snapshots (swift-snapshot-testing of the empty shell, PNGs uploaded as artifacts); pin the macOS image and Xcode version in one place; concurrency group cancels superseded runs. (4) .gitignore (xcodeproj, .build, DerivedData). QDesign: color and spacing tokens ported from Android core/designsystem (read only its Color/Theme/Spacing files). No feature logic yet.",
+  "allowedPaths": [
+    "^App/",
+    "^Packages/",
+    "^project\\.yml$",
+    "^\\.github/",
+    "^\\.gitignore$",
+    "^docs/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": null,
+  "approved": true,
+  "reviewer": "sonnet"
+}

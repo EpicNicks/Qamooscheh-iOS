@@ -1,0 +1,19 @@
+{
+  "name": "m3a-domain-path",
+  "repo": "ios",
+  "branch": "m3a-domain-path",
+  "title": "Port pathProgress and roadLayout with tests",
+  "closes": null,
+  "issue": "Packages/QDomain: port web src/domain/pathProgress.ts and roadLayout.ts and their .test.ts files 1:1 as XCTest, tests first. Android reference: core/domain. Pure Swift, no UI imports.",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs M0 merged",
+  "approved": false,
+  "reviewer": "sonnet"
+}

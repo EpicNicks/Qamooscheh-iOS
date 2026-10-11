@@ -1,0 +1,6 @@
+.claude/skills/sequential-issues/ledger/
+.claude/settings.local.json
+*.xcodeproj
+.build/
+DerivedData/
+.DS_Store
