@@ -11,19 +11,31 @@ final class ShellSnapshotTests: XCTestCase {
     func testEmptyShell() throws {
         let size = CGSize(width: 390, height: 844)
         let controller = UIHostingController(rootView: RootTabView())
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window: UIWindow
+        if let scene = scene {
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(origin: .zero, size: size)
+        } else {
+            window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        }
         window.rootViewController = controller
         window.makeKeyAndVisible()
         controller.view.frame = window.bounds
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.5))
+        window.layoutIfNeeded()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.5))
 
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
-        XCTAssertGreaterThan(distinctColors(of: image), 3, "render is blank or uniform")
+        let colorCount = distinctColors(of: image)
+        XCTAssertGreaterThan(
+            colorCount, 3,
+            "render is blank or uniform (\(colorCount) distinct colour(s), scene attached: \(scene != nil))"
+        )
 
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

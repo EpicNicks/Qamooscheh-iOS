@@ -52,6 +52,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: "YES"
         PRODUCT_BUNDLE_IDENTIFIER: com.parsling.ios.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Qamooscheh.app/Qamooscheh"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 schemes:
   Qamooscheh:
     build:
