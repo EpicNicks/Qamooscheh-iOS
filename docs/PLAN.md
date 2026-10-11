@@ -34,7 +34,7 @@ Packages/
   QModel        wire types (Codable) ported from C# *Contracts.cs, enums, content types   [no deps]
   QDomain       pure ports of web src/domain/* WITH their vitest tests as XCTest          [QModel]
   QNetwork      API client, auth/refresh actor, CDN client, SHA-256 verify                [QModel, CryptoKit]
-  QData         repositories, store, offline queue, content cache (version-pinned, hash-addressed)
+  QData         repositories, store, offline queue, content cache (version-pinned, hash-addressed)   [QModel, QNetwork]
   QGrader       Grader protocol + runtime(s), fixture-driven verdict tests                [QModel]
   QDesign       tokens, theme, primitives (Button, Card, Modal)                           [SwiftUI]
   QKeyboard     key layouts + candidate-above-key logic, shared by in-app keyboard and extension

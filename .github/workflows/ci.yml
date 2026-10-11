@@ -10,19 +10,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The single place that pins the macOS image, Xcode and simulator.
+  # The single place that pins the macOS image and Xcode. The simulator is
+  # picked dynamically on the runner (first available iPhone) and logged.
   config:
     runs-on: ubuntu-latest
     outputs:
       runner: ${{ steps.pin.outputs.runner }}
       xcode: ${{ steps.pin.outputs.xcode }}
-      destination: ${{ steps.pin.outputs.destination }}
     steps:
       - id: pin
         run: |
           echo "runner=macos-15" >> "$GITHUB_OUTPUT"
           echo "xcode=16.2" >> "$GITHUB_OUTPUT"
-          echo "destination=platform=iOS Simulator,name=iPhone 16,OS=18.2" >> "$GITHUB_OUTPUT"
 
   packages:
     needs: config
@@ -44,19 +43,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+      - name: pick simulator
+        run: |
+          xcrun simctl list devices available
+          UDID=$(xcrun simctl list devices available iPhone | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
+          if [ -z "$UDID" ]; then echo "no available iPhone simulator"; exit 1; fi
+          echo "DEST=platform=iOS Simulator,id=$UDID" >> "$GITHUB_ENV"
+          echo "Chosen destination: platform=iOS Simulator,id=$UDID"
       - run: brew install xcodegen
       - run: xcodegen generate
       - name: build for testing
         run: |
           set -o pipefail
           xcodebuild build-for-testing -project Qamooscheh.xcodeproj -scheme Qamooscheh \
-            -destination "${{ needs.config.outputs.destination }}" \
+            -destination "$DEST" \
             -resultBundlePath build/app.xcresult CODE_SIGNING_ALLOWED=NO
       - name: test
         run: |
           set -o pipefail
           xcodebuild test-without-building -project Qamooscheh.xcodeproj -scheme Qamooscheh \
-            -destination "${{ needs.config.outputs.destination }}" \
+            -destination "$DEST" \
             -skip-testing:QamooschehTests/ShellSnapshotTests \
             -resultBundlePath build/app-test.xcresult CODE_SIGNING_ALLOWED=NO
       - uses: actions/upload-artifact@v4
@@ -71,13 +77,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+      - name: pick simulator
+        run: |
+          xcrun simctl list devices available
+          UDID=$(xcrun simctl list devices available iPhone | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
+          if [ -z "$UDID" ]; then echo "no available iPhone simulator"; exit 1; fi
+          echo "DEST=platform=iOS Simulator,id=$UDID" >> "$GITHUB_ENV"
+          echo "Chosen destination: platform=iOS Simulator,id=$UDID"
       - run: brew install xcodegen
       - run: xcodegen generate
       - name: snapshot tests
         run: |
           set -o pipefail
           xcodebuild test -project Qamooscheh.xcodeproj -scheme Qamooscheh \
-            -destination "${{ needs.config.outputs.destination }}" \
+            -destination "$DEST" \
             -only-testing:QamooschehTests/ShellSnapshotTests \
             -resultBundlePath build/snapshots.xcresult CODE_SIGNING_ALLOWED=NO
       - uses: actions/upload-artifact@v4
