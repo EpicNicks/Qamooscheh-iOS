@@ -1,0 +1,748 @@
+{
+  "courses": {
+    "fa": [
+      {
+        "id": "abjad",
+        "title": "Persian Letters (Abjad)",
+        "view": "abjad"
+      },
+      {
+        "id": "counting",
+        "title": "Counting",
+        "children": [
+          {
+            "id": "cardinal",
+            "title": "Cardinal",
+            "terms": [
+              {
+                "term": "صفر",
+                "romanization": "sefr",
+                "definition": "zero"
+              },
+              {
+                "term": "یک",
+                "romanization": "yek",
+                "definition": "one"
+              },
+              {
+                "term": "دو",
+                "romanization": "do",
+                "definition": "two"
+              },
+              {
+                "term": "سه",
+                "romanization": "se",
+                "definition": "three"
+              },
+              {
+                "term": "چهار",
+                "romanization": "chahār",
+                "definition": "four"
+              },
+              {
+                "term": "پنج",
+                "romanization": "panj",
+                "definition": "five"
+              },
+              {
+                "term": "شش",
+                "romanization": "shesh",
+                "definition": "six"
+              },
+              {
+                "term": "هفت",
+                "romanization": "haft",
+                "definition": "seven"
+              },
+              {
+                "term": "هشت",
+                "romanization": "hasht",
+                "definition": "eight"
+              },
+              {
+                "term": "نه",
+                "romanization": "noh",
+                "definition": "nine"
+              },
+              {
+                "term": "ده",
+                "romanization": "dah",
+                "definition": "ten"
+              },
+              {
+                "term": "یازده",
+                "romanization": "yāzdah",
+                "definition": "eleven"
+              },
+              {
+                "term": "دوازده",
+                "romanization": "davāzdah",
+                "definition": "twelve"
+              },
+              {
+                "term": "سیزده",
+                "romanization": "sizdah",
+                "definition": "thirteen"
+              },
+              {
+                "term": "چهارده",
+                "romanization": "chahārdah",
+                "definition": "fourteen"
+              },
+              {
+                "term": "پانزده",
+                "romanization": "pānzdah",
+                "definition": "fifteen"
+              },
+              {
+                "term": "شانزده",
+                "romanization": "shānzdah",
+                "definition": "sixteen"
+              },
+              {
+                "term": "هفده",
+                "romanization": "hifdah",
+                "definition": "seventeen"
+              },
+              {
+                "term": "هجده",
+                "romanization": "hejdah",
+                "definition": "eighteen"
+              },
+              {
+                "term": "نوزده",
+                "romanization": "nuzdah",
+                "definition": "nineteen"
+              },
+              {
+                "term": "بیست",
+                "romanization": "bist",
+                "definition": "twenty"
+              },
+              {
+                "term": "بیست و یک، بیست و دو، ...، بیست و نه",
+                "romanization": "bist-o-yek, bist-o-do, ..., bist-o-noh",
+                "definition": "twenty-one, twenty-two, ..., twenty-nine (21-29)"
+              },
+              {
+                "term": "سی",
+                "romanization": "si",
+                "definition": "thirty"
+              },
+              {
+                "term": "سی و یک، سی و دو، ...، سی و نه",
+                "romanization": "si-o-yek, si-o-do, ..., si-o-noh",
+                "definition": "thirty-one, thirty-two, ..., thirty-nine (31-39)"
+              },
+              {
+                "term": "چهل",
+                "romanization": "chehel",
+                "definition": "forty"
+              },
+              {
+                "term": "چهل و یک، چهل و دو، ...، چهل و نه",
+                "romanization": "chehel-o-yek, chehel-o-do, ..., chehel-o-noh",
+                "definition": "forty-one, forty-two, ..., forty-nine (41-49)"
+              },
+              {
+                "term": "پنجاه",
+                "romanization": "panjāh",
+                "definition": "fifty"
+              },
+              {
+                "term": "پنجاه و یک، پنجاه و دو، ...، پنجاه و نه",
+                "romanization": "panjāh-o-yek, panjāh-o-do, ..., panjāh-o-noh",
+                "definition": "fifty-one, fifty-two, ..., fifty-nine (51-59)"
+              },
+              {
+                "term": "شصت",
+                "romanization": "shast",
+                "definition": "sixty"
+              },
+              {
+                "term": "شصت و یک، شصت و دو، ...، شصت و نه",
+                "romanization": "shast-o-yek, shast-o-do, ..., shast-o-noh",
+                "definition": "sixty-one, sixty-two, ..., sixty-nine (61-69)"
+              },
+              {
+                "term": "هفتاد",
+                "romanization": "haftād",
+                "definition": "seventy"
+              },
+              {
+                "term": "هفتاد و یک، هفتاد و دو، ...، هفتاد و نه",
+                "romanization": "haftād-o-yek, haftād-o-do, ..., haftād-o-noh",
+                "definition": "seventy-one, seventy-two, ..., seventy-nine (71-79)"
+              },
+              {
+                "term": "هشتاد",
+                "romanization": "hashtād",
+                "definition": "eighty"
+              },
+              {
+                "term": "هشتاد و یک، هشتاد و دو، ...، هشتاد و نه",
+                "romanization": "hashtād-o-yek, hashtād-o-do, ..., hashtād-o-noh",
+                "definition": "eighty-one, eighty-two, ..., eighty-nine (81-89)"
+              },
+              {
+                "term": "نود",
+                "romanization": "navad",
+                "definition": "ninety"
+              },
+              {
+                "term": "نود و یک، نود و دو، ...، نود و نه",
+                "romanization": "navad-o-yek, navad-o-do, ..., navad-o-noh",
+                "definition": "ninety-one, ninety-two, ..., ninety-nine (91-99)"
+              },
+              {
+                "term": "صد",
+                "romanization": "sad",
+                "definition": "one hundred"
+              },
+              {
+                "term": "هزار",
+                "romanization": "hezār",
+                "definition": "one thousand (1,000)"
+              },
+              {
+                "term": "میلیون",
+                "romanization": "milyon",
+                "definition": "one million (1,000,000)"
+              },
+              {
+                "term": "میلیارد",
+                "romanization": "milyārd",
+                "definition": "one billion (1,000,000,000)"
+              },
+              {
+                "term": "تریلیون",
+                "romanization": "trilyon",
+                "definition": "one trillion (10^12)"
+              },
+              {
+                "term": "کوادریلیون",
+                "romanization": "kuādrilyon",
+                "definition": "one quadrillion (10^15)"
+              },
+              {
+                "term": "کوینتیلیون",
+                "romanization": "kuintilyon",
+                "definition": "one quintillion (10^18)"
+              },
+              {
+                "term": "سکستیلیون",
+                "romanization": "sekstilyon",
+                "definition": "one sextillion (10^21)"
+              },
+              {
+                "term": "سپتیلیون",
+                "romanization": "septilyon",
+                "definition": "one septillion (10^24)"
+              },
+              {
+                "term": "اکتیلیون",
+                "romanization": "oktilyon",
+                "definition": "one octillion (10^27)"
+              },
+              {
+                "term": "نونیلیون",
+                "romanization": "nonilyon",
+                "definition": "one nonillion (10^30)"
+              },
+              {
+                "term": "دسیلیون",
+                "romanization": "desilyon",
+                "definition": "one decillion (10^33)"
+              },
+              {
+                "term": "آندسیلیون",
+                "romanization": "āndesilyon",
+                "definition": "one undecillion (10^36)"
+              },
+              {
+                "term": "دودسیلیون",
+                "romanization": "dodesilyon",
+                "definition": "one duodecillion (10^39)"
+              }
+            ]
+          },
+          {
+            "id": "ordinal",
+            "title": "Ordinal",
+            "note": "Other than \"first\" (اول/avval, a loanword from Arabic أول), the rule is exceptionless: the cardinal, plus a linking \"v\" if the cardinal ends in a vowel, plus \"-om\" — دو (do) becomes دوم (dovom), سه (se) becomes سوم (sevom), چهار (chahār, ending in a consonant) becomes چهارم (chahārom) with no linking v needed.",
+            "terms": [
+              {
+                "term": "صفرم",
+                "romanization": "sefrom",
+                "definition": "zeroth"
+              },
+              {
+                "term": "اول",
+                "romanization": "avval",
+                "definition": "first"
+              },
+              {
+                "term": "دوم",
+                "romanization": "dovom",
+                "definition": "second"
+              },
+              {
+                "term": "سوم",
+                "romanization": "sevom",
+                "definition": "third"
+              },
+              {
+                "term": "چهارم",
+                "romanization": "chahārom",
+                "definition": "fourth"
+              },
+              {
+                "term": "پنجم",
+                "romanization": "panjom",
+                "definition": "fifth"
+              },
+              {
+                "term": "بیست و یکم",
+                "romanization": "bist-o-yekom",
+                "definition": "twenty-first"
+              },
+              {
+                "term": "بیست و دوم",
+                "romanization": "bist-o-dovom",
+                "definition": "twenty-second"
+              },
+              {
+                "term": "صدم",
+                "romanization": "sadom",
+                "definition": "hundredth"
+              },
+              {
+                "term": "...",
+                "definition": ""
+              }
+            ]
+          },
+          {
+            "id": "terms",
+            "title": "Number Terms",
+            "terms": [
+              {
+                "term": "مثبت",
+                "romanization": "mosbat",
+                "definition": "positive"
+              },
+              {
+                "term": "منفی",
+                "romanization": "menfi",
+                "definition": "negative"
+              },
+              {
+                "term": "جمع",
+                "romanization": "jam",
+                "definition": "addition / sum"
+              },
+              {
+                "term": "تفریق",
+                "romanization": "tafrigh",
+                "definition": "subtraction"
+              },
+              {
+                "term": "ضرب",
+                "romanization": "zarb",
+                "definition": "multiplication"
+              },
+              {
+                "term": "تقسیم",
+                "romanization": "taghsim",
+                "definition": "division"
+              },
+              {
+                "term": "برابر",
+                "romanization": "barābar",
+                "definition": "equal"
+              },
+              {
+                "term": "نصف",
+                "romanization": "nesf",
+                "definition": "half"
+              },
+              {
+                "term": "زوج",
+                "romanization": "zoj",
+                "definition": "even"
+              },
+              {
+                "term": "فرد",
+                "romanization": "fard",
+                "definition": "odd"
+              },
+              {
+                "term": "درصد",
+                "romanization": "darsad",
+                "definition": "percent (literally: per hundred)"
+              },
+              {
+                "term": "بی‌نهایت",
+                "romanization": "bi-nahāyat",
+                "definition": "infinity"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "time",
+        "title": "Time",
+        "children": [
+          {
+            "id": "hours-minutes",
+            "title": "Hours & Minutes",
+            "terms": [
+              {
+                "term": "ساعت",
+                "romanization": "sāat",
+                "definition": "hour / o'clock"
+              },
+              {
+                "term": "دقیقه",
+                "romanization": "daqiqe",
+                "definition": "minute"
+              },
+              {
+                "term": "ثانیه",
+                "romanization": "sāniye",
+                "definition": "second"
+              },
+              {
+                "term": "نیم",
+                "romanization": "nim",
+                "definition": "half"
+              },
+              {
+                "term": "ربع",
+                "romanization": "rob",
+                "definition": "quarter"
+              },
+              {
+                "term": "ساعت چنده؟",
+                "romanization": "sāat chande?",
+                "definition": "what time is it?"
+              },
+              {
+                "term": "ساعت پنج",
+                "romanization": "sāat panj",
+                "definition": "five o'clock"
+              },
+              {
+                "term": "پنج و نیم",
+                "romanization": "panj-o-nim",
+                "definition": "half past five (5:30)"
+              },
+              {
+                "term": "پنج و ربع",
+                "romanization": "panj-o-rob",
+                "definition": "quarter past five (5:15)"
+              },
+              {
+                "term": "ربع به پنج",
+                "romanization": "rob be panj",
+                "definition": "quarter to five (4:45)"
+              }
+            ]
+          },
+          {
+            "id": "time-expressions",
+            "title": "Time Expressions",
+            "terms": [
+              {
+                "term": "صبح",
+                "romanization": "sobh",
+                "definition": "morning"
+              },
+              {
+                "term": "ظهر",
+                "romanization": "zohr",
+                "definition": "noon"
+              },
+              {
+                "term": "عصر",
+                "romanization": "asr",
+                "definition": "afternoon"
+              },
+              {
+                "term": "غروب",
+                "romanization": "gorub",
+                "definition": "sunset / evening"
+              },
+              {
+                "term": "شب",
+                "romanization": "shab",
+                "definition": "night"
+              },
+              {
+                "term": "نیمه‌شب",
+                "romanization": "nime-shab",
+                "definition": "midnight"
+              },
+              {
+                "term": "امروز",
+                "romanization": "emrooz",
+                "definition": "today"
+              },
+              {
+                "term": "فردا",
+                "romanization": "fardā",
+                "definition": "tomorrow"
+              },
+              {
+                "term": "دیروز",
+                "romanization": "dirooz",
+                "definition": "yesterday"
+              },
+              {
+                "term": "هفته",
+                "romanization": "hafte",
+                "definition": "week"
+              },
+              {
+                "term": "ماه",
+                "romanization": "māh",
+                "definition": "month"
+              },
+              {
+                "term": "سال",
+                "romanization": "sāl",
+                "definition": "year"
+              }
+            ]
+          },
+          {
+            "id": "relative-time",
+            "title": "Relative Time",
+            "terms": [
+              {
+                "term": "زود",
+                "romanization": "zud",
+                "definition": "early"
+              },
+              {
+                "term": "دیر",
+                "romanization": "dir",
+                "definition": "late"
+              },
+              {
+                "term": "به‌زودی",
+                "romanization": "be-zudi",
+                "definition": "soon"
+              },
+              {
+                "term": "به‌موقع",
+                "romanization": "be-moghe",
+                "definition": "on time"
+              },
+              {
+                "term": "مهلت",
+                "romanization": "mohlat",
+                "definition": "deadline"
+              },
+              {
+                "term": "قبل",
+                "romanization": "ghabl",
+                "definition": "before"
+              },
+              {
+                "term": "بعد",
+                "romanization": "ba'd",
+                "definition": "after"
+              },
+              {
+                "term": "هنوز",
+                "romanization": "hanuz",
+                "definition": "still / yet"
+              },
+              {
+                "term": "قبلاً",
+                "romanization": "ghablan",
+                "definition": "already"
+              },
+              {
+                "term": "الان",
+                "romanization": "alān",
+                "definition": "now"
+              },
+              {
+                "term": "بعداً",
+                "romanization": "ba'dan",
+                "definition": "later / afterwards"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "colors",
+        "title": "Colors",
+        "note": "A color follows its noun with the ezafe, like any other adjective: ماشینِ قرمز (māshīn-e ghermez, \"red car\") — see Ezafe - Word Glue. Several colors — نارنجی، صورتی، طلایی، نقره‌ای، خاکستری، فیروزه‌ای — are themselves nouns (orange the fruit, silver the metal, turquoise the stone, ...) with the ی suffix that turns a noun into \"of/like [that thing]\", the same pattern نارنج (nāranj, bitter orange) → نارنجی follows. A shade takes the ezafe too: آبیِ تیره (ābī-ye tīre, dark blue).",
+        "terms": [
+          {
+            "term": "رنگ",
+            "romanization": "rang",
+            "definition": "color"
+          },
+          {
+            "term": "قرمز",
+            "romanization": "ghermez",
+            "definition": "red"
+          },
+          {
+            "term": "آبی",
+            "romanization": "ābī",
+            "definition": "blue"
+          },
+          {
+            "term": "سبز",
+            "romanization": "sabz",
+            "definition": "green"
+          },
+          {
+            "term": "سفید",
+            "romanization": "sefīd",
+            "definition": "white"
+          },
+          {
+            "term": "سیاه",
+            "romanization": "siāh",
+            "definition": "black"
+          },
+          {
+            "term": "زرد",
+            "romanization": "zard",
+            "definition": "yellow"
+          },
+          {
+            "term": "بنفش",
+            "romanization": "banafsh",
+            "definition": "purple"
+          },
+          {
+            "term": "قهوه‌ای",
+            "romanization": "ghahve-ī",
+            "definition": "brown (literally: \"coffee-colored\")"
+          },
+          {
+            "term": "نارنجی",
+            "romanization": "nārenjī",
+            "definition": "orange"
+          },
+          {
+            "term": "صورتی",
+            "romanization": "sūratī",
+            "definition": "pink"
+          },
+          {
+            "term": "خاکستری",
+            "romanization": "khākestarī",
+            "definition": "gray (literally: \"ash-colored\")"
+          },
+          {
+            "term": "طلایی",
+            "romanization": "talāyī",
+            "definition": "gold / golden"
+          },
+          {
+            "term": "نقره‌ای",
+            "romanization": "noghre-ī",
+            "definition": "silver"
+          },
+          {
+            "term": "فیروزه‌ای",
+            "romanization": "fīrūze-ī",
+            "definition": "turquoise (the color of Isfahan's tiles)"
+          },
+          {
+            "term": "زرشکی",
+            "romanization": "zereshkī",
+            "definition": "maroon (literally: \"barberry-colored\")"
+          },
+          {
+            "term": "لاجوردی",
+            "romanization": "lājvardī",
+            "definition": "deep blue (literally: \"lapis lazuli-colored\")"
+          },
+          {
+            "term": "سرمه‌ای",
+            "romanization": "sorme-ī",
+            "definition": "navy blue (literally: \"kohl-colored\")"
+          },
+          {
+            "term": "روشن",
+            "romanization": "rowshan",
+            "definition": "light (as in \"light blue\", آبیِ روشن)"
+          },
+          {
+            "term": "تیره",
+            "romanization": "tīre",
+            "definition": "dark (as in \"dark green\", سبزِ تیره)"
+          }
+        ]
+      },
+      {
+        "id": "ezafe",
+        "title": "Ezafe - Word Glue",
+        "note": "The ezafe is a short -e sound that glues a noun to whatever describes or owns it: کتابِ من (ketāb-e man, \"my book\", literally \"book-of me\"). Everyday Persian doesn't write it — you have to hear it — so the lessons mark it for you: a kasra (ِ) on the word it follows, or a small hamza (ٔ) on a silent ه. Turn on \"Show vowel marks and the ezafe\" in a lesson's settings to see the marks; hovering a word that carries one highlights it either way. After a vowel it becomes -ye, carried by a ی. It links a whole chain, one word at a time — but never a noun to its verb: کتاب خوب است (the book is good) has none, while کتابِ خوب (a good book) does.",
+        "terms": [
+          {
+            "term": "کتابِ من",
+            "romanization": "ketāb-e man",
+            "definition": "my book — after a consonant: -e, marked with a kasra"
+          },
+          {
+            "term": "هوایِ خوب",
+            "romanization": "havā-ye khūb",
+            "definition": "good weather — after ا or و: -ye, and a ی is written to carry it"
+          },
+          {
+            "term": "خانهٔ من",
+            "romanization": "khāne-ye man",
+            "definition": "my house — after a silent ه: -ye, marked with a small hamza (or written خانه‌ی)"
+          },
+          {
+            "term": "صندلیِ چوبی",
+            "romanization": "sandalī-ye chūbī",
+            "definition": "a wooden chair — after ی: -ye, marked with a kasra on the ی"
+          },
+          {
+            "term": "کیفِ مادرم",
+            "romanization": "kīf-e mādaram",
+            "definition": "my mother's bag — possession: the owner comes after"
+          },
+          {
+            "term": "پیراهنِ زرشکی",
+            "romanization": "pīrāhan-e zereshkī",
+            "definition": "a maroon shirt — an adjective comes after its noun"
+          },
+          {
+            "term": "کتابِ قرمزِ علی",
+            "romanization": "ketāb-e ghermez-e Alī",
+            "definition": "Ali's red book — a chain: every link but the last takes it"
+          },
+          {
+            "term": "نزدیکِ مدرسه",
+            "romanization": "nazdīk-e madrese",
+            "definition": "near the school — many prepositions take it too"
+          },
+          {
+            "term": "آقایِ رضایی",
+            "romanization": "āghā-ye Rezāyī",
+            "definition": "Mr. Rezaei — titles before a name"
+          },
+          {
+            "term": "کتاب خوب است",
+            "romanization": "ketāb khūb ast",
+            "definition": "the book is good — no ezafe before a verb (compare ketāb-e khūb, a good book)"
+          }
+        ]
+      }
+    ]
+  }
+}
