@@ -36,7 +36,7 @@ private func bootstrap(
     BootstrapResponse(course: course, position: position, graders: [], enrolledCourseCodes: enrolled, onboardingComplete: true)
 }
 
-private func prefs(goal: Int) -> PrefsResponse {
+private func makePrefs(goal: Int) -> PrefsResponse {
     PrefsResponse(scriptMode: .native, register: .standard, autoplayAudio: true, keyboardMode: .contextual, desiredRetention: 0.9, dailyGoalXp: goal)
 }
 
@@ -45,7 +45,7 @@ private struct TestError: Error {}
 private final class FakeRepo: PathRepository, @unchecked Sendable {
     var content: Result<PathContent, Error> = .success(PathContent(units: fixtureUnits))
     var completed: Result<Set<String>, Error> = .success([])
-    var prefsResult: Result<PrefsResponse, Error> = .success(prefs(goal: 500))
+    var prefsResult: Result<PrefsResponse, Error> = .success(makePrefs(goal: 500))
     var activityResult: Result<ActivityResponse, Error> = .success(ActivityResponse(courseCode: "ja", days: []))
     var contentCalls: [String] = []
 
