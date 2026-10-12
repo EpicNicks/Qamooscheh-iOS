@@ -1,0 +1,20 @@
+{
+  "name": "m3f-hints-endings-romanization",
+  "repo": "ios",
+  "branch": "m3f-hints-endings-romanization",
+  "title": "Port attachedEndings and romanization",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): attachedEndings.ts + attachedEndings.test.ts; romanization.ts + romanization.test.ts. Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: hints/AttachedEndings.kt, hints/Romanization.kt (AttachedEndingsTest)). Target dir: Packages/QDomain/Sources/QDomain/Hints/. Pure Swift, no UI imports, depends only on QModel. Regex: see Android text/PortableRegex.kt for pitfalls translating JS regex to NSRegularExpression. Where web and Android differ, match the Android app's behaviour (see text/PortableRegex.kt).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

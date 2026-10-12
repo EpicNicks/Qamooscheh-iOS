@@ -1,0 +1,21 @@
+{
+  "name": "m4d-path-popovers",
+  "repo": "ios",
+  "branch": "m4d-path-popovers",
+  "title": "Lesson start popover and skill group sheet",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Learn/: LessonStartPopover, SkillGroupModal, DeepDiveChooserModal, SkillList. Read web src/components/path/LessonStartPopover.tsx, SkillGroupModal.tsx, DeepDiveChooserModal.tsx, SkillList.tsx and css. Android reference: feature/learn/.../PathPopups.kt. Navigation callbacks are closures (start lesson, practice, skip); no routing in this item. Snapshots: popover for each lesson state, group sheet with mixed states, chooser. Presentation choice (popover vs sheet on iPhone) is a design decision: implement a sheet and note it in the PR body. Where web and Android differ, match the Android app's behaviour (see feature/learn/.../PathPopups.kt.).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Learn/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots; popover vs sheet presentation is a user design call",
+  "approved": true,
+  "reviewer": "sonnet"
+}

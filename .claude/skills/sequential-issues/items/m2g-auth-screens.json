@@ -1,0 +1,21 @@
+{
+  "name": "m2g-auth-screens",
+  "repo": "ios",
+  "branch": "m2g-auth-screens",
+  "title": "Login and register screens (SwiftUI)",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Auth: SwiftUI LoginView and RegisterView bound to the m2f view models, using QDesign tokens (AppPalette, Spacing). Secure field for passwords, keyboard types and textContentType for AutoFill, disabled submit while submitting, inline error text, link between the two screens, accessibility labels. Wire into App/ only as far as an AuthGate that shows login when the SessionStore is empty. Web reference: E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/LoginPage.tsx, E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/RegisterPage.tsx, E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/AuthPage.module.css. Android reference: feature/auth AuthScreens.kt (find by name). Backend contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/API_SPEC.md. Visual judgement is held for the user. Where web and Android differ, match the Android app's behaviour (see feature/auth).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Auth/",
+    "^App/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "App builds for simulator"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2f and m2c merged; visual check held for the user",
+  "approved": true,
+  "reviewer": "sonnet"
+}

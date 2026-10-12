@@ -1,0 +1,20 @@
+{
+  "name": "m3d-wordbank-persian-answer",
+  "repo": "ios",
+  "branch": "m3d-wordbank-persian-answer",
+  "title": "Port wordBankOrders and persian typedAnswer, answerDiff, normalize",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): wordBankOrders.ts + wordBankOrders.test.ts; persian/typedAnswer.ts + persian/typedAnswer.test.ts; persian/answerDiff.ts (no test: add XCTest); persian/normalize.ts (no test: add XCTest). Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: lesson/WordBankOrders.kt, persian/PersianText.kt (WordBankOrders and ArabicVariantsTest)). Target dir: Packages/QDomain/Sources/QDomain/Lesson/ and .../Persian/. Pure Swift, no UI imports, depends only on QModel. Pure text logic; mind Unicode scalar vs grapheme semantics vs JS UTF-16 indexing. Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

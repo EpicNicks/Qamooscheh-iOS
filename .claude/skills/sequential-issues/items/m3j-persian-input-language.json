@@ -1,0 +1,20 @@
+{
+  "name": "m3j-persian-input-language",
+  "repo": "ios",
+  "branch": "m3j-persian-input-language",
+  "title": "Port persian isiriLayout, phoneticEngine, phoneticMap, plus language and enums",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): persian/isiriLayout.ts, persian/phoneticEngine.ts, persian/phoneticMap.ts (no tests: add XCTest); language.ts (no test: add XCTest); enums.ts (reuse QModel Enums.swift where equal; do not duplicate). Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: input/persian/IsiriLayout.kt, input/persian/PersianPhoneticEngine.kt, input/persian/PhoneticMap.kt, Language.kt (IsiriLayoutTest, PersianPhoneticEngineTest)). Target dir: Packages/QDomain/Sources/QDomain/Persian/ and .../Language/. Pure Swift, no UI imports, depends only on QModel. Check Packages/QModel/Sources/QModel/Enums.swift first. Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

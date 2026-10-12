@@ -1,0 +1,22 @@
+{
+  "name": "m2c-keychain-store",
+  "repo": "ios",
+  "branch": "m2c-keychain-store",
+  "title": "Keychain SessionStore",
+  "closes": null,
+  "issue": "Add Packages/QNetwork/Sources/QNetwork/KeychainSessionStore.swift: a SessionStore (protocol in SessionStore.swift) backed by the Security framework (kSecClassGenericPassword, service 'com.qamooscheh.session', kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, one item holding the JSON-encoded StoredSession). Inject a small KeychainClient protocol (get/set/delete Data) so the logic is tested with an in-memory fake; the real SecItem* implementation is thin. Handle errSecItemNotFound as nil, update-vs-add on save, and a corrupt blob as nil plus delete (never crash). Never log token values. Web reference: E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/auth/AuthProvider.tsx (session lifecycle only; web uses browser storage). Android reference: core/network session/EncryptedSessionStore.kt and SessionStore.kt (find by name). Backend contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/API_SPEC.md (auth/refresh section) and C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Auth/AuthContracts.cs for token fields. Do not change ApiClient or CdnClient (m2b-followup owns those). Where web and Android differ, match the Android app's behaviour (see core/network).",
+  "allowedPaths": [
+    "^Packages/QNetwork/Sources/QNetwork/Keychain",
+    "^Packages/QNetwork/Tests/QNetworkTests/Keychain"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Fake-client tests: round trip, overwrite, clear, corrupt blob, not-found",
+    "No token values in logs or error descriptions"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2b-followup merged (same package; avoids conflicts)",
+  "approved": true,
+  "reviewer": "opus"
+}

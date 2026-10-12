@@ -1,0 +1,20 @@
+{
+  "name": "m3o-sfx-tts-fonts",
+  "repo": "ios",
+  "branch": "m3o-sfx-tts-fonts",
+  "title": "Port sfx, tts, fonts",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): sfx.ts + sfx.test.ts; tts.ts (no test: add XCTest); fonts.ts + fonts.test.ts. Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: search by name (sfx, tts, fonts); may not exist in core/domain). Target dir: Packages/QDomain/Sources/QDomain/Audio/ and .../Fonts/. Pure Swift, no UI imports, depends only on QModel. Pure logic only: no AVFoundation or UIKit imports. If a file is only meaningful with platform APIs, hold for the user. Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

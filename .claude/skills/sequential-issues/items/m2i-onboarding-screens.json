@@ -1,0 +1,21 @@
+{
+  "name": "m2i-onboarding-screens",
+  "repo": "ios",
+  "branch": "m2i-onboarding-screens",
+  "title": "Onboarding screens (SwiftUI)",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Onboarding: SwiftUI OnboardingFlowView and the name, languages and tutorial step views bound to the m2h view model, using QDesign tokens; progress indicator, back/next buttons, accessibility labels. Hook into the App AuthGate so a signed-in user with onboardingComplete false lands here. Web reference: E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/onboarding/OnboardingFlow.tsx, the three step files, Onboarding.module.css and OnboardingTutorialStep.module.css. Android reference: feature/onboarding OnboardingScreen.kt (find by name). Backend contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Onboarding/OnboardingContracts.cs and C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/API_SPEC.md. Visual judgement is held for the user. Where web and Android differ, match the Android app's behaviour (see feature/onboarding).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Onboarding/",
+    "^App/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "App builds for simulator"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2g and m2h merged; visual check held for the user",
+  "approved": true,
+  "reviewer": "sonnet"
+}

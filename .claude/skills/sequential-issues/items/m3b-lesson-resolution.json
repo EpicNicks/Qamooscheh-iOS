@@ -1,0 +1,20 @@
+{
+  "name": "m3b-lesson-resolution",
+  "repo": "ios",
+  "branch": "m3b-lesson-resolution",
+  "title": "Port exerciseResolution, lessonScore, answerVariants, answerRegister, retype, mistakeHints",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): exerciseResolution.ts (no test: add XCTest for its behaviour); lessonScore.ts (no test: add XCTest); answerVariants.ts + answerVariants.test.ts; answerRegister.ts (no test: add XCTest); retype.ts + retype.test.ts; mistakeHints.ts + mistakeHints.test.ts. Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: lesson/AnswerVariants.kt, lesson/Answers.kt, lesson/LessonEngine.kt (AnswersTest, AnswerVariantsTest, LessonEngineTest)). Target dir: Packages/QDomain/Sources/QDomain/Lesson/. Pure Swift, no UI imports, depends only on QModel. Wire types (exercise, session) come from QModel; compare with SessionPlanContracts.cs and SessionSubmitContracts.cs in C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/. Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

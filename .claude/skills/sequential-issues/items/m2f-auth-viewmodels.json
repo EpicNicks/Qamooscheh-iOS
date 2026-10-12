@@ -1,0 +1,21 @@
+{
+  "name": "m2f-auth-viewmodels",
+  "repo": "ios",
+  "branch": "m2f-auth-viewmodels",
+  "title": "Login and register view models (logic only)",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Auth: @MainActor ObservableObject view models LoginViewModel and RegisterViewModel with pure-logic validation (email format, password length/match rules exactly as the web pages enforce), submit state machine (idle, submitting, error(message), success), double-submit guard, and mapping of AuthError (from m2d) to user-visible strings. No SwiftUI View code; depend on an AuthService protocol that AuthApi conforms to. Tests with a fake service. Web reference: E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/LoginPage.tsx and E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/RegisterPage.tsx. Android reference: feature/auth AuthViewModel.kt (find by name). Backend contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/API_SPEC.md and C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Auth/AuthContracts.cs (validation limits). Where web and Android differ, match the Android app's behaviour (see feature/auth).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Auth/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/Auth/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Validation rules match the web pages and backend limits; tests cover each state transition"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2d merged (and therefore m2b-followup)",
+  "approved": true,
+  "reviewer": "sonnet"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "m8b-keyboard-build",
+  "repo": "ios",
+  "branch": "m8b-keyboard-build",
+  "title": "Keyboard extension build",
+  "closes": null,
+  "issue": "KeyboardExt/ and Packages/QKeyboard: build the extension per the decisions in docs/keyboard-ext-spike.md (m8a). Do not start until the user has accepted the spike recommendation; rewrite this issue from the spike then. Likely slices: layouts and key rendering, candidate popup, host text insertion/deletion, Full Access gating; split into further items if over 600 lines. Where web and Android differ, match the Android app's behaviour (cite the relevant Android file in your report; locate it by name). No Swift toolchain locally: push early and fix from CI. Keep each slice under ~600 changed lines; if it grows, stop and report a split.",
+  "allowedPaths": [
+    "^KeyboardExt/",
+    "^Packages/QKeyboard/",
+    "^project\\.yml$"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot PNGs uploaded as CI artifacts (light/dark, default and large Dynamic Type)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "deferred past v1 (decision: in-app keyboard only); do not run",
+  "approved": false,
+  "reviewer": "opus"
+}

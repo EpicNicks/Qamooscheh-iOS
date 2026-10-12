@@ -1,0 +1,20 @@
+{
+  "name": "m3l-goals-streak-reports",
+  "repo": "ios",
+  "branch": "m3l-goals-streak-reports",
+  "title": "Port dailyGoal, streak, exerciseReport, skillRefKey, themeLookup",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): dailyGoal.ts + dailyGoal.test.ts; streak.ts + streak.test.ts; exerciseReport.ts + exerciseReport.test.ts; skillRefKey.ts (no test: add XCTest); themeLookup.ts (no test: add XCTest). Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: DailyGoal.kt, Streak.kt (DailyGoalTest, StreakTest)). Target dir: Packages/QDomain/Sources/QDomain/Progress/. Pure Swift, no UI imports, depends only on QModel. Wire types: StreakContracts.cs, ExerciseReportContracts.cs; QModel has StreakModels.swift and ReportModels.swift. Dates: inject Calendar/timezone, never call Date() inside logic. Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

@@ -1,0 +1,21 @@
+{
+  "name": "m5n-exercises-wordbank-match",
+  "repo": "ios",
+  "branch": "m5n-exercises-wordbank-match",
+  "title": "Word bank and match exercise views",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/Exercises/: ExercisePrompt, WordBankExercise, MatchExercise using AnnotatedText and QDomain wordBankOrders. Read web src/components/lesson/ExercisePrompt.tsx, WordBankExercise.tsx, MatchExercise.tsx, ExerciseRenderer.tsx, Exercise.module.css. Android reference: feature/lesson/.../Exercises.kt. Snapshots: ja and fa prompts, bank empty/partial/full, match selected/matched/wrong, RTL bank flow. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../Exercises.kt.).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Lesson/Exercises/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots; needs m5f and m5m merged",
+  "approved": true,
+  "reviewer": "sonnet"
+}

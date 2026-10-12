@@ -1,0 +1,22 @@
+{
+  "name": "m2b-followup",
+  "repo": "ios",
+  "branch": "m2b-followup",
+  "title": "QNetwork review follow-ups: refresh resilience, CDN URL safety, tests",
+  "closes": null,
+  "issue": "Fix the 5 open findings from ledger/m2b-network-auth/review.json (verdict fixes-needed) in Packages/QNetwork only. (1) medium, Sources/QNetwork/ApiClient.swift:87: a failed up-front refresh (5xx/408/429/network error) aborts sendRaw although the access token is still valid for up to 30s; on a non-auth refresh failure, fall through and send the request with the current token (a 401 then takes the normal refresh path; an actual auth rejection of the refresh token must still log out). (2) medium, ApiClient.swift:97: StaleRefreshError escapes sendRaw; catch it and retry once with the now-current session (re-read SessionStore), without a further refresh loop; if there is no session anymore, surface the unauthenticated error. (3) medium, Sources/QNetwork/CdnClient.swift:77: contentURL resolves relativePath from unverified child JSON via URL(string:relativeTo:), so an absolute URL such as 'https://evil.example/a.mp3' replaces the CDN host (audio host replacement); reject absolute/scheme-bearing/protocol-relative paths and '..' segments, and verify the resolved URL's scheme and host (and port) equal baseURL's, throwing a typed error otherwise. (4) low, CdnClient.swift:60: courseCode and path are interpolated into URLs without percent-encoding and baseURL trailing slash yields '//course/...'; percent-encode each path segment (so '/', '?', '#' in courseCode cannot alter the path) and normalise the baseURL trailing slash. (5) low, Tests/QNetworkTests/ApiClientTests.swift:0: add tests with the existing StubURLProtocol for concurrent 401s sharing exactly one refresh (single-flight), StaleRefreshError handling (finding 2), the already-rotated-token retry path, up-front refresh failure falling through (finding 1), and CdnClientTests for absolute-URL rejection and percent-encoding (findings 3, 4). Refresh/auth wire contract: backend API_SPEC.md (C:/Users/epicn/source/repos/Qamooscheh) and its C# auth contracts; do not change wire types. No real network in tests. Keychain store remains out of scope (acknowledged deviation).",
+  "allowedPaths": [
+    "^Packages/QNetwork/Sources/QNetwork/",
+    "^Packages/QNetwork/Tests/QNetworkTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "All 5 findings in ledger/m2b-network-auth/review.json addressed, each with a test",
+    "contentURL rejects any URL whose scheme/host differs from baseURL"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user approval before any other network-dependent item",
+  "approved": true,
+  "reviewer": "opus"
+}

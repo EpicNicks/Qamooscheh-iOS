@@ -1,0 +1,21 @@
+{
+  "name": "m4a-path-state",
+  "repo": "ios",
+  "branch": "m4a-path-state",
+  "title": "Path screen state model (pure logic)",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Learn/PathState.swift: a SwiftUI-free state struct/reducer driving the Path screen: current course, enrolled skill groups, completed lessons, current node, open popover id, jump-to-current visibility, daily goal progress. Compose existing QDomain pathProgress/roadLayout (no re-implementation) and QModel types. Read web src/pages/PathPage.tsx, web src/hooks/useCompletedLessons.ts, web src/hooks/useEnrollment.ts, web src/components/path/useSkillActions.ts. Android reference: feature/learn/src/main/kotlin/com/qamooscheh/feature/learn/PathViewModel.kt and PathActions.kt. Repository access via a protocol defined in this file (no QData dependency yet); tests with an in-memory fake. Wire types for completed lessons/streak: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Bootstrap/BootstrapContracts.cs and Streak/StreakContracts.cs (already in QModel; do not change). Where web and Android differ, match the Android app's behaviour (see feature/learn/src/main/kotlin/com/qamooscheh/feature/learn/PathViewModel.kt).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Learn/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Tests cover current-node selection, popover open/close, daily goal progress, jump-to-current visibility"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs M3a merged",
+  "approved": true,
+  "reviewer": "sonnet"
+}

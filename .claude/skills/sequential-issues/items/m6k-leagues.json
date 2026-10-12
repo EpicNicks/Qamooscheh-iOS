@@ -1,0 +1,23 @@
+{
+  "name": "m6k-leagues",
+  "repo": "ios",
+  "branch": "m6k-leagues",
+  "title": "Leagues screen",
+  "closes": null,
+  "issue": "Packages/QFeatures Social folder (+ QData league repository, QModel types). Read web src/pages/LeaguesPage.tsx (+ module.css), web src/hooks/useLeague.ts and Android feature/social/src/main/kotlin/com/qamooscheh/feature/social/LeaguesScreen.kt, LeaguesViewModel.kt. Wire contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Leagues/LeagueContracts.cs (golden JSON test). Promotion/demotion zones rendered from server data only. Where web and Android differ, match the Android app's behaviour (see feature/social/src/main/kotlin/com/qamooscheh/feature/social/LeaguesScreen.kt). No Swift toolchain locally: push early and fix from CI. Keep each slice under ~600 changed lines; if it grows, stop and report a split.",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Social/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^Packages/QModel/",
+    "^Packages/QData/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot PNGs uploaded as CI artifacts (light/dark, default and large Dynamic Type)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots",
+  "approved": true,
+  "reviewer": "sonnet"
+}

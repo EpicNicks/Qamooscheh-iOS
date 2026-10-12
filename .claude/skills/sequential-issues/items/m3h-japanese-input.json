@@ -1,0 +1,20 @@
+{
+  "name": "m3h-japanese-input",
+  "repo": "ios",
+  "branch": "m3h-japanese-input",
+  "title": "Port japanese/* (kana tables, dakuten, JIS layout, romajiToKana)",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): japanese/dakuten.ts, japanese/kanaScript.ts, japanese/kanaTable.ts, japanese/jisKanaLayout.ts (no tests: add XCTest); japanese/romajiToKana.ts + japanese/romajiToKana.test.ts. Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: input/japanese/*.kt (RomajiToKanaTest, KanaKeyboardTest)). Target dir: Packages/QDomain/Sources/QDomain/Japanese/. Pure Swift, no UI imports, depends only on QModel. Logic only; the keyboard UI belongs to QKeyboard (M5). Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

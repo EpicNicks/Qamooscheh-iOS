@@ -1,0 +1,24 @@
+{
+  "name": "m4e-path-update-banner",
+  "repo": "ios",
+  "branch": "m4e-path-update-banner",
+  "title": "Content update banner and roll-forward logic",
+  "closes": null,
+  "issue": "Pure logic in Packages/QData/Sources/QData/Content/ContentUpdate.swift plus a banner view in QFeatures/Learn. Behaviour: detect a newer pinned course content version from bootstrap, show a banner, and on accept download the full course via QNetwork CdnClient (SHA-256 verified) then roll the pinned version forward atomically (old version kept until the new one verifies; failure leaves the old version usable). Read web src/hooks/useCourseContent.ts, web src/hooks/useBootstrap.ts, web src/api/content.ts. Android reference: core/data/.../content/ (list that directory by name) and BootstrapRepository.kt. Wire: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Bootstrap/BootstrapContracts.cs. Use a fake CdnClient transport in tests: version bump, hash mismatch keeps old, interrupted download keeps old. Where web and Android differ, match the Android app's behaviour (see core/data/.../content/).",
+  "allowedPaths": [
+    "^Packages/QData/Sources/QData/Content/",
+    "^Packages/QData/Tests/QDataTests/",
+    "^Packages/QFeatures/Sources/QFeatures/Learn/UpdateBanner",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Roll-forward atomicity tests (hash mismatch and interruption keep the old version)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge (banner only)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots (banner only); needs m2b-followup merged",
+  "approved": true,
+  "reviewer": "opus"
+}

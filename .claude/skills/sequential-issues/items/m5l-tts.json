@@ -1,0 +1,21 @@
+{
+  "name": "m5l-tts",
+  "repo": "ios",
+  "branch": "m5l-tts",
+  "title": "TTS: AVSpeechSynthesizer wrapper and voice availability",
+  "closes": null,
+  "issue": "Add Packages/QData/Sources/QData/Speech/SpeechService.swift: protocol plus AVSpeechSynthesizer implementation guarded by canImport(AVFoundation), voice selection per course language (ja-JP, fa-IR, with fallback and a no-voice signal as in web src/hooks/useVoiceAvailability.ts), rate, interrupt-on-new, completion callback, and recorded-audio-first ordering using QDomain playback/recordings/tts (ported by m3n, m3o; do not re-port) per web src/domain/recordings.ts. Android reference: core/platform/src/main/kotlin/com/qamooscheh/core/platform/Speech.kt. Tests use a fake synthesizer. Whether iOS ships a fa-IR voice is device-dependent; the no-voice path must be tested. Where web and Android differ, match the Android app's behaviour (see core/platform/src/main/kotlin/com/qamooscheh/core/platform/Speech.kt.).",
+  "allowedPaths": [
+    "^Packages/QData/Sources/QData/Speech/",
+    "^Packages/QData/Tests/QDataTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Fake-synthesizer tests for ordering, interrupt, and no-voice fallback"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m3n and m3o merged; real voice availability needs a device check (held for user)",
+  "approved": true,
+  "reviewer": "sonnet"
+}

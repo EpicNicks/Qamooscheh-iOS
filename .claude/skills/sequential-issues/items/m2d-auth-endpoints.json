@@ -1,0 +1,21 @@
+{
+  "name": "m2d-auth-endpoints",
+  "repo": "ios",
+  "branch": "m2d-auth-endpoints",
+  "title": "Auth endpoints in QNetwork (login, register, logout, Google)",
+  "closes": null,
+  "issue": "Add Packages/QNetwork/Sources/QNetwork/AuthApi.swift: typed calls over ApiClient for login, register, logout and (if API_SPEC lists it) Google sign-in, mapping request/response bodies to the QModel types in AuthModels.swift (merged in m2a). On success persist StoredSession via SessionStore; on logout call the server then always clear the store. Map 400/401/409 problem responses to a typed AuthError (invalid credentials, email taken, validation messages). Tests with the existing StubURLProtocol, no real network. Web reference: E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/api/auth.ts and E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/auth/AuthProvider.tsx. Android reference: core/network auth/TokenRefresher.kt and feature/auth AuthViewModel.kt (find by name). Backend contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/API_SPEC.md auth section and C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Auth/AuthContracts.cs. Do not change wire types or ApiClient internals. Where web and Android differ, match the Android app's behaviour (see core/network).",
+  "allowedPaths": [
+    "^Packages/QNetwork/Sources/QNetwork/AuthApi",
+    "^Packages/QNetwork/Tests/QNetworkTests/AuthApi"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Each endpoint has success and failure tests; session saved on login/register, cleared on logout even if the server call fails"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2b-followup merged (depends on hardened ApiClient)",
+  "approved": true,
+  "reviewer": "opus"
+}

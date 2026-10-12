@@ -1,0 +1,21 @@
+{
+  "name": "m9d-privacy-metadata",
+  "repo": "ios",
+  "branch": "m9d-privacy-metadata",
+  "title": "Privacy manifest, permission strings, app icon and launch screen",
+  "closes": null,
+  "issue": "App/Resources and project.yml: PrivacyInfo.xcprivacy (declare the required-reason APIs actually used, e.g. UserDefaults, and collected data types matching the fields in C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Auth/AuthContracts.cs), Info.plist usage strings only for permissions really requested, asset catalog slots for icon and launch screen. Do not invent artwork: use the icon files the user supplies in App/Resources/Assets. Where web and Android differ, match the Android app's behaviour (cite the relevant Android file in your report; locate it by name). No Swift toolchain locally: push early and fix from CI. Keep each slice under ~600 changed lines; if it grows, stop and report a split.",
+  "allowedPaths": [
+    "^App/",
+    "^project\\.yml$"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Manifest lists every required-reason API found; the grep used is in the PR body"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user decision and assets: supply the 1024px app icon and approve the App Store privacy answers (data collected; tracking: none assumed)",
+  "approved": true,
+  "reviewer": "sonnet"
+}

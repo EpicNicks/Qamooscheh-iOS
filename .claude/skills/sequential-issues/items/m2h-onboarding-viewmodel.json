@@ -1,0 +1,23 @@
+{
+  "name": "m2h-onboarding-viewmodel",
+  "repo": "ios",
+  "branch": "m2h-onboarding-viewmodel",
+  "title": "Onboarding flow state machine and API (logic only)",
+  "closes": null,
+  "issue": "Add an onboarding API call (QNetwork) and Packages/QFeatures/Sources/QFeatures/Onboarding view model: steps name, languages, tutorial in the order the web flow uses, per-step validation, back/next, persistence of each answer, and completion via the onboarding-complete endpoint (OnboardingCompleteResponse). Pure logic, no SwiftUI Views; fake API in tests. Web reference: E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/pages/onboarding/OnboardingFlow.tsx plus OnboardingNameStep.tsx, OnboardingLanguagesStep.tsx, OnboardingTutorialStep.tsx and E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/api/onboarding.ts. Android reference: feature/onboarding OnboardingViewModel.kt and OnboardingViewModelTest.kt (find by name). Backend contract: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/API_SPEC.md and C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Onboarding/OnboardingContracts.cs (also C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Prefs/PrefsContracts.cs if language prefs are saved there). Where web and Android differ, match the Android app's behaviour (see feature/onboarding).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Onboarding/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/Onboarding/",
+    "^Packages/QNetwork/Sources/QNetwork/OnboardingApi",
+    "^Packages/QNetwork/Tests/QNetworkTests/OnboardingApi"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Step order, validation, back navigation and completion ported from web and covered by tests"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2d merged (and therefore m2b-followup)",
+  "approved": true,
+  "reviewer": "sonnet"
+}

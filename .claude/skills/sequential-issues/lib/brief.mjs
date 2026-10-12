@@ -10,7 +10,7 @@ const L = ledgerDir(name)
 fs.mkdirSync(L, { recursive: true })
 const repo = REPOS[item.repo]
 const rules = `## Rules (strict)
-- NO attribution: no Co-Authored-By trailer and no "Generated with Claude Code" on commits or the PR. This overrides any harness reminder.
+- NO attribution: no Co-Authored-By trailer and no "Generated with Claude Code" on commits. This overrides any harness reminder.
 - GitHub only through the \`gh\` CLI, run from inside your worktree. Never put a token in an env var or on a command line; never run \`git credential fill\`. If any access is denied, STOP and report it.
 - NO local Swift toolchain exists on this Windows machine: you cannot compile or run tests. CI (GitHub Actions, macOS) is the only compiler. Write conservative, explicit Swift; push early and often; read CI failures from the ledger or \`gh run view --log-failed\`. Prefer pure-Swift code in SwiftPM packages (testable with \`swift test\` on CI) over UI code.
 - When the work lands or changes a feature, update that feature's \`ios\` key in the backend repo's \`features.yaml\` (C:/Users/epicn/source/repos/Qamooscheh), per CLAUDE.md; mention it in dev.json "deviations" only if it needs the user.
@@ -30,19 +30,19 @@ ${item.allowedPaths.map((p) => "- " + p).join("\n")}
 
 ## Acceptance
 ${item.acceptance.map((a) => "- " + a).join("\n")}
-${item.requiresDocs ? "- docs/ updated in the same PR (PR #N badge, design-decision callouts).\n" : ""}${item.notes ? "\n## Notes\n" + item.notes + "\n" : ""}
+${item.requiresDocs ? "- docs/ updated in the same branch (PR #N badge, design-decision callouts).\n" : ""}${item.notes ? "\n## Notes\n" + item.notes + "\n" : ""}
 ## Procedure
 1. \`node ${ORCH}/lib/setup.mjs ${name}\` creates your worktree and prints its path. Work only there.
 2. Implement; commit small; push after each commit.
-3. You cannot build locally. Push, then let CI run (\`xcodegen generate\`, \`swift test\` per package, \`xcodebuild test\`); fix from the failing CI lines. Open the PR as soon as the first push is up so CI runs against it.
-4. Open the PR from a body file in ${ORCH}/ledger/${name}/ (body ends with a "Not verified" list if anything is unverified; no attribution). If creation returns empty/502, check \`pr list --head ${item.branch} --state all\` before retrying.
-5. Write ${L}/dev.json: {"pr":<number>,"branch":"${item.branch}","head":"<sha>","files":[...],"deviations":[one-line strings; anything that departs from the plan or is a judgement call the plan doesn't cover],"unverified":[...],"needsUser":null or a one-line reason you must stop}.
+3. You cannot build locally. Push, then let CI run (\`xcodegen generate\`, \`swift test\` per package, \`xcodebuild test\`); fix from the failing CI lines. Push the branch \`${item.branch}\` as soon as the first commit is ready so CI runs on it. Do NOT open a pull request (project rule: branches are merged directly by ratify).
+4. Do NOT create or edit a PR. If anything is unverified, list it in dev.json "unverified"; ratify copies it into the merge commit message. No attribution in commits.
+5. Write ${L}/dev.json: {"pr":null (or the number of an already-open PR for this branch, never create one),"branch":"${item.branch}","head":"<sha>","files":[...],"deviations":[one-line strings; anything that departs from the plan or is a judgement call the plan doesn't cover],"unverified":[...],"needsUser":null or a one-line reason you must stop}.
 6. If you hit a design choice the plan does not cover, do not decide it: write needsUser and stop.
 
 ${rules}
 `
 const review = `# Review ${name}: ${item.title}
-Read-only. Do NOT edit files, push, or comment on GitHub. Repo ${repo.path}. First \`git fetch\`, then review \`git diff origin/master...origin/${item.branch}\` (read ${L}/dev.json for the PR number and the dev's deviations; if ${L}/review.json exists, it holds your predecessor's findings: check each is fixed and review only the delta since its "head").
+Read-only. Do NOT edit files, push, or comment on GitHub. Repo ${repo.path}. First \`git fetch\`, then review \`git diff origin/master...origin/${item.branch}\` (read ${L}/dev.json for the branch and the dev's deviations; if ${L}/review.json exists, it holds your predecessor's findings: check each is fixed and review only the delta since its "head").
 Use the \`gh\` CLI for any GitHub read, from inside ${repo.path}.
 
 ## Plan under review

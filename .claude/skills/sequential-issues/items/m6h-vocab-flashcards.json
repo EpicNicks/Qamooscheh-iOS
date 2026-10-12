@@ -1,0 +1,25 @@
+{
+  "name": "m6h-vocab-flashcards",
+  "repo": "ios",
+  "branch": "m6h-vocab-flashcards",
+  "title": "Vocabulary review and flashcards",
+  "closes": null,
+  "issue": "Packages/QFeatures Words folder (+ QDomain ports if absent: web src/domain/courseVocabulary.ts, web src/domain/flashcards.ts with tests). Read web src/pages/VocabularyReviewPage.tsx (+ module.css), web src/pages/FlashcardsPage.tsx, web src/lib/cardStateStore.ts, and Android feature/words/src/main/kotlin/com/qamooscheh/feature/words/SkillVocabularyScreen.kt, FlashcardsScreen.kt, FlashcardsViewModel.kt, VocabularySource.kt, VocabTerms.kt. Wire contracts: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Vocab/VocabContracts.cs and C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/Flashcards/FlashcardContracts.cs (port missing types to QModel with golden JSON tests; keep that part first and small). If over 600 lines, split flashcards into its own item. Where web and Android differ, match the Android app's behaviour (see feature/words/src/main/kotlin/com/qamooscheh/feature/words/SkillVocabularyScreen.kt). No Swift toolchain locally: push early and fix from CI. Keep each slice under ~600 changed lines; if it grows, stop and report a split.",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Words/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^Packages/QDomain/",
+    "^Packages/QModel/",
+    "^Packages/QData/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot PNGs uploaded as CI artifacts (light/dark, default and large Dynamic Type)",
+    "Card state persists across relaunch (unit test on the store)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots",
+  "approved": true,
+  "reviewer": "sonnet"
+}

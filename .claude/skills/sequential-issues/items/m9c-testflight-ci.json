@@ -1,0 +1,21 @@
+{
+  "name": "m9c-testflight-ci",
+  "repo": "ios",
+  "branch": "m9c-testflight-ci",
+  "title": "TestFlight upload from CI",
+  "closes": null,
+  "issue": ".github/workflows/release.yml and fastlane lane beta: trigger on version tag only (v*), build number from github.run_number, upload with the App Store Connect API key via fastlane pilot, changelog from the tag message. Secrets in a protected GitHub environment, no secrets on forked-PR runs, minimal explicit workflow permissions, actions pinned by SHA. Needs m9b merged and secrets present. Where web and Android differ, match the Android app's behaviour (cite the relevant Android file in your report; locate it by name). No Swift toolchain locally: push early and fix from CI. Keep each slice under ~600 changed lines; if it grows, stop and report a split.",
+  "allowedPaths": [
+    "^\\.github/workflows/release\\.yml$",
+    "^fastlane/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "release workflow cannot run on pull_request events; permissions block is explicit"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user: create the GitHub environment \"release\" with a required reviewer, confirm the App Store Connect app record exists, push the first tag and confirm the build appears in TestFlight",
+  "approved": true,
+  "reviewer": "opus"
+}

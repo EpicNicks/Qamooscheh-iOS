@@ -1,0 +1,21 @@
+{
+  "name": "m5m-lesson-engine",
+  "repo": "ios",
+  "branch": "m5m-lesson-engine",
+  "title": "Lesson engine state machine",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/LessonEngine.swift (SwiftUI-free): exercise queue, answer check via injected QGrader Grader protocol, retry-at-end of missed exercises, hearts/score, XP via QDomain lessonScore, exerciseResolution and answerFeedback, completion producing a submit payload for OfflineQueue. Read web src/hooks/useLessonEngine.ts, useExerciseSession.ts, useAnswerConfirmation.ts, web src/domain/exerciseResolution.ts. Android reference: feature/lesson/.../LessonViewModel.kt. Tests with a fake Grader returning scripted verdicts, including the deferred \"checked when you sync\" case. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../LessonViewModel.kt.).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Lesson/LessonEngine",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Fake-grader tests for correct, wrong, retry, deferred-grading, completion payload"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs M1 grader result (docs/grader-spike.md and chosen runtime) and M3 domain items merged; needs m5j merged",
+  "approved": true,
+  "reviewer": "opus"
+}

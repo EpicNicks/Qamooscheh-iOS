@@ -1,0 +1,21 @@
+{
+  "name": "m6e-themes-screens",
+  "repo": "ios",
+  "branch": "m6e-themes-screens",
+  "title": "Themes browse and remix screens",
+  "closes": null,
+  "issue": "Packages/QFeatures Library folder. Read web src/pages/ThemesPage.tsx, web src/pages/ThemeBrowsePage.tsx, web src/pages/ThemeRemixPage.tsx (+ their .module.css) and web src/components/themes/*. Android reference: Android feature/library/src/main/kotlin (locate Themes*/Remix* screens by name). Logic from m3m-themes-remix. Needs m3m-themes-remix merged. Where web and Android differ, match the Android app's behaviour (see feature/library/src/main/kotlin). No Swift toolchain locally: push early and fix from CI. Keep each slice under ~600 changed lines; if it grows, stop and report a split.",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Library/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot PNGs uploaded as CI artifacts (light/dark, default and large Dynamic Type)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots",
+  "approved": true,
+  "reviewer": "sonnet"
+}

@@ -1,0 +1,21 @@
+{
+  "name": "m5i-lesson-api",
+  "repo": "ios",
+  "branch": "m5i-lesson-api",
+  "title": "QData: session plan, session for lesson, submit repository",
+  "closes": null,
+  "issue": "Packages/QData/Sources/QData/Lesson/: LessonRepository over QNetwork ApiClient: fetch session plan, session for lesson, submit completed session, post lessons-completed. Read web src/api/sessionPlan.ts, sessionForLesson.ts, sessionSubmit.ts, lessonsCompleted.ts for endpoints only; wire types come from C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/SessionPlan/SessionPlanContracts.cs and SessionSubmit/SessionSubmitContracts.cs (already in QModel; add nothing there unless a golden test proves a gap). Android reference: core/data/.../LessonRepository.kt and SessionCoordinator.kt. Tests with StubURLProtocol: request paths, bodies, error mapping. Where web and Android differ, match the Android app's behaviour (see core/data/.../LessonRepository.kt).",
+  "allowedPaths": [
+    "^Packages/QData/Sources/QData/Lesson/",
+    "^Packages/QData/Tests/QDataTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Request/response shape tests against golden JSON"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m2b-followup merged",
+  "approved": true,
+  "reviewer": "sonnet"
+}

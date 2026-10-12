@@ -20,7 +20,8 @@ Without the Workflow tool, follow `ORCHESTRATOR.md` (a paste-ready orchestrator 
 ## Rules
 - No local Swift toolchain: CI is the compiler. Prefer logic in SwiftPM packages so `swift test` proves it.
 - Never hand-edit a generated `.xcodeproj`; edit `project.yml`.
-- No attribution trailer/footer in commits or PR bodies (ratify holds on it).
+- No attribution trailer/footer in commits (ratify holds on it). No PRs: devs push the branch; ratify --merge merges it into master with --no-ff and pushes.
+- `ratify.mjs --accept-deviations` skips only the deviations hold (CI green on the reviewed head, 0 blocker/high, non-opus reviewer, no Auth/Keychain/Session/Security/Token/Cdn/Network/Signing/Secret paths, nothing outside allowedPaths) and logs them to `ledger/<item>/deviations.md`.
 - Anything off-plan, needing a design decision, a device, or a visual check is held and brought to the user.
 - Requires: a GitHub remote `EpicNicks/Qamooscheh-iOS` with branch `master` and `gh` authenticated.
 

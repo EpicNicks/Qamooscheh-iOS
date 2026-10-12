@@ -1,12 +1,12 @@
-// CI state for a PR head, from the Actions runs API (not the check rollup, which lags a fresh push).
+// CI state for a branch head, from the Actions runs API (not the check rollup, which lags a fresh push).
 import { REPOS, gh, ghJson } from "./common.mjs"
 
 const GREEN = new Set(["success", "skipped", "neutral"])
 const ERR = /error:|BUILD FAILED|TEST FAILED|Test Case .* failed|Fatal error|Testing failed|Process completed with exit code/
 
-export function ciOnce(item, pr) {
+export function ciOnce(item) {
   const slug = REPOS[item.repo].slug
-  const head = ghJson(item.repo, ["api", `repos/${slug}/pulls/${pr}`]).head.sha
+  const head = ghJson(item.repo, ["api", `repos/${slug}/branches/${encodeURIComponent(item.branch)}`]).commit.sha
   const runs = ghJson(item.repo, ["api", `repos/${slug}/actions/runs?head_sha=${head}`]).workflow_runs
   const done = runs.length > 0 && runs.every((r) => r.status === "completed")
   const allGreen = done && runs.every((r) => GREEN.has(r.conclusion))

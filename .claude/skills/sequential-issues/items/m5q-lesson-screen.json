@@ -1,0 +1,22 @@
+{
+  "name": "m5q-lesson-screen",
+  "repo": "ios",
+  "branch": "m5q-lesson-screen",
+  "title": "Lesson screen host and path navigation wiring",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/LessonScreen.swift binding LessonEngine, exercise views, feedback, results, close/skip/leave modals (CloseLessonButton, SkipLessonModal, LeaveCheckpointModal), language settings popover (LanguageSettingsPopover and toggles: keyboard mode, script mode, furigana, romanization, vowel marks, native text align), and queue flush on completion; plus App/ wiring from Path nodes to the lesson. Read web src/pages/LessonPage.tsx, components/lesson/ExerciseSessionScreen.tsx, CloseLessonButton.tsx, SkipLessonModal.tsx, languageSettings/LanguageSettingsPopover.tsx. Android reference: feature/lesson/.../LessonScreen.kt, LessonSettings.kt. Snapshots of settings popover and the modals; end-to-end flow needs a simulator or device run. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../LessonScreen.kt).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Lesson/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots; needs all earlier m4 and m5 items merged; end-to-end check needs a device run (held for user)",
+  "approved": true,
+  "reviewer": "sonnet"
+}

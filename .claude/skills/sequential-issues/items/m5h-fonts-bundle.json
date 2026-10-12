@@ -1,0 +1,22 @@
+{
+  "name": "m5h-fonts-bundle",
+  "repo": "ios",
+  "branch": "m5h-fonts-bundle",
+  "title": "QDesign: bundled Persian/Japanese fonts and script text styles",
+  "closes": null,
+  "issue": "Packages/QDesign/Sources/QDesign/ScriptFonts.swift plus font resources and project.yml registration (UIAppFonts). Registers the fonts chosen by QDomain fonts (m3o), exposes Font accessors per script and size, with system fallback when a font fails to register. Read Android core/designsystem/.../theme/ScriptFonts.kt and Typography.kt for the family list and licenses. Font files are binary and must come from the user; implement against the names with fallbacks and a test that asserts the fallback path and accessor mapping. Snapshot a specimen sheet. Where web and Android differ, match the Android app's behaviour (see core/designsystem/.../theme/ScriptFonts.kt).",
+  "allowedPaths": [
+    "^Packages/QDesign/",
+    "^project\\.yml$"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge",
+    "Fallback path tested without the font files present"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots; user must supply or approve font files and licenses (design decision); needs m3o merged",
+  "approved": true,
+  "reviewer": "sonnet"
+}

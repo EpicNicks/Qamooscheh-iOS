@@ -1,0 +1,22 @@
+{
+  "name": "m5j-offline-queue",
+  "repo": "ios",
+  "branch": "m5j-offline-queue",
+  "title": "QData: persistent offline submission queue",
+  "closes": null,
+  "issue": "Packages/QData/Sources/QData/Offline/OfflineQueue.swift: durable per-user FIFO queue of pending session submissions (file- or SwiftData-backed behind a storage protocol; in-memory fake for tests), idempotent enqueue by client submission id, dedupe, retry metadata (attempts, next-eligible time), survives relaunch, never drops an item on failure, keyed per user so logout/login does not leak. Port web src/lib/offlineQueue.ts with offlineQueue.test.ts 1:1, tests first. Android reference: core/data/.../db/ (list by name) and SessionCoordinator.kt. Actor-isolated; no flush networking in this item. Wire: C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/SessionSubmit/SessionSubmitContracts.cs. Where web and Android differ, match the Android app's behaviour (see core/data/.../db/).",
+  "allowedPaths": [
+    "^Packages/QData/Sources/QData/Offline/",
+    "^Packages/QData/Tests/QDataTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "offlineQueue.test.ts cases ported 1:1",
+    "Tests for relaunch persistence, per-user isolation, concurrent enqueue"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m5i merged",
+  "approved": true,
+  "reviewer": "opus"
+}

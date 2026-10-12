@@ -1,0 +1,21 @@
+{
+  "name": "m5k-offline-flush",
+  "repo": "ios",
+  "branch": "m5k-offline-flush",
+  "title": "QData: queue flush, retry and background trigger",
+  "closes": null,
+  "issue": "Packages/QData/Sources/QData/Offline/QueueFlusher.swift: single-flight flush of OfflineQueue through LessonRepository: stop on network failure, drop-with-report only on definitive 4xx per the web rules, exponential backoff, no double-submit when called concurrently or when the app is killed mid-submit (idempotency id). Trigger points as protocol hooks (app foreground, reachability regained; BGTaskScheduler registration happens in the App target in a later item). Read web src/hooks/useOfflineQueueFlush.ts, web src/lib/submitRecordedAnswers.ts. Android reference: core/data/.../SessionCoordinator.kt. Tests: concurrent flush calls submit once, 5xx retains, 4xx handling, mid-flush cancellation. Where web and Android differ, match the Android app's behaviour (see core/data/.../SessionCoordinator.kt.).",
+  "allowedPaths": [
+    "^Packages/QData/Sources/QData/Offline/",
+    "^Packages/QData/Tests/QDataTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Concurrency tests prove no duplicate submit"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m5j merged",
+  "approved": true,
+  "reviewer": "opus"
+}

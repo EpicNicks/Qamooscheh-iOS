@@ -1,4 +1,4 @@
-// node ci-wait.mjs <item> [--timeout <s>] [--once] : wait for CI on the PR head; print a compact JSON verdict.
+// node ci-wait.mjs <item> [--timeout <s>] [--once] : wait for CI on the branch head (no PR needed); print a compact JSON verdict.
 import { ledgerDir, loadItem, out, readJson, sleep, writeJson } from "./common.mjs"
 import { ciOnce, failureLines } from "./ci.mjs"
 
@@ -10,12 +10,12 @@ const POLL_MS = 85_000
 
 const item = loadItem(name)
 const dev = readJson(`${ledgerDir(name)}/dev.json`)
-if (!dev?.pr) { out({ name, error: "no dev.json with a pr number" }); process.exit(0) }
+if (!dev) { out({ name, error: "no dev.json" }); process.exit(0) }
 
 let waited = 0
 for (;;) {
   let s = null
-  try { s = ciOnce(item, dev.pr) } catch (e) {
+  try { s = ciOnce(item) } catch (e) {
     if (once || waited >= timeoutMs) { out({ name, error: String(e.message).slice(0, 200) }); process.exit(0) }
   }
   // done = every run for this exact head sha has completed (an engine PR can have two runs per sha)

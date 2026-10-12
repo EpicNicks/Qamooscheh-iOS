@@ -1,0 +1,20 @@
+{
+  "name": "m3m-themes-remix",
+  "repo": "ios",
+  "branch": "m3m-themes-remix",
+  "title": "Port themeTree, deepDiveRemix, remixContents",
+  "closes": null,
+  "issue": "Packages/QDomain: port from E:/Code/Projects/Qamooscheh-Web/Qamooscheh-Web/src/domain/ (read these files only): themeTree.ts + themeTree.test.ts; deepDiveRemix.ts + deepDiveRemix.test.ts; remixContents.ts + remixContents.test.ts. Port tests 1:1 as XCTest, tests first; for files without a web test, write XCTest covering their documented behaviour. Android reference (E:/Code/Projects/Qamooscheh-Android, core/domain, find by name: theme/ThemeTree.kt, theme/DeepDiveRemix.kt (ThemeTreeTest, DeepDiveRemixTest)). Target dir: Packages/QDomain/Sources/QDomain/Themes/. Pure Swift, no UI imports, depends only on QModel. Where web and Android differ, match the Android app's behaviour (see Code/Projects/Qamooscheh-Android).",
+  "allowedPaths": [
+    "^Packages/QDomain/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Every listed web test case has a matching XCTest"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "awaiting user review of issue text",
+  "approved": true,
+  "reviewer": "sonnet"
+}

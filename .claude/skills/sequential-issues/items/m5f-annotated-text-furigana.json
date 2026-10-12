@@ -1,0 +1,23 @@
+{
+  "name": "m5f-annotated-text-furigana",
+  "repo": "ios",
+  "branch": "m5f-annotated-text-furigana",
+  "title": "AnnotatedText with furigana and RTL",
+  "closes": null,
+  "issue": "Packages/QDesign and QFeatures: AnnotatedText view rendering annotation spans with furigana above kanji (SwiftUI has no ruby; use AttributedString/CoreText CTRubyAnnotation in a UIViewRepresentable, or a custom Layout; pick and justify in PR body), Persian vowel marks, romanization line, hint tap targets, and RTL for Persian. Read web src/components/lesson/AnnotatedText.tsx, AnnotatedText.module.css, SentenceRomanization.tsx, web src/hooks/useShowFurigana.ts, useShowRomanizationHints.ts, useNativeTextAlign.ts. Android reference: feature/lesson/.../AnnotatedText.kt and core/designsystem/.../component/DirectionalText.kt. Snapshots: kanji with furigana wrapping across lines, mixed ja/latin, Persian RTL with ezafe, Persian with vowel marks off/on. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../AnnotatedText.kt).",
+  "allowedPaths": [
+    "^Packages/QDesign/Sources/QDesign/",
+    "^Packages/QFeatures/Sources/QFeatures/Lesson/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^Packages/QDesign/Tests/QDesignTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots; ruby technique is a user design call; needs m3e, m3f merged (annotation, romanization in QDomain)",
+  "approved": true,
+  "reviewer": "sonnet"
+}

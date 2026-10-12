@@ -1,0 +1,21 @@
+{
+  "name": "m5p-lesson-feedback-results",
+  "repo": "ios",
+  "branch": "m5p-lesson-feedback-results",
+  "title": "Answer feedback, progress bar and results screen",
+  "closes": null,
+  "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/: AnswerFeedback panel, SessionProgressBar, XpBurst, LessonResults, ReportIssue sheet (posts via web src/api/exerciseReport.ts; wire in C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/ExerciseReports/ExerciseReportContracts.cs). Read web src/components/lesson/AnswerFeedback.tsx, SessionProgressBar.tsx, XpBurst.tsx, LessonResults.tsx, ReportIssue.tsx. Android reference: feature/lesson/.../LessonScreen.kt, ExerciseReport.kt, GoalCelebration.kt. Snapshots: correct, wrong with mistake hint, results with streak/goal. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../LessonScreen.kt).",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Lesson/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Snapshot tests added (swift-snapshot-testing, pinned simulator); recorded images are UNVERIFIED, user must review the CI snapshot artifacts before merge"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs user visual review of snapshots; needs m5m merged",
+  "approved": true,
+  "reviewer": "sonnet"
+}

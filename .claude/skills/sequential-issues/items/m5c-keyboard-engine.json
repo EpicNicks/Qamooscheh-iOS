@@ -1,0 +1,22 @@
+{
+  "name": "m5c-keyboard-engine",
+  "repo": "ios",
+  "branch": "m5c-keyboard-engine",
+  "title": "QKeyboard: key model, candidate-above-key engine",
+  "closes": null,
+  "issue": "Packages/QKeyboard/Sources/QKeyboard/Engine/: ScriptKeyboardEngine protocol and Persian/Japanese phonetic engines wrapped as an input-state machine (key press -> composing buffer -> candidates -> commit/backspace), plus latin row layout data and the shift/mode toggles (phonetic vs native layout). Read web src/components/lesson/keyboard/scriptEngines.tsx, latinRows.ts, web src/hooks/usePersianPhoneticInput.ts, useJapanesePhoneticInput.ts, useKeyboardInputMethod.ts. Android reference: keyboard/src/main/kotlin/com/qamooscheh/keyboard/Engines.kt and ScriptKeyboard.kt. Design for reuse by the future extension (M8): no composing-region assumptions, state is an explicit value type. The Persian (isiriLayout, phoneticEngine, phoneticMap) and Japanese (kanaTable, dakuten, jisKanaLayout, romajiToKana) logic is already ported to QDomain by m3j and m3h: wrap those, do not re-port. Add QDomain as a QKeyboard dependency in Packages/QKeyboard/Package.swift (QKeyboard logic stays free of UIKit/SwiftUI). Where web and Android differ, match the Android app's behaviour (see keyboard/src/main/kotlin/com/qamooscheh/keyboard/Engines.kt).",
+  "allowedPaths": [
+    "^Packages/QKeyboard/Sources/QKeyboard/Engine/",
+    "^Packages/QKeyboard/Tests/QKeyboardTests/",
+    "^Packages/QKeyboard/Package.swift$"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)",
+    "Scripted key sequences tested for both scripts including backspace and candidate commit"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs m3h and m3j merged",
+  "approved": true,
+  "reviewer": "sonnet"
+}
