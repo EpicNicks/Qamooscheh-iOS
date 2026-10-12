@@ -63,9 +63,10 @@ final class OnboardingViewModelTests: XCTestCase {
     private func make(
         _ fake: FakeOnboardingService,
         store: OnboardingStepStore = InMemoryOnboardingStepStore(),
-        recorder: Recorder = Recorder()
+        recorder: Recorder? = nil
     ) -> OnboardingViewModel {
-        OnboardingViewModel(
+        let recorder = recorder ?? Recorder()
+        return OnboardingViewModel(
             service: fake, stepStore: store,
             onBootstrap: { recorder.bootstraps.append($0) },
             onComplete: { recorder.completions.append($0) })
