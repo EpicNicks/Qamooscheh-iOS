@@ -365,7 +365,7 @@ final class OnboardingViewModelTests: XCTestCase {
         let fake = FakeOnboardingService()
         let vm = make(fake)
         await toLanguages(vm)
-        await fake.setDelay(100_000_000)
+        await fake.setDelay(600_000_000)
         await fake.setEnroll(.failure(ApiError(status: 400, body: ApiErrorBody(error: "Bad course."))))
         await fake.setCatalog(.failure(ApiError(status: 500, body: nil)))
         let task = Task { await vm.startLearning(courseCodes: ["fa"]) }
