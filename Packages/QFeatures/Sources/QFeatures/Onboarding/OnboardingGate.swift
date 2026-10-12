@@ -26,16 +26,27 @@ public struct LiveBootstrapLoader: OnboardingBootstrapLoading {
 public struct OnboardingEnvironment: Sendable {
     public let bootstrap: OnboardingBootstrapLoading
     public let service: OnboardingService
+    /// The signed-in user's id; the saved step is scoped to it.
+    public let currentUserId: @Sendable () async -> String?
 
-    public init(bootstrap: OnboardingBootstrapLoading, service: OnboardingService) {
+    public init(
+        bootstrap: OnboardingBootstrapLoading,
+        service: OnboardingService,
+        currentUserId: @escaping @Sendable () async -> String?
+    ) {
         self.bootstrap = bootstrap
         self.service = service
+        self.currentUserId = currentUserId
     }
 
     /// Shares the session store with the auth environment so tokens refresh in one place.
     public static func live(baseURL: URL, clientHeader: String, store: SessionStore) -> OnboardingEnvironment {
         let client = ApiClient(baseURL: baseURL, clientHeader: clientHeader, store: store)
-        return OnboardingEnvironment(bootstrap: LiveBootstrapLoader(client: client), service: OnboardingApi(client: client))
+        return OnboardingEnvironment(
+            bootstrap: LiveBootstrapLoader(client: client),
+            service: OnboardingApi(client: client),
+            currentUserId: { await store.load()?.userId }
+        )
     }
 }
 
@@ -45,15 +56,16 @@ public struct OnboardingGate<Content: View>: View {
     private enum Phase { case loading, failed, onboarding, ready }
 
     private let environment: OnboardingEnvironment
-    private let stepKey: String
+    private let stepKeyPrefix: String
     private let content: Content
     @State private var phase: Phase = .loading
+    @State private var stepKey: String = ""
     @Environment(\.colorScheme) private var colorScheme
 
-    /// - Parameter stepKey: UserDefaults key for the saved step.
-    public init(environment: OnboardingEnvironment, stepKey: String = "qamooscheh.onboarding.step", @ViewBuilder content: () -> Content) {
+    /// - Parameter stepKeyPrefix: UserDefaults key prefix; the user id is appended so accounts do not share a step.
+    public init(environment: OnboardingEnvironment, stepKeyPrefix: String = "qamooscheh.onboarding.step", @ViewBuilder content: () -> Content) {
         self.environment = environment
-        self.stepKey = stepKey
+        self.stepKeyPrefix = stepKeyPrefix
         self.content = content()
     }
 
@@ -88,7 +100,12 @@ public struct OnboardingGate<Content: View>: View {
 
     private func load() async {
         do {
+            guard let userId = await environment.currentUserId() else {
+                phase = .failed
+                return
+            }
             let complete = try await environment.bootstrap.onboardingComplete()
+            stepKey = OnboardingStepKey.make(prefix: stepKeyPrefix, userId: userId)
             phase = complete ? .ready : .onboarding
         } catch is CancellationError {
             // The view went away; a later appearance reloads.

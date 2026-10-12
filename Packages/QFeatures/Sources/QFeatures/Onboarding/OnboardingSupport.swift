@@ -55,6 +55,13 @@ public final class UserDefaultsOnboardingStepStore: OnboardingStepStore {
     }
 }
 
+/// Builds the per-account UserDefaults key for the saved step.
+public enum OnboardingStepKey {
+    public static func make(prefix: String, userId: String) -> String {
+        "\(prefix).\(userId)"
+    }
+}
+
 /// Limits and user-visible strings (web onboarding pages, Android OnboardingViewModel).
 public enum OnboardingRules {
     /// ProfileService.MaxDisplayNameLength.

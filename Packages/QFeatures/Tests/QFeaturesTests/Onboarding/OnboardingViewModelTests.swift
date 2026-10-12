@@ -397,4 +397,21 @@ final class OnboardingViewModelTests: XCTestCase {
         store.step = nil
         XCTAssertNil(store.step)
     }
+
+    func testTwoAccountsDoNotShareTheSavedStep() {
+        let suite = "onboarding-tests-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { return XCTFail("no defaults") }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let keyA = OnboardingStepKey.make(prefix: "p", userId: "userA")
+        let keyB = OnboardingStepKey.make(prefix: "p", userId: "userB")
+        XCTAssertNotEqual(keyA, keyB)
+        let storeA = UserDefaultsOnboardingStepStore(defaults: defaults, key: keyA)
+        let storeB = UserDefaultsOnboardingStepStore(defaults: defaults, key: keyB)
+        storeA.step = .languages
+        XCTAssertNil(storeB.step)
+        XCTAssertEqual(make(FakeOnboardingService(), store: storeB).step, .name)
+        XCTAssertEqual(make(FakeOnboardingService(), store: storeA).step, .languages)
+        storeB.step = .tutorial
+        XCTAssertEqual(storeA.step, .languages)
+    }
 }
