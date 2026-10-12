@@ -24,9 +24,13 @@ public func matchDailyGoalPreset(_ xp: Int) -> DailyGoalPreset? {
     return dailyGoalPresets.first { $0.xp == xp }
 }
 
-/// "yyyy-MM-dd" for `now` in the given calendar's time zone (the device's, when the caller passes `.current`).
+/// Gregorian "yyyy-MM-dd" for `now` in the given calendar's time zone (the device's, when the caller passes `.current`).
+/// Only the calendar's time zone is used: a Persian, Buddhist or Japanese device calendar still yields the Gregorian
+/// day the server's localDay uses.
 public func todayLocalDay(now: Date, calendar: Calendar) -> String {
-    let parts = calendar.dateComponents([.year, .month, .day], from: now)
+    var gregorian = Calendar(identifier: .gregorian)
+    gregorian.timeZone = calendar.timeZone
+    let parts = gregorian.dateComponents([.year, .month, .day], from: now)
     return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
 }
 

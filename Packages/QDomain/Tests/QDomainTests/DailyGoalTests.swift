@@ -42,4 +42,27 @@ final class DailyGoalTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_790_820_000)
         XCTAssertEqual(todayLocalDay(now: now, calendar: calendar), "2026-09-30")
     }
+
+    func testTodayLocalDayIsGregorianForNonGregorianCalendars() {
+        // 2026-10-12T12:00Z; Tehran, Bangkok and Tokyo are all still 12 Oct.
+        let now = Date(timeIntervalSince1970: 1_791_806_400)
+        let cases: [(Calendar.Identifier, String)] = [
+            (.persian, "Asia/Tehran"),
+            (.buddhist, "Asia/Bangkok"),
+            (.japanese, "Asia/Tokyo"),
+        ]
+        for (identifier, zone) in cases {
+            var calendar = Calendar(identifier: identifier)
+            calendar.timeZone = TimeZone(identifier: zone)!
+            XCTAssertEqual(todayLocalDay(now: now, calendar: calendar), "2026-10-12", "\(identifier)")
+        }
+    }
+
+    func testTodayLocalDayNonGregorianCalendarKeepsInjectedZone() {
+        // 2026-10-11T22:00Z is already 12 Oct in Tokyo.
+        let now = Date(timeIntervalSince1970: 1_791_756_000)
+        var calendar = Calendar(identifier: .japanese)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        XCTAssertEqual(todayLocalDay(now: now, calendar: calendar), "2026-10-12")
+    }
 }
