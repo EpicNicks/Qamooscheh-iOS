@@ -11,7 +11,7 @@ let package = Package(
         .package(path: "../QModel"),
     ],
     targets: [
-        .target(name: "QDomain", dependencies: ["QModel"]),
+        .target(name: "QDomain", dependencies: ["QModel"], resources: [.process("Resources")]),
         .testTarget(name: "QDomainTests", dependencies: ["QDomain"]),
     ]
 )
