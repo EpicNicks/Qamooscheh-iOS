@@ -83,18 +83,17 @@ final class AnswerFeedbackTests: XCTestCase {
                        AnswerFeedback(verdict: .incorrect, note: nil, xp: 0, separators: nil))
     }
 
-    func testFallsBackToExactMatchWithoutGrader() {
-        let typeIn = exercise(.typeIn, ["x"])
-        XCTAssertEqual(check(nil, "fa", typeIn, " X "), AnswerFeedback(verdict: .correct, note: nil, xp: 0, separators: nil))
-        XCTAssertEqual(check(nil, "fa", typeIn, "y").verdict, .incorrect)
+    func testPendingWithoutGrader() {
+        let pending = AnswerFeedback(verdict: .pending, note: nil, xp: 0, separators: nil)
+        XCTAssertEqual(check(nil, "fa", exercise(.typeIn, ["x"]), " X "), pending)
+        XCTAssertEqual(check(nil, "fa", exercise(.typeIn, ["x"]), "y"), pending)
         let wordBank = exercise(.wordBank, ["من", "کتاب"], alternatives: [["کتاب", "من"]])
-        XCTAssertEqual(check(nil, "fa", wordBank, "کتاب من").verdict, .correct)
-        XCTAssertEqual(check(nil, "fa", wordBank, "من من").verdict, .incorrect)
+        XCTAssertEqual(check(nil, "fa", wordBank, "کتاب من"), pending)
     }
 
-    func testFallsBackWhenGraderCannotInterpretRequest() {
+    func testPendingWhenGraderCannotInterpretRequest() {
         let grader = FakeGrader { _ in GraderResponse(verdict: nil, error: "unknown exerciseType 'Nope'.") }
-        XCTAssertEqual(check(grader, "fa", exercise(.typeIn, ["x"]), "x"), AnswerFeedback(verdict: .correct, note: nil, xp: 0, separators: nil))
+        XCTAssertEqual(check(grader, "fa", exercise(.typeIn, ["x"]), "x"), AnswerFeedback(verdict: .pending, note: nil, xp: 0, separators: nil))
     }
 
     // checkAnswer's spacing hint (issue #39)
@@ -172,16 +171,16 @@ final class AnswerFeedbackTests: XCTestCase {
         XCTAssertEqual(plain(check(grader, "fa", exercise(.typeIn, [withAids]), "کتاو من").note), "Close \u{2014} a small typo: کتاب, not کتاو.")
     }
 
-    func testNamesRomanizedTypoWordRomanizationFirst() {
+    func testNamesRomanizedTypoWordInGraderOrder() {
         let grader = FakeGrader { _ in acceptedReply("man ketab daram", ["EditDistanceTypo", "LatinizationVariance"]) }
         let ex = exercise(.typeIn, ["man ketab daram"], romanized: true)
-        XCTAssertEqual(plain(check(grader, "fa", ex, "man ketob daram").note), "Close \u{2014} romanization spelling, a small typo: ketab, not ketob.")
+        XCTAssertEqual(plain(check(grader, "fa", ex, "man ketob daram").note), "Close \u{2014} a small typo: ketab, not ketob, romanization spelling.")
     }
 
     func testGivesWholeAnswerWhenRomanizedTypoMovedASpace() {
         let grader = FakeGrader { _ in acceptedReply("man ketab daram", ["EditDistanceTypo", "LatinizationVariance"]) }
         let ex = exercise(.typeIn, ["man ketab daram"], romanized: true)
-        XCTAssertEqual(plain(check(grader, "fa", ex, "man ketabdaram").note), "Close \u{2014} romanization spelling, a small typo: it's man ketab daram.")
+        XCTAssertEqual(plain(check(grader, "fa", ex, "man ketabdaram").note), "Close \u{2014} a small typo: it's man ketab daram, romanization spelling.")
     }
 
     // closestAnswerFirst (issue #42)
