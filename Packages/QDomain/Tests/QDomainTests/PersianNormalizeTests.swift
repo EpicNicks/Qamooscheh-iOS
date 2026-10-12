@@ -42,9 +42,9 @@ final class PersianNormalizeTests: XCTestCase {
         XCTAssertEqual(PersianNormalize.normalizeStrict("ک\(kasra)تاب"), "کتاب")
     }
 
-    func testNormalizeStrictComposesHehWithHamzaToHehGoal() {
-        // NFC composes heh + hamza above into U+06C0 before reading aids are looked at.
-        XCTAssertEqual(PersianNormalize.normalizeStrict("خانه\(hamza)"), "خان\u{06C0}")
+    func testNormalizeStrictStripsEzafeHamzaAfterHeh() {
+        // U+06C0 decomposes to U+06D5 + hamza, not U+0647, so heh + hamza stays two scalars and the aid is dropped.
+        XCTAssertEqual(PersianNormalize.normalizeStrict("\u{062E}\u{0627}\u{0646}\u{0647}\(hamza) \u{0645}\u{0646}"), "\u{062E}\u{0627}\u{0646}\u{0647} \u{0645}\u{0646}")
     }
 
     func testNormalizeStrictKeepsZwnjAndAlefMadda() {
