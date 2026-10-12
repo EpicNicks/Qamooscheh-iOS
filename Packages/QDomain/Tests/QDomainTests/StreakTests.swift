@@ -82,7 +82,7 @@ final class StreakTests: XCTestCase {
     }
 
     func testStreakZoneFallsBackToUtc() {
-        XCTAssertEqual(streakZone(streak(zone: "not/a-zone")).identifier, "UTC")
+        XCTAssertEqual(streakZone(streak(zone: "not/a-zone")).secondsFromGMT(for: now), 0)
         XCTAssertEqual(streakZone(streak(zone: "Asia/Tokyo")).identifier, "Asia/Tokyo")
     }
 }
