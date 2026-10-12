@@ -3,15 +3,24 @@ import QFeatures
 
 @main
 struct QamooschehApp: App {
-    private let auth = AuthEnvironment.live(
-        baseURL: URL(string: "https://api.parsling.com")!,
-        clientHeader: "ios/0.1.0"
-    )
+    private let auth: AuthEnvironment
+
+    private let onboarding: OnboardingEnvironment
+
+    init() {
+        let baseURL = URL(string: "https://api.parsling.com")!
+        let clientHeader = "ios/0.1.0"
+        let auth = AuthEnvironment.live(baseURL: baseURL, clientHeader: clientHeader)
+        self.auth = auth
+        self.onboarding = OnboardingEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, store: auth.store)
+    }
 
     var body: some Scene {
         WindowGroup {
             AuthGate(environment: auth) {
-                RootTabView()
+                OnboardingGate(environment: onboarding) {
+                    RootTabView()
+                }
             }
         }
     }
