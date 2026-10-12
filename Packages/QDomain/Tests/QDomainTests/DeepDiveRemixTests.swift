@@ -34,7 +34,7 @@ final class DeepDiveRemixTests: XCTestCase {
     }
 
     // "unloaded" has no artifact, so its category is nil.
-    private let categories: [String: SkillCategory] = ["a": .standard, "b": .standard, "c": .standard, "story-1": .story]
+    private let categories: [String: QModel.SkillCategory] = ["a": .standard, "b": .standard, "c": .standard, "story-1": .story]
 
     private func pool(_ themeIds: [String], exclude: String? = nil, noIndex: Bool = false) -> [String] {
         let idx: ThemeIndexArtifact? = noIndex ? nil : index

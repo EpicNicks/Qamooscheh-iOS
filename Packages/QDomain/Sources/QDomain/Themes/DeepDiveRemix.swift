@@ -17,7 +17,7 @@ private let masteryStabilityCap = 30.0
 /// categoryOf is nil for a lesson whose content isn't known (excluded).
 public func buildRemixPool(
     themeIndex: ThemeIndexArtifact?,
-    categoryOf: (_ lessonKey: String) -> SkillCategory?,
+    categoryOf: (_ lessonKey: String) -> QModel.SkillCategory?,
     themeIds: [String],
     excludeLessonKey: String? = nil
 ) -> [ThemeLessonRef] {
