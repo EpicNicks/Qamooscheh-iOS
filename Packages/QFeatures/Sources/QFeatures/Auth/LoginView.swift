@@ -33,10 +33,7 @@ public struct LoginView: View {
                 }
                 AuthFieldBox(label: "Email", palette: palette) {
                     TextField("", text: $viewModel.email)
-                        .keyboardType(.emailAddress)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
+                        .authField(.email)
                         .submitLabel(.next)
                         .focused($focus, equals: .email)
                         .onSubmit { focus = .password }
@@ -45,7 +42,7 @@ public struct LoginView: View {
                 }
                 AuthFieldBox(label: "Password", palette: palette) {
                     SecureField("", text: $viewModel.password)
-                        .textContentType(.password)
+                        .authField(.password)
                         .submitLabel(.done)
                         .focused($focus, equals: .password)
                         .onSubmit { submit() }

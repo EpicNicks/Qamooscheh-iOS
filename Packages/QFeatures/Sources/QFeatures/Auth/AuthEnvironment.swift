@@ -32,14 +32,14 @@ public struct PreviewAuthService: AuthService {
     public func registrationEnabled() async throws -> Bool { registrationOpen }
 
     public func login(email: String, password: String) async throws -> StoredSession {
-        throw AuthError.invalidCredentials(failure ?? "")
+        throw AuthError.invalidCredentials(message: failure ?? "")
     }
 
     public func register(email: String, password: String, confirmPassword: String) async throws -> StoredSession {
-        throw AuthError.invalidCredentials(failure ?? "")
+        throw AuthError.invalidCredentials(message: failure ?? "")
     }
 
     public func signInWithGoogle(idToken: String) async throws -> StoredSession {
-        throw AuthError.invalidCredentials(failure ?? "")
+        throw AuthError.invalidCredentials(message: failure ?? "")
     }
 }

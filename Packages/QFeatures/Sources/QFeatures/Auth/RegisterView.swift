@@ -35,10 +35,7 @@ public struct RegisterView: View {
                 }
                 AuthFieldBox(label: "Email", palette: palette) {
                     TextField("", text: $viewModel.email)
-                        .keyboardType(.emailAddress)
-                        .textContentType(.username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
+                        .authField(.email)
                         .submitLabel(.next)
                         .focused($focus, equals: .email)
                         .onSubmit { focus = .password }
@@ -47,7 +44,7 @@ public struct RegisterView: View {
                 }
                 AuthFieldBox(label: "Password", palette: palette) {
                     SecureField("", text: $viewModel.password)
-                        .textContentType(.newPassword)
+                        .authField(.newPassword)
                         .submitLabel(.next)
                         .focused($focus, equals: .password)
                         .onSubmit { focus = .confirm }
@@ -56,7 +53,7 @@ public struct RegisterView: View {
                 }
                 AuthFieldBox(label: "Confirm password", palette: palette) {
                     SecureField("", text: $viewModel.confirmPassword)
-                        .textContentType(.newPassword)
+                        .authField(.newPassword)
                         .submitLabel(.done)
                         .focused($focus, equals: .confirm)
                         .onSubmit { submit() }
