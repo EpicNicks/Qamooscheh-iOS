@@ -26,7 +26,7 @@ public final class LoginViewModel: ObservableObject {
 
     /// Android: blank email or empty password is a silent no-op.
     public var canSubmit: Bool {
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty && !isSubmitting
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty && !isSubmitting && state != .success
     }
 
     public func loadRegistrationStatus() async {
@@ -62,6 +62,12 @@ public final class LoginViewModel: ObservableObject {
         case .submitting, .success:
             break
         }
+    }
+
+    /// The service reported success but the session store is empty (e.g. a failed Keychain write).
+    /// Returns to a retryable error so the user is not stuck on a dead button.
+    public func sessionNotSaved() {
+        if state == .success { state = .error(AuthRules.sessionNotSaved) }
     }
 
     public func clearError() {

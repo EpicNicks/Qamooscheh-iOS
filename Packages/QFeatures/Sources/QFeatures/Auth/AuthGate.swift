@@ -21,15 +21,18 @@ public struct AuthGate<Content: View>: View {
             ProgressView()
                 .task { await refresh() }
         case .signedOut:
-            AuthFlow(environment: environment, onSignedIn: { Task { await refresh() } })
+            AuthFlow(environment: environment, onSignedIn: { await refresh() })
         case .signedIn:
             content
         }
     }
 
-    private func refresh() async {
+    /// Re-reads the store; returns false when it is still empty.
+    @discardableResult
+    private func refresh() async -> Bool {
         let session = await environment.store.load()
         phase = session == nil ? .signedOut : .signedIn
+        return session != nil
     }
 }
 
@@ -38,9 +41,10 @@ struct AuthFlow: View {
     @StateObject private var login: LoginViewModel
     @StateObject private var register: RegisterViewModel
     @State private var showingRegister = false
-    private let onSignedIn: () -> Void
+    /// Returns false when no session was stored after the sign-in.
+    private let onSignedIn: () async -> Bool
 
-    init(environment: AuthEnvironment, onSignedIn: @escaping () -> Void) {
+    init(environment: AuthEnvironment, onSignedIn: @escaping () async -> Bool) {
         _login = StateObject(wrappedValue: LoginViewModel(service: environment.service))
         _register = StateObject(wrappedValue: RegisterViewModel(service: environment.service))
         self.onSignedIn = onSignedIn
@@ -55,10 +59,10 @@ struct AuthFlow: View {
             }
         }
         .onChange(of: login.state) { _, state in
-            if state == .success { onSignedIn() }
+            if state == .success { Task { let saved = await onSignedIn(); if !saved { login.sessionNotSaved() } } }
         }
         .onChange(of: register.state) { _, state in
-            if state == .success { onSignedIn() }
+            if state == .success { Task { let saved = await onSignedIn(); if !saved { register.sessionNotSaved() } } }
         }
     }
 }

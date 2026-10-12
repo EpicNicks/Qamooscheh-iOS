@@ -34,6 +34,7 @@ public enum AuthRules {
     public static let emailInvalid = "Enter a valid email address."
     public static let fieldTooLong = "Email and password must be at most 256 characters."
     public static let tooManyRequests = "Too many attempts. Wait a minute and try again."
+    public static let sessionNotSaved = "Signed in, but this device couldn't save your session. Please try again."
     public static let offline = "Couldn't reach the server. Check your connection and try again."
 
     /// Lenient, like .NET's EmailAddressAttribute: one "@" with text on both sides, no spaces.

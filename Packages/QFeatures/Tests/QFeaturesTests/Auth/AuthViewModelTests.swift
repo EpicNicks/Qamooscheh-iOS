@@ -380,3 +380,43 @@ final class RegisterViewModelTests: XCTestCase {
         XCTAssertEqual(vm.state, .success)
     }
 }
+
+@MainActor
+final class SessionNotSavedTests: XCTestCase {
+    func testLoginSuccessThenNotSavedIsRetryableError() async {
+        let fake = FakeAuthService()
+        let vm = LoginViewModel(service: fake)
+        vm.email = "a@b.co"
+        vm.password = "secret123"
+        await vm.submit()
+        XCTAssertEqual(vm.state, .success)
+        XCTAssertFalse(vm.canSubmit)
+        vm.sessionNotSaved()
+        XCTAssertEqual(vm.state, .error(AuthRules.sessionNotSaved))
+        XCTAssertTrue(vm.canSubmit)
+        await vm.submit()
+        XCTAssertEqual(vm.state, .success)
+        let calls = await fake.loginCalls.count
+        XCTAssertEqual(calls, 2)
+    }
+
+    func testRegisterSuccessThenNotSavedIsRetryableError() async {
+        let fake = FakeAuthService()
+        let vm = RegisterViewModel(service: fake)
+        vm.email = "a@b.co"
+        vm.password = "secret123"
+        vm.confirmPassword = "secret123"
+        await vm.submit()
+        XCTAssertEqual(vm.state, .success)
+        XCTAssertFalse(vm.canSubmit)
+        vm.sessionNotSaved()
+        XCTAssertEqual(vm.state, .error(AuthRules.sessionNotSaved))
+        XCTAssertTrue(vm.canSubmit)
+    }
+
+    func testNotSavedIgnoredOutsideSuccess() {
+        let vm = LoginViewModel(service: FakeAuthService())
+        vm.sessionNotSaved()
+        XCTAssertEqual(vm.state, .idle)
+    }
+}

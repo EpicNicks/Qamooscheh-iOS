@@ -27,7 +27,7 @@ public final class RegisterViewModel: ObservableObject {
     public var isSubmitting: Bool { state == .submitting }
 
     public var canSubmit: Bool {
-        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty && !isSubmitting
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty && !isSubmitting && state != .success
     }
 
     /// The first rule the current input breaks; nil when valid.
@@ -73,6 +73,12 @@ public final class RegisterViewModel: ObservableObject {
         case .submitting, .success:
             break
         }
+    }
+
+    /// The service reported success but the session store is empty (e.g. a failed Keychain write).
+    /// Returns to a retryable error so the user is not stuck on a dead button.
+    public func sessionNotSaved() {
+        if state == .success { state = .error(AuthRules.sessionNotSaved) }
     }
 
     public func clearError() {
