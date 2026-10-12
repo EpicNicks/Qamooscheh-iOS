@@ -54,8 +54,14 @@ public final class LoginViewModel: ObservableObject {
         }
     }
 
+    /// Only applies when idle or already showing an error; never overrides an in-flight submit or a success.
     public func reportGoogleError(_ message: String) {
-        state = .error(message)
+        switch state {
+        case .idle, .error:
+            state = .error(message)
+        case .submitting, .success:
+            break
+        }
     }
 
     public func clearError() {

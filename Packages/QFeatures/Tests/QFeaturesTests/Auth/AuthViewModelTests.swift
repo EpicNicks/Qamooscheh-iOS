@@ -203,6 +203,32 @@ final class LoginViewModelTests: XCTestCase {
         await vm.loadRegistrationStatus()
         XCTAssertNil(vm.registrationEnabled)
     }
+
+    func testGoogleErrorDuringSubmitStaysSubmitting() async {
+        let fake = FakeAuthService()
+        await fake.setDelay(100_000_000)
+        let vm = LoginViewModel(service: fake)
+        vm.email = "a@b.co"
+        vm.password = "x"
+        let task = Task { await vm.submit() }
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertEqual(vm.state, .submitting)
+        vm.reportGoogleError("Cancelled.")
+        XCTAssertEqual(vm.state, .submitting)
+        await task.value
+        XCTAssertEqual(vm.state, .success)
+    }
+
+    func testGoogleErrorAfterSuccessStaysSuccess() async {
+        let fake = FakeAuthService()
+        let vm = LoginViewModel(service: fake)
+        vm.email = "a@b.co"
+        vm.password = "x"
+        await vm.submit()
+        XCTAssertEqual(vm.state, .success)
+        vm.reportGoogleError("Cancelled.")
+        XCTAssertEqual(vm.state, .success)
+    }
 }
 
 @MainActor
@@ -329,6 +355,28 @@ final class RegisterViewModelTests: XCTestCase {
         let fake = FakeAuthService()
         let vm = RegisterViewModel(service: fake)
         await vm.signInWithGoogle(idToken: "t")
+        XCTAssertEqual(vm.state, .success)
+    }
+
+    func testGoogleErrorDuringSubmitStaysSubmitting() async {
+        let fake = FakeAuthService()
+        await fake.setDelay(100_000_000)
+        let vm = filled(fake)
+        let task = Task { await vm.submit() }
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertEqual(vm.state, .submitting)
+        vm.reportGoogleError("Cancelled.")
+        XCTAssertEqual(vm.state, .submitting)
+        await task.value
+        XCTAssertEqual(vm.state, .success)
+    }
+
+    func testGoogleErrorAfterSuccessStaysSuccess() async {
+        let fake = FakeAuthService()
+        let vm = filled(fake)
+        await vm.submit()
+        XCTAssertEqual(vm.state, .success)
+        vm.reportGoogleError("Cancelled.")
         XCTAssertEqual(vm.state, .success)
     }
 }
