@@ -27,7 +27,7 @@ final class SettingsLogicTests: XCTestCase {
         XCTAssertEqual(scriptModeSample(mode: .romanized, nativeName: "N", romanizedName: "R"), "R")
         XCTAssertEqual(scriptModeSample(mode: .both, nativeName: "N", romanizedName: "R"), "N (R)")
         XCTAssertFalse(keyboardSample(mode: .contextual).contains("\u{200C}"))
-        XCTAssertEqual(keyboardSample(mode: .isolated).filter { $0 == "\u{200C}" }.count, 3)
+        XCTAssertEqual(keyboardSample(mode: .isolated).unicodeScalars.filter { $0.value == 0x200C }.count, 3)
     }
 
     func testNoticeMapping() {
