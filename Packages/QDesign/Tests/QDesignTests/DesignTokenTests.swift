@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import QDesign
 
 final class DesignTokenTests: XCTestCase {
@@ -15,5 +16,12 @@ final class DesignTokenTests: XCTestCase {
         XCTAssertEqual(AppPalette.dark.bg, 0xFF131320)
         XCTAssertTrue(AppPalette.dark.isDark)
         XCTAssertFalse(AppPalette.light.isDark)
+    }
+}
+
+final class DirectionalTextTests: XCTestCase {
+    func testLayoutDirection() {
+        XCTAssertEqual(DirectionalText.layoutDirection(rtl: true), .rightToLeft)
+        XCTAssertEqual(DirectionalText.layoutDirection(rtl: false), .leftToRight)
     }
 }
