@@ -122,12 +122,14 @@ final class AnnotatedTextTests: XCTestCase {
         XCTAssertEqual(frames[0].minX, 30)
     }
 
-    func testFlowDropsGapAtLineStart() {
-        let items = [item(60, 20), item(10, 20, gap: true), item(60, 20)]
+    func testFlowDropsLeadingGapAndKeepsGapAtRowEnd() {
+        let items = [item(10, 20, gap: true), item(60, 20), item(10, 20, gap: true), item(60, 20)]
         let frames = WordFlowGeometry.frames(items: items, width: 100, rtl: false, centered: false, lineSpacing: 0)
-        XCTAssertEqual(frames[1], .zero)
-        XCTAssertEqual(frames[2].minX, 0)
-        XCTAssertEqual(frames[2].minY, 20)
+        XCTAssertEqual(frames[0], .zero)
+        XCTAssertEqual(frames[1].minX, 0)
+        XCTAssertEqual(frames[2].minX, 60)
+        XCTAssertEqual(frames[3].minX, 0)
+        XCTAssertEqual(frames[3].minY, 20)
     }
 
     func testFlowLongItemGetsItsOwnRow() {
