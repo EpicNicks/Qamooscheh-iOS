@@ -253,8 +253,7 @@ private struct CourseSections: View {
                     goalText = sanitizedGoalInput(raw)
                     if let xp = Int(goalText) { model.edit { $0.dailyGoalXp = xp } }
                 }))
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
+                .numberEntry()
             }
             switchRow("Celebrate when I hit my daily goal", model.local.goalCelebrationEnabled, p, description: "Saved on this device.") { on in
                 model.updateLocal { $0.goalCelebrationEnabled = on }
@@ -558,5 +557,17 @@ public struct SettingsShowcase: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(argb: (colorScheme == .dark ? AppPalette.dark : AppPalette.light).bg))
             .environment(\.dynamicTypeSize, large ? .accessibility2 : .large)
+    }
+}
+
+private extension View {
+    /// Number pad on iOS; the packages also build on macOS, which has neither modifier.
+    @ViewBuilder
+    func numberEntry() -> some View {
+        #if os(iOS)
+        self.keyboardType(.numberPad).textFieldStyle(.roundedBorder)
+        #else
+        self
+        #endif
     }
 }
