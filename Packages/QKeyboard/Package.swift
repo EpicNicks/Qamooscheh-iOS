@@ -8,9 +8,10 @@ let package = Package(
         .library(name: "QKeyboard", targets: ["QKeyboard"]),
     ],
     dependencies: [
+        .package(path: "../QDomain"),
     ],
     targets: [
-        .target(name: "QKeyboard", dependencies: []),
+        .target(name: "QKeyboard", dependencies: ["QDomain"]),
         .testTarget(name: "QKeyboardTests", dependencies: ["QKeyboard"]),
     ]
 )
