@@ -4,10 +4,18 @@ import Foundation
 struct StubResponse {
     var status: Int
     var body: Data
+    var failure: URLError?
 
     init(_ status: Int, _ json: String = "") {
         self.status = status
         self.body = Data(json.utf8)
+    }
+
+    /// A transport failure (no HTTP response at all).
+    init(failing code: URLError.Code) {
+        self.status = 0
+        self.body = Data()
+        self.failure = URLError(code)
     }
 }
 
@@ -46,6 +54,10 @@ final class StubURLProtocol: URLProtocol {
         StubURLProtocol.lock.unlock()
 
         let stub = handler?(request) ?? StubResponse(500)
+        if let failure = stub.failure {
+            client?.urlProtocol(self, didFailWithError: failure)
+            return
+        }
         let url = request.url ?? URL(string: "https://stub.invalid")!
         let response = HTTPURLResponse(
             url: url, statusCode: stub.status, httpVersion: "HTTP/1.1",
