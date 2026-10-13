@@ -139,10 +139,24 @@ public actor PrefsSync {
         let start = load()
         let gen = generation
         inFlightRevision = start?.revision ?? 0
-        let task = Task { try await self.runSync(start: start, generation: gen) }
+        // The flight clears itself before it completes, so a waiter that
+        // resumes never sees a finished flight still registered.
+        let task = Task { () throws -> PrefsSyncOutcome in
+            do {
+                let result = try await self.runSync(start: start, generation: gen)
+                await self.endFlight()
+                return result
+            } catch {
+                await self.endFlight()
+                throw error
+            }
+        }
         inFlight = task
-        defer { inFlight = nil }
         return try await task.value
+    }
+
+    private func endFlight() {
+        inFlight = nil
     }
 
     /// Sign-out cleanup. Also invalidates any request still in flight so its
