@@ -103,8 +103,9 @@ private struct BulletList: View {
 public struct AboutView: View {
     private let version: String?
 
-    public init(version: String? = AboutContent.bundleVersionLine()) {
-        self.version = version
+    /// `version` overrides the line read from the app bundle (tests, previews).
+    public init(version: String? = nil) {
+        self.version = version ?? AboutContent.bundleVersionLine()
     }
 
     public var body: some View {
