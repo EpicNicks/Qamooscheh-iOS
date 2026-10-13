@@ -8,6 +8,10 @@ public protocol OfflineQueueStorage: Sendable {
     func read(_ name: String) throws -> Data?
     func write(_ name: String, _ data: Data) throws
     func remove(_ name: String) throws
+    /// Names of all stored blobs (used to clear quarantined leftovers).
+    func list() throws -> [String]
+    /// Identifies the storage location; queues with equal keys share one process-wide lock.
+    var lockKey: String { get }
 }
 
 /// Files in a directory, written atomically (temp file then rename).
@@ -27,6 +31,13 @@ public struct FileOfflineQueueStorage: OfflineQueueStorage {
     public func write(_ name: String, _ data: Data) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: directory.appendingPathComponent(name), options: [.atomic])
+    }
+
+    public var lockKey: String { directory.standardizedFileURL.path }
+
+    public func list() throws -> [String] {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(atPath: directory.path)
     }
 
     public func remove(_ name: String) throws {
@@ -49,6 +60,10 @@ public final class InMemoryOfflineQueueStorage: OfflineQueueStorage, @unchecked 
         lock.lock(); defer { lock.unlock() }
         failWrites = fail
     }
+
+    public var lockKey: String { "mem-" + String(UInt(bitPattern: ObjectIdentifier(self).hashValue)) }
+
+    public func list() throws -> [String] { names }
 
     public var names: [String] {
         lock.lock(); defer { lock.unlock() }

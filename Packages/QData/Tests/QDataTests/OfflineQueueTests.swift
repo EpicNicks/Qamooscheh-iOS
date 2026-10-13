@@ -220,6 +220,95 @@ final class OfflineQueueTests: XCTestCase {
         let loaded = try await q.loadQueue(userId: "u")
         XCTAssertEqual(loaded[0].occurredAt.timeIntervalSince1970, 1_789_466_400.25, accuracy: 0.001)
     }
+    // Review fixes
+
+    func testUndecodableEntriesCountAsUnsentAndFlushFailsLoudly() async throws {
+        let storage = InMemoryOfflineQueueStorage()
+        let q = OfflineQueue(storage: storage)
+        try await q.enqueue(userId: "u", session: session("ok"))
+        let name = OfflineQueue.fileName("u")
+        let good = try XCTUnwrap(storage.read(name))
+        var array = try XCTUnwrap(JSONSerialization.jsonObject(with: good) as? [Any])
+        array.append(["submissionId": "stuck", "futureField": true])
+        try storage.write(name, JSONSerialization.data(withJSONObject: array))
+
+        let count = try await q.unsentCount(userId: "u")
+        XCTAssertEqual(count, 2)
+        let undecodable = try await q.undecodableCount(userId: "u")
+        XCTAssertEqual(undecodable, 1)
+        do {
+            _ = try await q.eligible(userId: "u")
+            XCTFail("eligible should throw")
+        } catch let error as OfflineQueueError {
+            XCTAssertEqual(error, .undecodableEntries(count: 1, submissionIds: ["stuck"]))
+        }
+        try await q.removeFromQueue(userId: "u", submissionIds: ["stuck", "ok"])
+        let after = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(storage.read(name))) as? [Any])
+        XCTAssertEqual(after.count, 1)
+    }
+
+    func testEnqueueDedupesAgainstUndecodableIds() async throws {
+        let storage = InMemoryOfflineQueueStorage()
+        let q = OfflineQueue(storage: storage)
+        let name = OfflineQueue.fileName("u")
+        try storage.write(name, JSONSerialization.data(withJSONObject: [["submissionId": "x", "futureField": 1]]))
+        let added = try await q.enqueue(userId: "u", session: session("x"))
+        XCTAssertFalse(added)
+        let array = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(storage.read(name))) as? [Any])
+        XCTAssertEqual(array.count, 1)
+    }
+
+    func testSeparateInstancesOnSameDirectoryDoNotLoseWrites() async throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let a = OfflineQueue(storage: FileOfflineQueueStorage(directory: dir))
+        let b = OfflineQueue(storage: FileOfflineQueueStorage(directory: dir))
+        let sessions = (0..<40).map { session("s\($0)") }
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<40 {
+                let s = sessions[i]
+                let q = i % 2 == 0 ? a : b
+                group.addTask {
+                    _ = try? await q.enqueue(userId: "u", session: s)
+                }
+            }
+        }
+        let ids = try await a.loadQueue(userId: "u").map { $0.submissionId }
+        XCTAssertEqual(Set(ids).count, 40)
+        XCTAssertEqual(ids.count, 40)
+    }
+
+    func testRepeatedCorruptionDoesNotOverwriteEarlierQuarantine() async throws {
+        let storage = InMemoryOfflineQueueStorage()
+        let q = OfflineQueue(storage: storage)
+        let name = OfflineQueue.fileName("u")
+        try storage.write(name, Data("{\"first\":1}".utf8))
+        try await q.enqueue(userId: "u", session: session("a"))
+        try storage.write(name, Data("{\"second\":2}".utf8))
+        try await q.enqueue(userId: "u", session: session("b"))
+        let corrupt = storage.names.filter { $0.hasPrefix(name + ".corrupt") }
+        XCTAssertEqual(corrupt.count, 2)
+        let blobs = try Set(corrupt.map { String(decoding: try XCTUnwrap(storage.read($0)), as: UTF8.self) })
+        XCTAssertEqual(blobs, ["{\"first\":1}", "{\"second\":2}"])
+    }
+
+    func testClearRemovesCorruptLeftoversOfThatUserOnly() async throws {
+        let storage = InMemoryOfflineQueueStorage()
+        let q = OfflineQueue(storage: storage)
+        let mine = OfflineQueue.fileName("u")
+        let other = OfflineQueue.fileName("u2")
+        try storage.write(mine, Data("[1".utf8))
+        try await q.enqueue(userId: "u", session: session("a"))
+        try storage.write(other, Data("{\"x\":1}".utf8))
+        try await q.enqueue(userId: "u2", session: session("b"))
+        try storage.write(mine, Data("{\"y\":1}".utf8))
+        try await q.enqueue(userId: "u", session: session("c"))
+        try await q.clear(userId: "u")
+        XCTAssertTrue(storage.names.allSatisfy { !$0.hasPrefix(mine) })
+        XCTAssertTrue(storage.names.contains(other + ".corrupt"))
+        XCTAssertTrue(storage.names.contains(other))
+    }
+
 }
 
 private final class ClockBox: @unchecked Sendable {
