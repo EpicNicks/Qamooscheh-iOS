@@ -81,7 +81,8 @@ public actor OfflineQueue {
     /// `OfflineQueueError.undecodableEntries` when the user's file holds unsent
     /// entries this build cannot decode, so a flush fails loudly instead of
     /// silently skipping them (they stay on disk and in `unsentCount`).
-    public func eligible(userId: String) throws -> [QueuedSession] {
+    /// `ignoringBackoff` skips the retry-time gate (foreground / reachability regained).
+    public func eligible(userId: String, ignoringBackoff: Bool = false) throws -> [QueuedSession] {
         let now = nowMillis()
         let state = try locked { try readState(userId) }
         let stuck = state.foreign.filter { !OfflineQueue.isRejected($0) }
@@ -89,7 +90,7 @@ public actor OfflineQueue {
             throw OfflineQueueError.undecodableEntries(count: stuck.count, submissionIds: stuck.compactMap { OfflineQueue.entryId($0) })
         }
         return state.records.filter {
-            $0.rejectionReason == nil && ($0.nextEligibleAtMillis ?? 0) <= now
+            $0.rejectionReason == nil && (ignoringBackoff || ($0.nextEligibleAtMillis ?? 0) <= now)
         }
     }
 
