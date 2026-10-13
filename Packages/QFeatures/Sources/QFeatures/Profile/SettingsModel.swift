@@ -98,14 +98,23 @@ public final class SettingsModel: ObservableObject {
                     desiredRetention: draft.desiredRetention, dailyGoalXp: draft.dailyGoalXp,
                     preferredVoice: draft.preferredVoice)
             }
-            dirty = false
-            if case .rejected(_, let prefs) = outcome {
-                if let prefs = prefs { form = prefs.updateRequest }
-                await sync.dismissRejectedEdit()
+            if case .rejected = outcome {
+                // Keep the draft in the form (like Android) and show the error.
+                dirty = true
+                notice = settingsNotice(for: outcome)
+            } else if form == draft {
+                dirty = false
+                notice = settingsNotice(for: outcome)
+            } else {
+                // Edited while the PUT was in flight: stay dirty so the newer
+                // edit is neither overwritten by a pull nor reported as saved.
+                dirty = true
+                notice = nil
             }
-            notice = settingsNotice(for: outcome)
         } catch {
-            notice = .failed("Couldn't save your settings. Try again.")
+            // The edit is already stored pending in PrefsSync and will be retried.
+            dirty = true
+            notice = .failed("Couldn't reach the server just now. Your changes are kept and will sync later.")
         }
         saving = false
     }

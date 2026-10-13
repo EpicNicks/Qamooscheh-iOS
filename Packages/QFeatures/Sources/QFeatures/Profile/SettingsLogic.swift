@@ -89,7 +89,7 @@ public func settingsNotice(for outcome: PrefsSyncOutcome) -> SettingsNotice {
     case .offline:
         return .savedOffline
     case .rejected(let status, _):
-        return .rejected("The server didn't accept those settings (error \(status)). Your last saved settings are shown.")
+        return .rejected("The server didn't accept those settings (error \(status)). Your changes are still here; adjust them and save again.")
     }
 }
 

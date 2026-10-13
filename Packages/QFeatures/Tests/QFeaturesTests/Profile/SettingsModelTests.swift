@@ -1,12 +1,14 @@
 import XCTest
 import QModel
 import QData
+import QNetwork
 @testable import QFeatures
 
 private final class FakeAPI: PrefsAPI, @unchecked Sendable {
     var server = PrefsResponse(scriptMode: .native, register: .both, autoplayAudio: true, keyboardMode: .contextual, desiredRetention: 0.9, dailyGoalXp: 500)
     var failure: Error?
     var saved: [UpdatePrefsRequest] = []
+    var duringSave: (@Sendable () async -> Void)?
 
     func fetch() async throws -> PrefsResponse {
         if let failure = failure { throw failure }
@@ -15,6 +17,7 @@ private final class FakeAPI: PrefsAPI, @unchecked Sendable {
 
     func save(_ request: UpdatePrefsRequest) async throws -> PrefsResponse {
         if let failure = failure { throw failure }
+        if let hook = duringSave { await hook() }
         saved.append(request)
         server = PrefsResponse(
             scriptMode: request.scriptMode, register: request.register, autoplayAudio: request.autoplayAudio,
@@ -95,5 +98,63 @@ final class SettingsModelTests: XCTestCase {
         await model.setRemindersEnabled(true)
         XCTAssertTrue(model.reminders.enabled)
         XCTAssertTrue(scheduler.settings.enabled)
+    }
+
+    func testRejectedSaveKeepsDraftAndShowsError() async {
+        let api = FakeAPI()
+        let model = makeModel(api: api)
+        await model.load()
+        api.failure = ApiError(status: 422, body: nil)
+        model.edit { $0.dailyGoalXp = 9999 }
+        await model.save()
+        XCTAssertEqual(model.form?.dailyGoalXp, 9999)
+        if case .rejected(let message)? = model.notice {
+            XCTAssertTrue(message.contains("422"))
+        } else {
+            XCTFail("expected rejected notice")
+        }
+        // A reload must not replace the kept draft with the server copy.
+        api.failure = nil
+        await model.load()
+        XCTAssertEqual(model.form?.dailyGoalXp, 9999)
+    }
+
+    func testDirtyLoadIsNotOverwritten() async {
+        let api = FakeAPI()
+        let model = makeModel(api: api)
+        await model.load()
+        model.edit { $0.dailyGoalXp = 2000 }
+        await model.load()
+        XCTAssertEqual(model.form?.dailyGoalXp, 2000)
+    }
+
+    func testEditDuringSaveStaysDirty() async {
+        let api = FakeAPI()
+        let model = makeModel(api: api)
+        await model.load()
+        model.edit { $0.dailyGoalXp = 1000 }
+        api.duringSave = { await MainActor.run { model.edit { $0.autoplayAudio = false } } }
+        await model.save()
+        XCTAssertEqual(model.form?.autoplayAudio, false)
+        XCTAssertNil(model.notice)
+        api.duringSave = nil
+        await model.load()
+        XCTAssertEqual(model.form?.autoplayAudio, false)
+        XCTAssertEqual(model.form?.dailyGoalXp, 1000)
+    }
+
+    func testThrownSaveSaysItWillSyncLater() async {
+        let api = FakeAPI()
+        let model = makeModel(api: api)
+        await model.load()
+        api.failure = ApiError(status: 401, body: nil)
+        model.edit { $0.dailyGoalXp = 1500 }
+        await model.save()
+        if case .failed(let message)? = model.notice {
+            XCTAssertTrue(message.contains("sync later"))
+        } else {
+            XCTFail("expected failed notice")
+        }
+        XCTAssertEqual(model.form?.dailyGoalXp, 1500)
     }
 }

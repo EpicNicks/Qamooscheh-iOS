@@ -254,6 +254,12 @@ private struct CourseSections: View {
                     if let xp = Int(goalText) { model.edit { $0.dailyGoalXp = xp } }
                 }))
                 .numberEntry()
+                .onReceive(model.$form) { latest in
+                    // Follow form resets (server pull) without fighting live typing.
+                    if let xp = latest?.dailyGoalXp, !goalText.isEmpty, Int(goalText) != xp {
+                        goalText = String(xp)
+                    }
+                }
             }
             switchRow("Celebrate when I hit my daily goal", model.local.goalCelebrationEnabled, p, description: "Saved on this device.") { on in
                 model.updateLocal { $0.goalCelebrationEnabled = on }
