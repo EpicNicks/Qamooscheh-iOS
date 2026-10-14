@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import QFeatures
 
 final class PathChromeLogicTests: XCTestCase {
@@ -28,5 +29,25 @@ final class PathChromeLogicTests: XCTestCase {
         XCTAssertEqual(jumpArrowRotation(.down), 180)
         XCTAssertEqual(streakLabel(7), "7")
         XCTAssertEqual(streakLabel(-1), "0")
+    }
+
+    func testGoalRingSizeMatchesAndroid() {
+        XCTAssertEqual(dailyGoalRingSize, 18.3, accuracy: 0.0001)
+    }
+
+    func testCelebrationSkippedUnderReduceMotion() {
+        XCTAssertTrue(goalCelebrationAnimates(celebrating: true, reduceMotion: false))
+        XCTAssertFalse(goalCelebrationAnimates(celebrating: true, reduceMotion: true))
+        XCTAssertFalse(goalCelebrationAnimates(celebrating: false, reduceMotion: false))
+    }
+
+    func testTotalXpLabels() {
+        XCTAssertEqual(totalXpLabel(4210), "4210 XP")
+        XCTAssertEqual(totalXpLabel(-3), "0 XP")
+        XCTAssertEqual(totalXpAccessibilityLabel(12), "12 total XP")
+    }
+
+    func testSheetOpensLarge() {
+        XCTAssertEqual(pathSheetDetents, [.large])
     }
 }

@@ -104,10 +104,13 @@ public struct SkillGroupSheetView: View {
 }
 
 public extension View {
-    /// Presents sheet content as a bottom sheet that opens at medium height and expands (Android ModalBottomSheet).
+    /// Presents sheet content as a bottom sheet that opens expanded (Android ModalBottomSheet, skipPartiallyExpanded).
     func pathBottomSheet<Content: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) -> some View {
         sheet(isPresented: isPresented) {
-            content().presentationDetents([.medium, .large])
+            content().presentationDetents(pathSheetDetents)
         }
     }
 }
+
+/// The Path bottom sheet opens at the large detent only, as Android opens it expanded.
+public let pathSheetDetents: Set<PresentationDetent> = [.large]
