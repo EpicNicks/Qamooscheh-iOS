@@ -71,6 +71,9 @@ struct SettingsContent: View {
                         .buttonStyle(.bordered)
                 }
             }
+            if model.canSignOut {
+                AccountSection(model: model, p: p)
+            }
         }
     }
 
@@ -154,6 +157,36 @@ private func segmented<T: Hashable>(_ options: [(T, String)], selection: T, set:
     .pickerStyle(.segmented)
 }
 
+/// Account: who is signed in, and Sign out behind a confirmation (Android AccountSection).
+private struct AccountSection: View {
+    @ObservedObject var model: SettingsModel
+    let p: AppPalette
+
+    @State private var confirming = false
+
+    var body: some View {
+        SettingsCard("Account", p) {
+            if let name = model.accountName, !name.isEmpty {
+                mutedText("Signed in as \(name)", p)
+            }
+            if let error = model.signOutError {
+                Text(error).font(.callout).foregroundColor(Color(argb: p.danger))
+            }
+            Button(action: { confirming = true }) {
+                Text(model.signingOut ? "Signing out\u{2026}" : "Sign out")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .foregroundColor(Color(argb: p.danger))
+            .disabled(model.signingOut)
+            .confirmationDialog("Sign out of Qamooscheh?", isPresented: $confirming, titleVisibility: .visible) {
+                Button("Sign out", role: .destructive) { Task { await model.signOut() } }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+    }
+}
+
 /// Study, Input, Audio and Goals: the course prefs that Save sends.
 private struct CourseSections: View {
     @ObservedObject var model: SettingsModel
@@ -224,16 +257,40 @@ private struct CourseSections: View {
         let selected = form.preferredVoice ?? defaultId
         return SettingsCard("Audio", p) {
             fieldLabel("Voice", p)
-            Picker("Voice", selection: Binding(get: { selected }, set: { id in
-                model.edit { $0.preferredVoice = id == defaultId ? nil : id }
-            })) {
+            VStack(spacing: 8) {
                 ForEach(0..<model.voices.count, id: \.self) { i in
-                    Text(model.voices[i].label).tag(model.voices[i].id)
+                    voiceRow(model.voices[i], selected: model.voices[i].id == selected, defaultId: defaultId)
                 }
             }
-            .pickerStyle(.menu)
+            if let notice = model.previewNotice {
+                Text(notice).font(.footnote).foregroundColor(Color(argb: p.warning))
+            }
             if model.voices.count > 1 {
                 switchRow("Shuffle voices", model.local.shuffleVoices, p) { on in model.updateLocal { $0.shuffleVoices = on } }
+            }
+        }
+    }
+
+    private func voiceRow(_ voice: SettingsVoice, selected: Bool, defaultId: String) -> some View {
+        HStack(spacing: 8) {
+            Button(action: { model.edit { $0.preferredVoice = voice.id == defaultId ? nil : voice.id } }) {
+                HStack {
+                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                        .foregroundColor(Color(argb: selected ? p.current : p.textMuted))
+                    Text(voice.label).font(.body).foregroundColor(Color(argb: p.text))
+                    Spacer(minLength: 0)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            if voice.canPreview {
+                Button(action: { model.previewVoice(voice) }) {
+                    Image(systemName: "play.circle")
+                        .font(.title3)
+                        .foregroundColor(Color(argb: p.current))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Play \(voice.label)")
             }
         }
     }
@@ -557,9 +614,13 @@ public struct SettingsShowcase: View {
         let form = UpdatePrefsRequest(
             scriptMode: .both, register: .spoken, autoplayAudio: true, keyboardMode: .contextual,
             desiredRetention: 0.92, dailyGoalXp: 750, preferredVoice: nil)
-        let voices = [SettingsVoice(id: "v1", label: "Voice one"), SettingsVoice(id: "v2", label: "Voice two")]
+        let voices = [
+            SettingsVoice(id: "v1", label: "Voice one", sampleText: "Salam", sampleLanguage: "fa-IR"),
+            SettingsVoice(id: "v2", label: "Voice two", sampleText: "Salam", sampleLanguage: "fa-IR"),
+        ]
         _model = StateObject(wrappedValue: SettingsModel.preview(
-            form: form, local: local, reminders: reminders, streak: streak, courseCode: course, voices: voices))
+            form: form, local: local, reminders: reminders, streak: streak, courseCode: course, voices: voices,
+            accountName: "learner@example.com", canSignOut: true))
     }
 
     public var body: some View {

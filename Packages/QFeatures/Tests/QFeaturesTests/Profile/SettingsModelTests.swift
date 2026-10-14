@@ -192,3 +192,82 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(model.hasUnsyncedEdit)
     }
 }
+
+private final class StubPreviewer: VoicePreviewing {
+    var hasVoice = true
+    var played: [String] = []
+    func preview(text: String, languageTag: String) -> Bool {
+        played.append(text + "|" + languageTag)
+        return hasVoice
+    }
+    func stop() {}
+}
+
+private struct SignOutFailure: Error {}
+
+@MainActor
+final class SettingsAccountVoiceTests: XCTestCase {
+    private func makeModel(
+        voices: [SettingsVoice] = [], accountName: String? = nil,
+        signOut: (() async throws -> Void)? = nil, previewer: VoicePreviewing? = nil
+    ) -> SettingsModel {
+        let suite = UserDefaults(suiteName: "settings.tests." + UUID().uuidString)!
+        return SettingsModel(
+            userId: "u1", courseCode: "fa",
+            sync: PrefsSync(userId: "u1", courseCode: "fa", api: OfflinePrefsAPI(), defaults: suite),
+            localStore: LocalPrefsStore(defaults: suite), voices: voices,
+            accountName: accountName, signOut: signOut, previewer: previewer)
+    }
+
+    func testSignOutCallsClosure() async {
+        var calls = 0
+        let model = makeModel(accountName: "a@b.c", signOut: { calls += 1 })
+        XCTAssertTrue(model.canSignOut)
+        XCTAssertEqual(model.accountName, "a@b.c")
+        await model.signOut()
+        XCTAssertEqual(calls, 1)
+        XCTAssertFalse(model.signingOut)
+        XCTAssertNil(model.signOutError)
+    }
+
+    func testSignOutFailureShowsError() async {
+        let model = makeModel(signOut: { throw SignOutFailure() })
+        await model.signOut()
+        XCTAssertNotNil(model.signOutError)
+        XCTAssertFalse(model.signingOut)
+    }
+
+    func testNoSignOutClosureHidesAccount() async {
+        let model = makeModel()
+        XCTAssertFalse(model.canSignOut)
+        await model.signOut()
+        XCTAssertNil(model.signOutError)
+    }
+
+    func testPreviewSpeaksSample() {
+        let previewer = StubPreviewer()
+        let voice = SettingsVoice(id: "v1", label: "One", sampleText: "Salam", sampleLanguage: "fa-IR")
+        let model = makeModel(voices: [voice], previewer: previewer)
+        model.previewVoice(voice)
+        XCTAssertEqual(previewer.played, ["Salam|fa-IR"])
+        XCTAssertNil(model.previewNotice)
+    }
+
+    func testPreviewWithoutDeviceVoiceSaysSo() {
+        let previewer = StubPreviewer()
+        previewer.hasVoice = false
+        let voice = SettingsVoice(id: "v1", label: "One", sampleText: "Salam", sampleLanguage: "fa-IR")
+        let model = makeModel(voices: [voice], previewer: previewer)
+        model.previewVoice(voice)
+        XCTAssertNotNil(model.previewNotice)
+    }
+
+    func testVoiceWithoutSampleCannotPreview() {
+        let previewer = StubPreviewer()
+        let voice = SettingsVoice(id: "v1", label: "One")
+        XCTAssertFalse(voice.canPreview)
+        let model = makeModel(voices: [voice], previewer: previewer)
+        model.previewVoice(voice)
+        XCTAssertTrue(previewer.played.isEmpty)
+    }
+}

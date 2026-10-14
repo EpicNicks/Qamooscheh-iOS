@@ -20,15 +20,24 @@ public final class SettingsModel: ObservableObject {
     @Published public private(set) var streak: StreakResponse?
     @Published public private(set) var pauseBusy = false
     @Published public private(set) var pauseError: String?
+    @Published public private(set) var signingOut = false
+    @Published public private(set) var signOutError: String?
+    @Published public private(set) var previewNotice: String?
 
     public let courseCode: String
     public let voices: [SettingsVoice]
+    /// The signed-in name or email for the Account section; nil hides the line.
+    public let accountName: String?
+    /// Whether the Account section (Sign out) is shown.
+    public var canSignOut: Bool { signOutAction != nil }
 
     private let userId: String
     private let sync: PrefsSync
     private let localStore: LocalPrefsStore
     private let scheduler: ReminderScheduling
     private let streakService: StreakService?
+    private let signOutAction: (() async throws -> Void)?
+    private let previewer: VoicePreviewing?
     private var dirty = false
 
     public init(
@@ -38,7 +47,10 @@ public final class SettingsModel: ObservableObject {
         localStore: LocalPrefsStore,
         scheduler: ReminderScheduling = StubReminderScheduler(),
         streakService: StreakService? = nil,
-        voices: [SettingsVoice] = []
+        voices: [SettingsVoice] = [],
+        accountName: String? = nil,
+        signOut: (() async throws -> Void)? = nil,
+        previewer: VoicePreviewing? = nil
     ) {
         self.userId = userId
         self.courseCode = courseCode
@@ -47,6 +59,9 @@ public final class SettingsModel: ObservableObject {
         self.scheduler = scheduler
         self.streakService = streakService
         self.voices = voices
+        self.accountName = accountName
+        self.signOutAction = signOut
+        self.previewer = previewer
         let stored = localStore.current(userId: userId)
         self.local = stored
         var r = scheduler.current()
@@ -153,6 +168,28 @@ public final class SettingsModel: ObservableObject {
         }
     }
 
+    /// Signs out through the injected closure (the app wires AuthApi.logout plus the session clear).
+    public func signOut() async {
+        guard let action = signOutAction, !signingOut else { return }
+        signingOut = true
+        signOutError = nil
+        do {
+            try await action()
+        } catch {
+            signOutError = "Couldn't sign out. Try again."
+        }
+        signingOut = false
+    }
+
+    /// Plays a voice's sample so the learner can hear it before choosing it (Android previewVoice).
+    public func previewVoice(_ voice: SettingsVoice) {
+        guard let previewer = previewer, let text = voice.sampleText, let language = voice.sampleLanguage, voice.canPreview else { return }
+        previewNotice = nil
+        if !previewer.preview(text: text, languageTag: language) {
+            previewNotice = "This device has no voice installed for that language, so the sample can't play."
+        }
+    }
+
     /// Books a pause of `days` days starting `startDay` ("yyyy-MM-dd").
     public func pauseStreak(startDay: String, days: Int) async {
         guard let service = streakService, !pauseBusy, days >= 1 else { return }
@@ -181,16 +218,19 @@ public final class SettingsModel: ObservableObject {
     }
 
     /// Seeds a loaded screen without any network (snapshot showcases).
-    public static func preview(form: UpdatePrefsRequest, local: LocalPrefs, reminders: ReminderSettings, streak: StreakResponse?, courseCode: String, voices: [SettingsVoice]) -> SettingsModel {
+    public static func preview(form: UpdatePrefsRequest, local: LocalPrefs, reminders: ReminderSettings, streak: StreakResponse?, courseCode: String, voices: [SettingsVoice], accountName: String? = nil, canSignOut: Bool = false) -> SettingsModel {
         let suite = UserDefaults(suiteName: "qamooscheh.settings.preview") ?? .standard
         let store = LocalPrefsStore(defaults: suite)
         store.update(userId: "preview") { $0 = local }
         let scheduler = StubReminderScheduler()
         scheduler.apply(reminders)
+        var signOutStub: (() async throws -> Void)?
+        if canSignOut { signOutStub = { } }
         let model = SettingsModel(
             userId: "preview", courseCode: courseCode,
             sync: PrefsSync(userId: "preview", courseCode: courseCode, api: OfflinePrefsAPI(), defaults: suite),
-            localStore: store, scheduler: scheduler, streakService: nil, voices: voices)
+            localStore: store, scheduler: scheduler, streakService: nil, voices: voices,
+            accountName: accountName, signOut: signOutStub, previewer: nil)
         model.form = form
         model.streak = streak
         return model
