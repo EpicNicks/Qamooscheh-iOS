@@ -1,5 +1,6 @@
 import SwiftUI
 import QData
+import QModel
 import QDesign
 
 /// "Course update available" prompt on the Path (Android `CourseUpdateBanner`).
@@ -7,8 +8,11 @@ import QDesign
 public struct UpdateBannerView: View {
     private let offer: ContentUpdateOffer
     private let state: ContentUpdateState
+    private let dialog: RollForwardDialogState?
     private let palette: AppPalette?
     private let onUpdate: () -> Void
+    private let onConfirm: () -> Void
+    private let onCancel: () -> Void
     private let onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -16,14 +20,20 @@ public struct UpdateBannerView: View {
     public init(
         offer: ContentUpdateOffer,
         state: ContentUpdateState = .idle,
+        dialog: RollForwardDialogState? = nil,
         palette: AppPalette? = nil,
         onUpdate: @escaping () -> Void = {},
+        onConfirm: @escaping () -> Void = {},
+        onCancel: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) {
         self.offer = offer
         self.state = state
+        self.dialog = dialog
         self.palette = palette
         self.onUpdate = onUpdate
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
         self.onDismiss = onDismiss
     }
 
@@ -54,20 +64,22 @@ public struct UpdateBannerView: View {
                 } else if state.isBusy {
                     ProgressView()
                 }
-                Button(action: onUpdate) {
-                    Text(state.isBusy ? "Updating\u{2026}" : "Update")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Color(argb: p.primaryContrast))
-                        .padding(.horizontal, Spacing.standard.s4)
-                        .padding(.vertical, Spacing.standard.s2)
-                        .background(
-                            RoundedRectangle(cornerRadius: Radii.standard.md)
-                                .fill(Color(argb: p.primary))
-                                .opacity(state.isBusy ? 0.5 : 1)
-                        )
+                if offer.canUpdate {
+                    Button(action: onUpdate) {
+                        Text(state.isBusy ? "Updating\u{2026}" : "Update")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(Color(argb: p.primaryContrast))
+                            .padding(.horizontal, Spacing.standard.s4)
+                            .padding(.vertical, Spacing.standard.s2)
+                            .background(
+                                RoundedRectangle(cornerRadius: Radii.standard.md)
+                                    .fill(Color(argb: p.primary))
+                                    .opacity(state.isBusy ? 0.5 : 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(state.isBusy)
                 }
-                .buttonStyle(.plain)
-                .disabled(state.isBusy)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, Spacing.standard.s5)
@@ -84,7 +96,48 @@ public struct UpdateBannerView: View {
         .background(shape.fill(Color(argb: p.surface)))
         .overlay(shape.stroke(Color(argb: p.primary), lineWidth: 2))
         .accessibilityElement(children: .contain)
+        .alert(
+            dialogTitle,
+            isPresented: Binding(get: { dialog != nil }, set: { if !$0 { onCancel() } }),
+            actions: {
+                if case .ready = dialog {
+                    Button("Update", action: onConfirm)
+                }
+                Button("Cancel", role: .cancel, action: onCancel)
+            },
+            message: { Text(dialogMessage) })
     }
+
+    private var dialogTitle: String {
+        if case .ready(let confirmation) = dialog { return confirmation.title }
+        return "Update to version \(offer.version)?"
+    }
+
+    private var dialogMessage: String {
+        switch dialog {
+        case .none: return ""
+        case .some(.loading): return "Checking what's new\u{2026}"
+        case .some(.failed(let message)): return message
+        case .some(.ready(let c)):
+            var lines: [String] = []
+            if let notes = c.notes { lines.append(notes) }
+            if c.unchanged {
+                lines.append(RollForwardConfirmation.preservedMessage)
+            } else {
+                lines.append("Current position: \(c.currentLabel)")
+                lines.append("After updating: \(c.afterLabel)")
+            }
+            if let warning = c.clampedWarning { lines.append(warning) }
+            return lines.joined(separator: "\n")
+        }
+    }
+}
+
+/// The confirm step in front of every roll-forward.
+public enum RollForwardDialogState: Equatable, Sendable {
+    case loading
+    case ready(RollForwardConfirmation)
+    case failed(String)
 }
 
 /// Drives the banner: the offer, the in-flight state and per-visit dismissal.
@@ -93,6 +146,7 @@ public final class UpdateBannerModel: ObservableObject {
     @Published public private(set) var offer: ContentUpdateOffer?
     @Published public private(set) var state: ContentUpdateState = .idle
     @Published public private(set) var dismissed = false
+    @Published public private(set) var dialog: RollForwardDialogState?
 
     public init(offer: ContentUpdateOffer? = nil) {
         self.offer = offer
@@ -109,9 +163,38 @@ public final class UpdateBannerModel: ObservableObject {
         dismissed = true
     }
 
-    /// Downloads the offered version, then runs `commit` (the server roll-forward).
+    /// Update tapped: fetches the roll-forward preview and opens the confirm dialog.
+    /// Nothing is downloaded or applied until `confirm`. An ineligible offer does nothing.
+    public func requestUpdate(
+        courseCode: String,
+        loadPreview: @Sendable (String, Int) async throws -> RollForwardPreviewResponse
+    ) async {
+        guard let offer = offer, offer.canUpdate, !state.isBusy, dialog == nil else { return }
+        dialog = .loading
+        do {
+            let preview = try await loadPreview(courseCode, offer.version)
+            guard dialog == .loading else { return }
+            dialog = .ready(RollForwardConfirmation(preview))
+        } catch {
+            guard dialog == .loading else { return }
+            dialog = .failed("Couldn't check this update.")
+        }
+    }
+
+    public func cancelConfirmation() {
+        dialog = nil
+    }
+
+    /// Confirm tapped: downloads the offered version, then runs `commit` (the server
+    /// roll-forward). A no-op unless the dialog is showing a loaded preview.
+    public func confirm(updater: ContentUpdater, courseCode: String, commit: @escaping @Sendable (Int) async throws -> Void) async {
+        guard case .ready = dialog else { return }
+        dialog = nil
+        await apply(updater: updater, courseCode: courseCode, commit: commit)
+    }
+
     /// Failure leaves the old version pinned and shows a message on the banner.
-    public func accept(updater: ContentUpdater, courseCode: String, commit: @escaping @Sendable (Int) async throws -> Void) async {
+    private func apply(updater: ContentUpdater, courseCode: String, commit: @escaping @Sendable (Int) async throws -> Void) async {
         guard let offer = offer, !state.isBusy else { return }
         state = .downloading(DownloadProgress(done: 0, discovered: 0))
         do {

@@ -94,16 +94,19 @@ final class ContentUpdateTests: XCTestCase {
         XCTAssertNil(ContentUpdateOffer.detect(course: nil, update: newer))
     }
 
-    func testIneligibleUpdateIsStillOfferedWithHint() throws {
+    func testIneligibleUpdateIsStillShownWithReasonAndNoAction() throws {
         let course = CourseRef(code: "fa", version: 3, manifestSha256: "a")
         let update = CourseUpdateRef(version: 4, manifestSha256: "b", eligible: false)
         let offer = try XCTUnwrap(ContentUpdateOffer.detect(course: course, update: update))
-        XCTAssertEqual(offer.hint, "Tap Update to see what's going on.")
+        XCTAssertEqual(offer.hint, "This update isn't available for your course yet.")
+        XCTAssertEqual(offer.ineligibleReason, offer.hint)
+        XCTAssertFalse(offer.canUpdate)
         XCTAssertEqual(offer.title, "Course update available \u{2014} version 4")
     }
 
-    func testNotesWinOverHintAndEligibleHasNone() {
-        XCTAssertEqual(ContentUpdateOffer(version: 4, manifestSha256: "b", eligible: false, notes: "New words").hint, "New words")
+    func testNotesShowWhenEligibleAndEligibleHasNone() {
+        XCTAssertEqual(ContentUpdateOffer(version: 4, manifestSha256: "b", eligible: true, notes: "New words").hint, "New words")
+        XCTAssertTrue(ContentUpdateOffer(version: 4, manifestSha256: "b", eligible: true).canUpdate)
         XCTAssertNil(ContentUpdateOffer(version: 4, manifestSha256: "b", eligible: true).hint)
     }
 
@@ -190,6 +193,52 @@ final class ContentUpdateTests: XCTestCase {
         }
         XCTAssertTrue(isComplete(store, 3))
         XCTAssertTrue(isComplete(store, 4))
+    }
+
+    func testIneligibleOfferIsNeverDownloadedOrCommitted() async throws {
+        let (store, updater) = try await installed(serving: world())
+        let committed = Counter()
+        let offer = ContentUpdateOffer(version: 4, manifestSha256: manifestSha(4), eligible: false)
+        do {
+            try await updater.accept(courseCode: "fa", offer: offer) { committed.record($0) }
+            XCTFail("expected ineligible")
+        } catch is IneligibleUpdateError {
+        }
+        XCTAssertEqual(committed.all, [])
+        XCTAssertFalse(isComplete(store, 4))
+        XCTAssertEqual(ContentUpdater.message(for: IneligibleUpdateError()), "This update isn't available for your course yet.")
+    }
+
+    // MARK: - Confirmation
+
+    private func preview(
+        from: RollForwardPositionRef?, to: RollForwardPositionRef?, clamped: Bool = false, notes: String? = nil
+    ) -> RollForwardPreviewResponse {
+        RollForwardPreviewResponse(
+            courseCode: "fa", fromVersion: 3, toVersion: 4, manifestSha256: "b", updateNotes: notes,
+            from: from, to: to, clamped: clamped, unitClamped: clamped, lessonClamped: false)
+    }
+
+    func testConfirmationShowsBothPositionsOneIndexed() {
+        let from = RollForwardPositionRef(unitKey: "u1", skillKey: "s1", unitIndex: 1, lessonIndex: 3)
+        let to = RollForwardPositionRef(unitKey: "u1", skillKey: "s2", unitIndex: 1, lessonIndex: 2)
+        let c = RollForwardConfirmation(preview(from: from, to: to, clamped: true, notes: "New"))
+        XCTAssertEqual(c.title, "Update to version 4?")
+        XCTAssertEqual(c.currentLabel, "Unit 2 Lesson 4")
+        XCTAssertEqual(c.afterLabel, "Unit 2 Lesson 3")
+        XCTAssertEqual(c.notes, "New")
+        XCTAssertFalse(c.unchanged)
+        XCTAssertNotNil(c.clampedWarning)
+    }
+
+    func testConfirmationUnchangedAndNilPositions() {
+        let at = RollForwardPositionRef(unitKey: "u1", skillKey: "s1", unitIndex: 0, lessonIndex: 0)
+        XCTAssertTrue(RollForwardConfirmation(preview(from: at, to: at)).unchanged)
+        let none = RollForwardConfirmation(preview(from: nil, to: nil))
+        XCTAssertFalse(none.unchanged)
+        XCTAssertNil(none.clampedWarning)
+        XCTAssertEqual(none.currentLabel, "You'll start at the first lesson you still owe.")
+        XCTAssertEqual(none.afterLabel, "Your position won't move.")
     }
 
     func testMessages() {

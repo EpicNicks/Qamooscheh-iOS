@@ -22,7 +22,7 @@ public struct ContentUpdateOffer: Equatable, Sendable {
     }
 
     /// The offer to show, or nil. Needs a pinned course and an update newer than its pin.
-    /// An ineligible update is still offered (the server decides on accept), as on Android.
+    /// An ineligible update is still shown, with its reason and no action.
     public static func detect(course: CourseRef?, update: CourseUpdateRef?) -> ContentUpdateOffer? {
         guard let course = course, let update = update, update.version > course.version else { return nil }
         return ContentUpdateOffer(update)
@@ -32,10 +32,57 @@ public struct ContentUpdateOffer: Equatable, Sendable {
         "Course update available \u{2014} version \(version)"
     }
 
-    /// Notes when present, else a hint for an ineligible update, else nothing.
+    /// Shown instead of an Update action when the server marks the offer ineligible.
+    public static let ineligibleMessage = "This update isn't available for your course yet."
+
+    /// Nil when the update can be taken; otherwise why it can't.
+    public var ineligibleReason: String? {
+        eligible ? nil : ContentUpdateOffer.ineligibleMessage
+    }
+
+    /// Whether the banner offers an Update action. An ineligible offer never previews or applies.
+    public var canUpdate: Bool { eligible }
+
+    /// The ineligible reason when there is one (it explains the missing action), else notes, else nothing.
     public var hint: String? {
-        if let notes = notes { return notes }
-        return eligible ? nil : "Tap Update to see what's going on."
+        if let reason = ineligibleReason { return reason }
+        return notes
+    }
+}
+
+/// The confirm step's content, built from the server's roll-forward preview
+/// (Android `RollForwardDialog`): where the learner is, where they land, and a
+/// warning when the new version is shorter there.
+public struct RollForwardConfirmation: Equatable, Sendable {
+    public static let preservedMessage = "Your progress will be preserved."
+
+    public let toVersion: Int
+    public let title: String
+    public let notes: String?
+    public let unchanged: Bool
+    public let currentLabel: String
+    public let afterLabel: String
+    public let clampedWarning: String?
+
+    public init(_ preview: RollForwardPreviewResponse) {
+        toVersion = preview.toVersion
+        title = "Update to version \(preview.toVersion)?"
+        notes = preview.updateNotes
+        if let from = preview.from, let to = preview.to {
+            unchanged = from.unitKey == to.unitKey && from.skillKey == to.skillKey
+        } else {
+            unchanged = false
+        }
+        currentLabel = preview.from.map { RollForwardConfirmation.locator($0) } ?? "You'll start at the first lesson you still owe."
+        afterLabel = preview.to.map { RollForwardConfirmation.locator($0) } ?? "Your position won't move."
+        clampedWarning = preview.clamped
+            ? "Heads up \u{2014} this version is shorter where you are, so this update moves you back a little."
+            : nil
+    }
+
+    /// Indices are 0-based on the wire; display adds one.
+    static func locator(_ ref: RollForwardPositionRef) -> String {
+        "Unit \(ref.unitIndex + 1) Lesson \(ref.lessonIndex + 1)"
     }
 }
 
@@ -55,6 +102,11 @@ public enum ContentUpdateState: Equatable, Sendable {
         guard case .downloading(let progress) = self, progress.discovered > 0 else { return nil }
         return min(1, max(0, Double(progress.done) / Double(progress.discovered)))
     }
+}
+
+/// An ineligible offer was applied; nothing was downloaded or committed.
+public struct IneligibleUpdateError: Error, Equatable, Sendable {
+    public init() {}
 }
 
 /// Downloads a newer course version, then rolls the pin forward.
@@ -78,6 +130,7 @@ public struct ContentUpdater: Sendable {
         onProgress: @escaping @Sendable (DownloadProgress) -> Void = { _ in },
         commit: @Sendable (Int) async throws -> Void
     ) async throws {
+        guard offer.canUpdate else { throw IneligibleUpdateError() }
         try await downloader.download(
             courseCode: courseCode, version: offer.version,
             manifestSha256: offer.manifestSha256, onProgress: onProgress)
@@ -88,6 +141,7 @@ public struct ContentUpdater: Sendable {
     /// A user-facing message for a failed update.
     public static func message(for error: Error) -> String {
         if error is CancellationError { return "Update cancelled." }
+        if error is IneligibleUpdateError { return ContentUpdateOffer.ineligibleMessage }
         if error is ManifestHashMismatchError || error is FileHashMismatchError {
             return "The update didn't verify, so your course wasn't changed."
         }
