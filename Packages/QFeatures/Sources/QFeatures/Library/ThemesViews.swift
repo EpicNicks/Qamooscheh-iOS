@@ -58,9 +58,26 @@ struct LibraryContent: View {
                     .frame(minHeight: 44)
             case .ready(let ready):
                 topics(ready, p)
+                ForEach(LibraryPlaceholders.sectionTitles, id: \.self) { title in
+                    placeholderSection(title, p)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func placeholderSection(_ title: String, _ p: AppPalette) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radii.standard.md)
+        Text(title).font(.title2.weight(.bold)).foregroundColor(Color(argb: p.text))
+            .padding(.top, 8)
+            .accessibilityAddTraits(.isHeader)
+        Text(LibraryPlaceholders.comingSoon).font(.callout).foregroundColor(Color(argb: p.textMuted))
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 12)
+            .background(Color(argb: p.surface))
+            .clipShape(shape)
+            .overlay(shape.stroke(Color(argb: p.border), lineWidth: 1))
     }
 
     @ViewBuilder
