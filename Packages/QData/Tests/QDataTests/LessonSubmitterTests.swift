@@ -153,6 +153,18 @@ final class LessonSubmitterTests: XCTestCase {
     }
 }
 
+extension LessonSubmitterTests {
+    func testResubmitOfRejectedSessionReturnsRejected() async throws {
+        let queue = OfflineQueue(storage: InMemoryOfflineQueueStorage())
+        try await queue.enqueue(userId: user, session: session("r"))
+        try await queue.markRejected(userId: user, submissionId: "r", reason: "bad")
+        let stub = StubSubmitter { processed($0) }
+        let result = try await make(stub, queue: queue).submit(userId: user, session: session("r"))
+        XCTAssertEqual(result, .rejected(reason: "bad"))
+        XCTAssertTrue(stub.calls.isEmpty)
+    }
+}
+
 private final class LockedBox<T>: @unchecked Sendable {
     private let lock = NSLock()
     private var value: T

@@ -38,9 +38,14 @@ public struct LessonSubmitter: Sendable {
     /// `OfflineQueueError.undecodableEntries` / a storage error (the session is
     /// already saved in that case).
     public func submit(userId: String, session: SubmittedSession) async throws -> LessonSubmitResult {
-        try await queue.enqueue(userId: userId, session: session)
-        let report = try await flusher.flush(userId: userId, reason: .enqueued)
         let id = session.submissionId
+        if let known = try await queue.records(userId: userId).first(where: { $0.submissionId == id }),
+           let reason = known.rejectionReason {
+            return .rejected(reason: reason)
+        }
+        try await queue.enqueue(userId: userId, session: session)
+        // An explicit submit is user-driven, so it bypasses retry backoff (like a foreground flush).
+        let report = try await flusher.flush(userId: userId, ignoreBackoff: true)
         if let result = report.results.first(where: { $0.submissionId == id }) {
             if report.rejected.contains(id) {
                 return .rejected(reason: result.rejectionReason)
