@@ -24,7 +24,7 @@ extension ShellSnapshotTests {
     }
 
     private func renderSettings(course: String, name: String, dark: Bool, large: Bool) throws {
-        let size = CGSize(width: 390, height: large ? 5200 : 2600)
+        let size = CGSize(width: 390, height: large ? 5600 : 2900)
         let controller = UIHostingController(rootView: SettingsShowcase(course: course, large: large))
         controller.overrideUserInterfaceStyle = dark ? .dark : .light
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
