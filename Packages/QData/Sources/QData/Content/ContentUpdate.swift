@@ -33,7 +33,7 @@ public struct ContentUpdateOffer: Equatable, Sendable {
     }
 
     /// Shown instead of an Update action when the server marks the offer ineligible.
-    public static let ineligibleMessage = "This update isn't available for your course yet."
+    public static let ineligibleMessage = "This update isn't available for your course."
 
     /// Nil when the update can be taken; otherwise why it can't.
     public var ineligibleReason: String? {

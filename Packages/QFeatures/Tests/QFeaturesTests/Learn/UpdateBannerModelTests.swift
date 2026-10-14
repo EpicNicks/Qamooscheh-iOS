@@ -74,4 +74,57 @@ final class UpdateBannerModelTests: XCTestCase {
         XCTAssertEqual(model.state, .idle)
         XCTAssertNotNil(model.offer)
     }
+
+    func testConfirmAppliesOnlyFromReadyDialog() async {
+        let model = UpdateBannerModel(offer: eligible)
+        await model.requestUpdate(courseCode: "fa") { _, _ in makePreview() }
+        let calls = Calls()
+        let task = model.confirm { offer, _ in calls.record(offer.version) }
+        XCTAssertNil(model.dialog)
+        XCTAssertEqual(model.state, .downloading(DownloadProgress(done: 0, discovered: 0)))
+        await task?.value
+        XCTAssertEqual(calls.all, [4])
+        XCTAssertEqual(model.state, .idle)
+        XCTAssertNil(model.offer)
+    }
+
+    func testCancelAfterConfirmDoesNotUndoApply() async {
+        let model = UpdateBannerModel(offer: eligible)
+        await model.requestUpdate(courseCode: "fa") { _, _ in makePreview() }
+        let calls = Calls()
+        let task = model.confirm { offer, _ in calls.record(offer.version) }
+        model.cancelConfirmation()
+        await task?.value
+        XCTAssertEqual(calls.all, [4])
+    }
+
+    func testConfirmIsNoOpAfterCancel() async {
+        let model = UpdateBannerModel(offer: eligible)
+        await model.requestUpdate(courseCode: "fa") { _, _ in makePreview() }
+        model.cancelConfirmation()
+        let calls = Calls()
+        XCTAssertNil(model.confirm { offer, _ in calls.record(offer.version) })
+        XCTAssertEqual(calls.all, [])
+        XCTAssertEqual(model.state, .idle)
+    }
+
+    func testConfirmIsNoOpWithoutDialogOrWhileFailed() async {
+        let calls = Calls()
+        let none = UpdateBannerModel(offer: eligible)
+        XCTAssertNil(none.confirm { offer, _ in calls.record(offer.version) })
+
+        let failed = UpdateBannerModel(offer: eligible)
+        await failed.requestUpdate(courseCode: "fa") { _, _ in throw PreviewFailed() }
+        XCTAssertNil(failed.confirm { offer, _ in calls.record(offer.version) })
+        XCTAssertEqual(calls.all, [])
+    }
+
+    func testConfirmFailureShowsMessageAndKeepsOffer() async {
+        let model = UpdateBannerModel(offer: eligible)
+        await model.requestUpdate(courseCode: "fa") { _, _ in makePreview() }
+        let task = model.confirm { _, _ in throw PreviewFailed() }
+        await task?.value
+        guard case .failed = model.state else { return XCTFail("expected failed") }
+        XCTAssertNotNil(model.offer)
+    }
 }

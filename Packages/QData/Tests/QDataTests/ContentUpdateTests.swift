@@ -98,7 +98,7 @@ final class ContentUpdateTests: XCTestCase {
         let course = CourseRef(code: "fa", version: 3, manifestSha256: "a")
         let update = CourseUpdateRef(version: 4, manifestSha256: "b", eligible: false)
         let offer = try XCTUnwrap(ContentUpdateOffer.detect(course: course, update: update))
-        XCTAssertEqual(offer.hint, "This update isn't available for your course yet.")
+        XCTAssertEqual(offer.hint, "This update isn't available for your course.")
         XCTAssertEqual(offer.ineligibleReason, offer.hint)
         XCTAssertFalse(offer.canUpdate)
         XCTAssertEqual(offer.title, "Course update available \u{2014} version 4")
@@ -206,7 +206,7 @@ final class ContentUpdateTests: XCTestCase {
         }
         XCTAssertEqual(committed.all, [])
         XCTAssertFalse(isComplete(store, 4))
-        XCTAssertEqual(ContentUpdater.message(for: IneligibleUpdateError()), "This update isn't available for your course yet.")
+        XCTAssertEqual(ContentUpdater.message(for: IneligibleUpdateError()), "This update isn't available for your course.")
     }
 
     // MARK: - Confirmation

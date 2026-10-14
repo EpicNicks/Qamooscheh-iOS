@@ -185,25 +185,38 @@ public final class UpdateBannerModel: ObservableObject {
         dialog = nil
     }
 
-    /// Confirm tapped: downloads the offered version, then runs `commit` (the server
-    /// roll-forward). A no-op unless the dialog is showing a loaded preview.
-    public func confirm(updater: ContentUpdater, courseCode: String, commit: @escaping @Sendable (Int) async throws -> Void) async {
-        guard case .ready = dialog else { return }
+    /// Confirm tapped. Synchronous up to the point the dialog closes, so the alert dismissing
+    /// (which fires `cancelConfirmation`) cannot race the apply. A no-op unless the dialog is
+    /// showing a loaded preview. Returns the apply task (nil when nothing was started).
+    @discardableResult
+    public func confirm(updater: ContentUpdater, courseCode: String, commit: @escaping @Sendable (Int) async throws -> Void) -> Task<Void, Never>? {
+        confirm { offer, onProgress in
+            try await updater.accept(courseCode: courseCode, offer: offer, onProgress: onProgress, commit: commit)
+        }
+    }
+
+    /// Same as above with the download-and-commit step injected.
+    @discardableResult
+    public func confirm(
+        perform: @escaping @Sendable (ContentUpdateOffer, @escaping @Sendable (DownloadProgress) -> Void) async throws -> Void
+    ) -> Task<Void, Never>? {
+        guard case .ready = dialog, let offer = offer, !state.isBusy else { return nil }
         dialog = nil
-        await apply(updater: updater, courseCode: courseCode, commit: commit)
+        state = .downloading(DownloadProgress(done: 0, discovered: 0))
+        return Task { @MainActor [weak self] in
+            await self?.run(offer: offer, perform: perform)
+        }
     }
 
     /// Failure leaves the old version pinned and shows a message on the banner.
-    private func apply(updater: ContentUpdater, courseCode: String, commit: @escaping @Sendable (Int) async throws -> Void) async {
-        guard let offer = offer, !state.isBusy else { return }
-        state = .downloading(DownloadProgress(done: 0, discovered: 0))
+    private func run(
+        offer: ContentUpdateOffer,
+        perform: @Sendable (ContentUpdateOffer, @escaping @Sendable (DownloadProgress) -> Void) async throws -> Void
+    ) async {
         do {
-            try await updater.accept(
-                courseCode: courseCode, offer: offer,
-                onProgress: { progress in
-                    Task { @MainActor [weak self] in self?.progressed(progress) }
-                },
-                commit: commit)
+            try await perform(offer, { progress in
+                Task { @MainActor [weak self] in self?.progressed(progress) }
+            })
             state = .idle
             self.offer = nil
         } catch {
