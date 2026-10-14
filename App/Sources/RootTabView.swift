@@ -1,5 +1,6 @@
 import SwiftUI
 import QDesign
+import QFeatures
 
 enum AppTab: String, CaseIterable, Identifiable {
     case learn
@@ -45,12 +46,28 @@ struct EmptyTabView: View {
 }
 
 struct RootTabView: View {
-    var body: some View {
+    private let lessons: LessonEnvironment?
+    @State private var lessonRoute: LessonRoute?
+
+    init(lessons: LessonEnvironment? = nil) {
+        self.lessons = lessons
+    }
+
+    private var tabs: some View {
         TabView {
             ForEach(AppTab.allCases) { tab in
                 EmptyTabView(tab: tab)
                     .tabItem { Label(tab.title, systemImage: tab.systemImage) }
             }
+        }
+        .environment(\.startLesson, { lessonRoute = $0 })
+    }
+
+    var body: some View {
+        if let lessons = lessons {
+            tabs.lessonCover(route: $lessonRoute, environment: lessons)
+        } else {
+            tabs
         }
     }
 }
