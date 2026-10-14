@@ -12,7 +12,7 @@ final class GlossaryModelTests: XCTestCase {
     }
 
     func testTermTableColumnsAre30_30_40() {
-        let w = GlossaryColumns.widths(available: 332, spacing: 12)
+        let w = GlossaryColumns.widths(available: 344, spacing: 12)
         XCTAssertEqual(w.count, 3)
         XCTAssertEqual(w[0], 96, accuracy: 0.001)
         XCTAssertEqual(w[1], 96, accuracy: 0.001)
