@@ -22,6 +22,7 @@ targets:
     platform: iOS
     sources:
       - App/Sources
+      - App/Resources
     dependencies:
       - package: QDesign
       - package: QFeatures
