@@ -70,11 +70,12 @@ public final class LeaguesModel: ObservableObject {
     @Published public private(set) var state: LeaguesState = .loading
 
     private let service: LeagueService?
-    private let viewerId: String?
+    private let viewerId: @MainActor () -> String?
     private let onUnauthorized: (@Sendable () -> Void)?
     private var generation = 0
 
-    public init(service: LeagueService?, viewerId: String?, onUnauthorized: (@Sendable () -> Void)? = nil) {
+    /// `viewerId` is read on every refresh so the '(you)' marker follows an account switch.
+    public init(service: LeagueService?, viewerId: @escaping @MainActor () -> String?, onUnauthorized: (@Sendable () -> Void)? = nil) {
         self.service = service
         self.viewerId = viewerId
         self.onUnauthorized = onUnauthorized
@@ -90,20 +91,21 @@ public final class LeaguesModel: ObservableObject {
             let league = try await service.current()
             if mine != generation { return }
             if let league = league {
-                state = .ready(makeLeagueUi(league, viewerId: viewerId))
+                state = .ready(makeLeagueUi(league, viewerId: viewerId()))
             } else {
                 state = .noLeague
             }
         } catch {
-            if mine != generation { return }
+            // A 401 is about the session, not the data: report it even when superseded.
             if (error as? ApiError)?.status == 401 || error is SessionExpiredError { onUnauthorized?() }
+            if mine != generation { return }
             state = .failed(AuthRules.message(for: error, fallback: "Couldn't load your league."))
         }
     }
 
     /// Seeds a screen without any network (snapshot showcases).
     public static func preview(_ state: LeaguesState) -> LeaguesModel {
-        let model = LeaguesModel(service: nil, viewerId: nil)
+        let model = LeaguesModel(service: nil, viewerId: { nil })
         model.state = state
         return model
     }

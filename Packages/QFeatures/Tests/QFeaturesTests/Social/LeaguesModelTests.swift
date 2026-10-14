@@ -53,7 +53,7 @@ final class LeaguesModelTests: XCTestCase {
         XCTAssertEqual(ui.rows.filter { $0.isMe }.map { $0.rank }, [13])
         XCTAssertFalse(ui.rows.contains { $0.outcome == .demoted })
         XCTAssertEqual(ui.rows[12].outcome, .held)
-        let upper = makeLeagueUi(league(1, 13), viewerId: nil)
+        let upper = makeLeagueUi(league(1, 13), viewerId: { nil })
         XCTAssertEqual(upper.rows[12].outcome, .demoted)
         XCTAssertTrue(upper.rows.allSatisfy { !$0.isMe })
         XCTAssertNil(upper.rows[2].displayName)
@@ -70,7 +70,7 @@ final class LeaguesModelTests: XCTestCase {
     func testReadyAndNoLeague() async {
         let fake = FakeLeague()
         fake.result = league(1, 3)
-        let model = LeaguesModel(service: fake, viewerId: "u0")
+        let model = LeaguesModel(service: fake, viewerId: { "u0" })
         await model.refresh()
         guard case .ready(let ui) = model.state else { return XCTFail("expected ready") }
         XCTAssertEqual(ui.tier, 1)
@@ -83,7 +83,7 @@ final class LeaguesModelTests: XCTestCase {
     func testFailureSurfacesServerMessageAndReload() async {
         let fake = FakeLeague()
         fake.error = ApiError(status: 500, body: ApiErrorBody(error: "Leagues are down"))
-        let model = LeaguesModel(service: fake, viewerId: nil)
+        let model = LeaguesModel(service: fake, viewerId: { nil })
         await model.refresh()
         XCTAssertEqual(model.state, .failed("Leagues are down"))
         fake.error = nil
@@ -96,7 +96,7 @@ final class LeaguesModelTests: XCTestCase {
         let fake = FakeLeague()
         fake.error = ApiError(status: 401, body: nil)
         let box = Counter()
-        let model = LeaguesModel(service: fake, viewerId: nil, onUnauthorized: { box.bump() })
+        let model = LeaguesModel(service: fake, viewerId: { nil }, onUnauthorized: { box.bump() })
         await model.refresh()
         XCTAssertEqual(box.count, 1)
     }
@@ -104,7 +104,7 @@ final class LeaguesModelTests: XCTestCase {
     func testReloadKeepsStandingsAndStaleResultNeverOverwritesNewer() async {
         let fake = FakeLeague()
         fake.result = league(1, 3)
-        let model = LeaguesModel(service: fake, viewerId: nil)
+        let model = LeaguesModel(service: fake, viewerId: { nil })
         await model.refresh()
         // The first (slow) call starts a second refresh that finishes first with newer data.
         fake.result = league(1, 3)
@@ -117,6 +117,46 @@ final class LeaguesModelTests: XCTestCase {
             }
         }
         await model.refresh()
+        guard case .ready(let ui) = model.state else { return XCTFail("expected ready") }
+        XCTAssertEqual(ui.tier, 5)
+    }
+}
+
+extension LeaguesModelTests {
+    func testViewerIdIsReadOnEveryRefresh() async {
+        let fake = FakeLeague()
+        fake.result = league(1, 3)
+        var viewer: String? = "u0"
+        let model = LeaguesModel(service: fake, viewerId: { viewer })
+        await model.refresh()
+        guard case .ready(let first) = model.state else { return XCTFail("expected ready") }
+        XCTAssertEqual(first.rows.filter { $0.isMe }.map { $0.rank }, [1])
+        viewer = "u1"
+        await model.refresh()
+        guard case .ready(let second) = model.state else { return XCTFail("expected ready") }
+        XCTAssertEqual(second.rows.filter { $0.isMe }.map { $0.rank }, [2])
+    }
+
+    func testSupersededUnauthorizedStillSignalsWithoutOverwriting() async {
+        let fake = FakeLeague()
+        fake.result = league(1, 3)
+        let box = Counter()
+        let model = LeaguesModel(service: fake, viewerId: { nil }, onUnauthorized: { box.bump() })
+        fake.during = { n in
+            if n == 1 {
+                fake.during = nil
+                fake.error = ApiError(status: 401, body: nil)
+                // Newer refresh succeeds; the slow first call then fails with 401.
+                let newer = league(5, 3)
+                fake.result = newer
+                let saved = fake.error
+                fake.error = nil
+                await model.refresh()
+                fake.error = saved
+            }
+        }
+        await model.refresh()
+        XCTAssertEqual(box.count, 1)
         guard case .ready(let ui) = model.state else { return XCTFail("expected ready") }
         XCTAssertEqual(ui.tier, 5)
     }
