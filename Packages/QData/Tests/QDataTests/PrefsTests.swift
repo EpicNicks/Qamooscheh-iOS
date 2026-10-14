@@ -85,6 +85,53 @@ final class PrefsTests: XCTestCase {
         }
     }
 
+    func testApplyPrefsHookFiresOnLoadEditAndMerge() async throws {
+        let json = serverJson
+        StubURLProtocol.install { _ in StubResponse(200, json) }
+        let defaults = makeDefaults()
+        let sync = PrefsSync(userId: "u", courseCode: "fa", api: makeAPI(), defaults: defaults)
+        let seen = GoalLog()
+        await sync.setApplyPrefs { seen.add($0.dailyGoalXp) }
+        XCTAssertEqual(seen.values, [])
+        _ = try await sync.sync()
+        XCTAssertEqual(seen.values, [50])
+        StubURLProtocol.install { _ in StubResponse(failing: .notConnectedToInternet) }
+        _ = try await sync.update { $0.dailyGoalXp = 80 }
+        XCTAssertEqual(seen.values, [50, 80])
+        // Re-registering with cached prefs applies them at once (load).
+        let again = GoalLog()
+        await sync.setApplyPrefs { again.add($0.dailyGoalXp) }
+        XCTAssertEqual(again.values, [80])
+    }
+
+    func testProviderSharesOneSyncPerUserAndCourse() async {
+        let provider = PrefsSyncProvider(api: makeAPI(), defaults: makeDefaults())
+        let a1 = provider.sync(userId: "u", courseCode: "fa")
+        let a2 = provider.sync(userId: "u", courseCode: "fa")
+        let b = provider.sync(userId: "u", courseCode: "ja")
+        let c = provider.sync(userId: "v", courseCode: "fa")
+        XCTAssertTrue(a1 === a2)
+        XCTAssertFalse(a1 === b)
+        XCTAssertFalse(a1 === c)
+        await provider.clear(userId: "u")
+        XCTAssertFalse(a1 === provider.sync(userId: "u", courseCode: "fa"))
+        XCTAssertTrue(c === provider.sync(userId: "v", courseCode: "fa"))
+    }
+
+    func testReminderPrefsPersistAndDecodeDefaults() {
+        let store = LocalPrefsStore(defaults: makeDefaults())
+        XCTAssertFalse(store.current(userId: "u").reminderEnabled)
+        XCTAssertEqual(store.current(userId: "u").reminderHour, 19)
+        store.update(userId: "u") { $0.reminderEnabled = true; $0.reminderHour = 7; $0.reminderMinute = 30 }
+        let read = store.current(userId: "u")
+        XCTAssertTrue(read.reminderEnabled)
+        XCTAssertEqual(read.reminderHour, 7)
+        XCTAssertEqual(read.reminderMinute, 30)
+        let old = try? JSONDecoder().decode(LocalPrefs.self, from: Data("{\"reminderHour\":99}".utf8))
+        XCTAssertEqual(old?.reminderHour, 23)
+        XCTAssertEqual(old?.reminderMinute, 0)
+    }
+
     func testOfflineEditThenSync() async throws {
         let json = serverJson
         StubURLProtocol.install { _ in StubResponse(200, json) }
@@ -398,4 +445,11 @@ actor GatedAPI: PrefsAPI {
         }
         return result
     }
+}
+
+private final class GoalLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [Int] = []
+    func add(_ v: Int) { lock.lock(); items.append(v); lock.unlock() }
+    var values: [Int] { lock.lock(); defer { lock.unlock() }; return items }
 }

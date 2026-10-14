@@ -76,6 +76,11 @@ struct SettingsContent: View {
 
     @ViewBuilder
     private func saveArea(_ p: AppPalette) -> some View {
+        if model.hasUnsyncedEdit {
+            Label("Not synced yet", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption)
+                .foregroundColor(Color(argb: p.warning))
+        }
         if let notice = model.notice {
             switch notice {
             case .saved:

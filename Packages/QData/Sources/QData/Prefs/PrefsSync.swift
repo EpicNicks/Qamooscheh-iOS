@@ -81,6 +81,7 @@ public actor PrefsSync {
     private var inFlight: Task<PrefsSyncOutcome, Error>?
     private var inFlightRevision = 0
     private var generation = 0
+    private var applyHook: (@Sendable (PrefsResponse) -> Void)?
 
     public init(userId: String, courseCode: String, api: PrefsAPI, defaults: UserDefaults = .standard) {
         self.userId = userId
@@ -105,6 +106,14 @@ public actor PrefsSync {
         defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(quarantinePrefix) }.count
     }
 
+    /// Registers the applyPrefs hook, called with the merged prefs after load
+    /// (at once, when prefs are cached), after each local edit and after each
+    /// server merge (pull or accepted push). Replaces any earlier hook.
+    public func setApplyPrefs(_ hook: (@Sendable (PrefsResponse) -> Void)?) {
+        applyHook = hook
+        if let hook = hook, let current = load()?.prefs { hook(current) }
+    }
+
     public func dismissRejectedEdit() {
         guard var record = load() else { return }
         record.rejected = nil
@@ -120,6 +129,7 @@ public actor PrefsSync {
         record.pending = true
         record.revision += 1
         store(record)
+        applyHook?(record.prefs)
         return try await sync()
     }
 
@@ -181,6 +191,7 @@ public actor PrefsSync {
                         latest.pending = false
                         latest.rejected = nil
                         store(latest)
+                        applyHook?(saved)
                         return .synced(saved)
                     }
                     // Edited during the PUT: keep the newer local copy pending.
@@ -203,6 +214,7 @@ public actor PrefsSync {
         if let current = current, current.pending { return .offline(current.prefs) }
         store(Record(prefs: fetched, pending: false, revision: (current?.revision ?? 0) + 1,
                      rejected: current?.rejected))
+        applyHook?(fetched)
         return .synced(fetched)
     }
 
@@ -254,5 +266,38 @@ public actor PrefsSync {
         if let data = try? JSONEncoder().encode(record) {
             defaults.set(data, forKey: key)
         }
+    }
+}
+
+/// One `PrefsSync` per (user, course), shared by every screen that asks for it.
+public final class PrefsSyncProvider: @unchecked Sendable {
+    private let api: PrefsAPI
+    private let defaults: UserDefaults
+    private let lock = NSLock()
+    private var syncs: [String: PrefsSync] = [:]
+
+    public init(api: PrefsAPI, defaults: UserDefaults = .standard) {
+        self.api = api
+        self.defaults = defaults
+    }
+
+    public func sync(userId: String, courseCode: String) -> PrefsSync {
+        lock.lock()
+        defer { lock.unlock() }
+        let key = userId + "|" + courseCode
+        if let existing = syncs[key] { return existing }
+        let created = PrefsSync(userId: userId, courseCode: courseCode, api: api, defaults: defaults)
+        syncs[key] = created
+        return created
+    }
+
+    /// Sign-out: clears and forgets this user's instances.
+    public func clear(userId: String) async {
+        lock.lock()
+        let prefix = userId + "|"
+        let doomed = syncs.filter { $0.key.hasPrefix(prefix) }
+        for k in doomed.keys { syncs.removeValue(forKey: k) }
+        lock.unlock()
+        for entry in doomed.values { await entry.clear() }
     }
 }
