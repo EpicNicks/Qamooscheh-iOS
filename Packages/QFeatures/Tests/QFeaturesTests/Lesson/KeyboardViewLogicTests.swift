@@ -62,4 +62,36 @@ final class KeyboardViewLogicTests: XCTestCase {
         XCTAssertEqual(VirtualKey.accessibilityName(for: Key(label: "\u{232B}", action: .backspace)), "Backspace")
         XCTAssertEqual(VirtualKey.accessibilityName(for: Key(label: "x", action: .letter("x"))), "x")
     }
+
+    func testTapRegistersAfterCancelledGesture() {
+        let state = KeyboardState(method: .persianPhonetic)
+        XCTAssertTrue(state.beginTouch(keyId: "1:1"))
+        XCTAssertFalse(state.beginTouch(keyId: "1:1"))
+        state.cancelTouch()
+        XCTAssertNil(state.activeKeyId)
+        XCTAssertTrue(state.beginTouch(keyId: "1:1"))
+        state.hovered = 2
+        XCTAssertEqual(state.endTouch(), 2)
+        XCTAssertNil(state.activeKeyId)
+        XCTAssertNil(state.hovered)
+    }
+
+    func testLabelSizeScalesAndClamps() {
+        XCTAssertEqual(KeyboardMetrics.labelSize(base: 20, scale: 1), 20, accuracy: 0.001)
+        XCTAssertEqual(KeyboardMetrics.labelSize(base: 20, scale: 1.15), 23, accuracy: 0.001)
+        XCTAssertEqual(KeyboardMetrics.labelSize(base: 20, scale: 3), 26, accuracy: 0.001)
+        XCTAssertEqual(KeyboardMetrics.labelSize(base: 20, scale: 0.8), 20, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(KeyboardMetrics.labelSize(base: 20, scale: 3), KeyboardMetrics.keyHeight)
+    }
+
+    func testKeysClearTallHeader() {
+        XCTAssertEqual(KeyboardMetrics.keysTop(headerHeight: 0), 54, accuracy: 0.001)
+        XCTAssertEqual(KeyboardMetrics.keysTop(headerHeight: 30), 54, accuracy: 0.001)
+        XCTAssertEqual(KeyboardMetrics.keysTop(headerHeight: 90), 90, accuracy: 0.001)
+    }
+
+    func testDisabledKeyIsDimmedForVoiceOver() {
+        XCTAssertTrue(VirtualKey.isAccessibilityDisabled(for: Key(label: "x", action: .letter("x"), enabled: false)))
+        XCTAssertFalse(VirtualKey.isAccessibilityDisabled(for: Key(label: "x", action: .letter("x"))))
+    }
 }
