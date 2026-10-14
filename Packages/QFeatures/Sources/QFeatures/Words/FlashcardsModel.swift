@@ -150,8 +150,11 @@ public final class FlashcardsModel: ObservableObject {
             if id == roundId { xp = .saved(response.xp) }
         } catch {
             if isUnauthorizedError(error) { onUnauthorized?() }
-            if id == roundId && !isCancellation(error) {
-                xp = .failed(AuthRules.message(for: error, fallback: "Couldn't save this round's XP."))
+            if id == roundId {
+                // A cancelled send also lands on failed, so the XP stays held for a retry.
+                xp = .failed(isCancellation(error)
+                    ? "Saving was interrupted. Try again."
+                    : AuthRules.message(for: error, fallback: "Couldn't save this round's XP."))
             }
         }
     }
