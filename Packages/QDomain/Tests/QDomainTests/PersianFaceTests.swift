@@ -6,8 +6,9 @@ final class PersianFaceTests: XCTestCase {
         XCTAssertEqual(PersianFace.of(nil), .vazirmatn)
     }
 
-    func testKnownFamilyResolves() {
-        XCTAssertEqual(PersianFace.of("Noto Naskh Arabic"), .notoNaskh)
+    func testRemovedNaskhFamilyFallsBackToDefault() {
+        XCTAssertEqual(PersianFace.of("Noto Naskh Arabic"), .vazirmatn)
+        XCTAssertEqual(PersianFace.allCases, [.vazirmatn])
     }
 
     func testUnknownFamilyFallsBackToDefault() {
@@ -16,8 +17,6 @@ final class PersianFaceTests: XCTestCase {
 
     func testLabelsAndBundling() {
         XCTAssertEqual(PersianFace.vazirmatn.label, "Vazirmatn")
-        XCTAssertEqual(PersianFace.notoNaskh.label, "Noto Naskh")
         XCTAssertTrue(PersianFace.vazirmatn.isBundled)
-        XCTAssertFalse(PersianFace.notoNaskh.isBundled)
     }
 }
