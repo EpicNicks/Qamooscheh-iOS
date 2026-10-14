@@ -14,6 +14,8 @@ public final class SettingsModel: ObservableObject {
     @Published public private(set) var reminders: ReminderSettings
     @Published public private(set) var loadError: String?
     @Published public private(set) var saving = false
+    /// True while an edit has not reached the server (shown as a badge).
+    @Published public private(set) var hasUnsyncedEdit = false
     @Published public private(set) var notice: SettingsNotice?
     /// The Streak section's state; its changes republish through this model.
     public let streakPause: StreakPauseModel
@@ -62,8 +64,14 @@ public final class SettingsModel: ObservableObject {
         self.accountName = accountName
         self.signOutAction = signOut
         self.previewer = previewer
-        self.local = localStore.current(userId: userId)
-        self.reminders = scheduler.current()
+        let stored = localStore.current(userId: userId)
+        self.local = stored
+        var r = scheduler.current()
+        r.enabled = stored.reminderEnabled
+        r.hour = stored.reminderHour
+        r.minute = stored.reminderMinute
+        self.reminders = r
+        scheduler.apply(r)
         self.pauseObserver = streakPause.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
@@ -91,6 +99,7 @@ public final class SettingsModel: ObservableObject {
         if form == nil {
             loadError = "Couldn't load your settings. Check your connection and try again."
         }
+        hasUnsyncedEdit = await sync.hasPendingEdit
         await streakPause.load()
     }
 
@@ -132,6 +141,7 @@ public final class SettingsModel: ObservableObject {
             dirty = true
             notice = .failed("Couldn't reach the server just now. Your changes are kept and will sync later.")
         }
+        hasUnsyncedEdit = await sync.hasPendingEdit
         saving = false
     }
 
@@ -152,6 +162,11 @@ public final class SettingsModel: ObservableObject {
         change(&next)
         reminders = next
         scheduler.apply(next)
+        local = localStore.update(userId: userId) {
+            $0.reminderEnabled = next.enabled
+            $0.reminderHour = next.hour
+            $0.reminderMinute = next.minute
+        }
     }
 
     /// Signs out through the injected closure (the app wires AuthApi.logout plus the session clear).
