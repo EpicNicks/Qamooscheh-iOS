@@ -305,4 +305,14 @@ public struct PreviewOnboardingService: OnboardingService {
     }
 
     public func completeOnboarding() async throws -> Bool { true }
+
+    public func enroll(courseCode: String) async throws -> BootstrapResponse {
+        BootstrapResponse(graders: [], enrolledCourseCodes: [courseCode], onboardingComplete: true)
+    }
+
+    public func switchActive(courseCode: String) async throws -> BootstrapResponse {
+        BootstrapResponse(
+            course: CourseRef(code: courseCode, version: 1, manifestSha256: "h"),
+            graders: [], enrolledCourseCodes: [courseCode], onboardingComplete: true)
+    }
 }
