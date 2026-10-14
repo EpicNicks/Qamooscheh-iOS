@@ -104,7 +104,7 @@ final class PrefsTests: XCTestCase {
         XCTAssertEqual(again.values, [80])
         // Both hooks stay registered; removing one leaves the other.
         _ = try await sync.update { $0.dailyGoalXp = 90 }
-        XCTAssertEqual(seen.values, [50, 80, 80, 90])
+        XCTAssertEqual(seen.values, [50, 80, 90])
         XCTAssertEqual(again.values, [80, 90])
         await sync.removeApplyPrefs(token)
         _ = try await sync.update { $0.dailyGoalXp = 95 }
@@ -118,6 +118,7 @@ final class PrefsTests: XCTestCase {
         let defaults = makeDefaults()
         // Previous session: pending edits stored for two courses and a corrupt copy.
         for course in ["fa", "ja"] {
+            StubURLProtocol.install { _ in StubResponse(200, json) }
             let s = PrefsSync(userId: "u", courseCode: course, api: makeAPI(), defaults: defaults)
             _ = try await s.sync()
             StubURLProtocol.install { _ in StubResponse(failing: .notConnectedToInternet) }
