@@ -113,15 +113,42 @@ public enum TypeInModel {
     public static let phoneKeyboardLabel = "Phone keyboard"
     public static let inAppKeyboardLabel = "Use the in-app keyboard"
 
-    /// The text split at the caret (clamped into the text, counted in Characters), with the keyboard's pending letters shown between.
+    /// The text split at the caret (a Unicode-scalar offset, clamped into the text, the same unit as the keyboard's `Edit.applyAt`), with the keyboard's pending letters shown between.
     public static func shownText(text: String, caret: Int, pending: String?) -> TypeInShownText {
+        let scalars = Array(text.unicodeScalars)
+        let at = min(max(caret, 0), scalars.count)
+        var head = String.UnicodeScalarView()
+        head.append(contentsOf: scalars[0..<at])
+        var tail = String.UnicodeScalarView()
+        tail.append(contentsOf: scalars[at...])
+        return TypeInShownText(before: String(head), pending: pending ?? "", after: String(tail))
+    }
+
+    /// The caret (a scalar offset) for a tap `fraction` of the way along the text from its leading edge. Snaps to a letter boundary, so a letter with its vowel marks is never split.
+    public static func caretForTap(text: String, fraction: Double) -> Int {
         let chars = Array(text)
-        let at = min(max(caret, 0), chars.count)
-        return TypeInShownText(
-            before: String(chars[0..<at]),
-            pending: pending ?? "",
-            after: String(chars[at...])
-        )
+        if chars.isEmpty { return 0 }
+        let f = min(max(fraction.isNaN ? 1 : fraction, 0), 1)
+        let index = min(max(Int((f * Double(chars.count)).rounded()), 0), chars.count)
+        var scalarOffset = 0
+        for c in chars[0..<index] { scalarOffset += c.unicodeScalars.count }
+        return scalarOffset
+    }
+
+    /// Screen-reader text for one reviewed word: the mark is spoken, not only coloured.
+    public static func markSpoken(_ word: MarkedWord) -> String {
+        switch word.mark {
+        case .right: return word.text + ", right"
+        case .wrong: return word.text + ", wrong"
+        case .swapped: return word.text + ", right word, wrong place"
+        case .missing: return word.text + ", missing"
+        }
+    }
+
+    /// The review answer's accessibility value: every word with its mark.
+    public static func reviewAccessibilityValue(_ words: [MarkedWord]) -> String {
+        if words.isEmpty { return nothingSubmitted }
+        return words.map { markSpoken($0) }.joined(separator: ". ")
     }
 
     /// Play-button states (Android ExercisePrompt): with a voice or recorded audio it plays; with neither it points at installing a voice.

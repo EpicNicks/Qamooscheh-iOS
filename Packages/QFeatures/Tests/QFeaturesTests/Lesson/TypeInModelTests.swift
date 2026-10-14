@@ -1,5 +1,6 @@
 import XCTest
 import QModel
+import QDomain
 import QData
 import QKeyboard
 @testable import QFeatures
@@ -56,6 +57,34 @@ final class TypeInModelTests: XCTestCase {
         XCTAssertEqual(s, TypeInShownText(before: "ab", pending: "x", after: "cd"))
         XCTAssertEqual(TypeInModel.shownText(text: "ab", caret: 99, pending: nil), TypeInShownText(before: "ab", pending: "", after: ""))
         XCTAssertEqual(TypeInModel.shownText(text: "ab", caret: -3, pending: nil).before, "")
+    }
+
+    func testShownTextCaretIsUnicodeScalarsWithZwnjAndVowelMarks() {
+        // Letters with a fatha and a ZWNJ: Characters and scalars differ.
+        let text = "\u{062E}\u{064E}\u{0627}\u{0646}\u{0647}\u{200C}\u{0647}\u{0627}"
+        XCTAssertEqual(text.count, 6)
+        XCTAssertEqual(text.unicodeScalars.count, 8)
+        let s = TypeInModel.shownText(text: text, caret: 6, pending: nil)
+        XCTAssertEqual(s.before, "\u{062E}\u{064E}\u{0627}\u{0646}\u{0647}\u{200C}")
+        XCTAssertEqual(s.after, "\u{0647}\u{0627}")
+        XCTAssertEqual(TypeInModel.shownText(text: text, caret: 8, pending: nil).after, "")
+    }
+
+    func testCaretForTapSnapsToLetterBoundaryInScalars() {
+        let text = "\u{062E}\u{064E}\u{0627}\u{0646}"  // 3 Characters, 4 scalars
+        XCTAssertEqual(TypeInModel.caretForTap(text: text, fraction: 0), 0)
+        XCTAssertEqual(TypeInModel.caretForTap(text: text, fraction: 0.34), 2)
+        XCTAssertEqual(TypeInModel.caretForTap(text: text, fraction: 1.5), 4)
+        XCTAssertEqual(TypeInModel.caretForTap(text: "", fraction: 0.5), 0)
+    }
+
+    func testReviewAccessibilityValueSpeaksEveryMark() {
+        let words = [
+            MarkedWord(text: "a", mark: .right), MarkedWord(text: "b", mark: .wrong),
+            MarkedWord(text: "c", mark: .swapped), MarkedWord(text: "d", mark: .missing)
+        ]
+        XCTAssertEqual(TypeInModel.reviewAccessibilityValue(words), "a, right. b, wrong. c, right word, wrong place. d, missing")
+        XCTAssertEqual(TypeInModel.reviewAccessibilityValue([]), TypeInModel.nothingSubmitted)
     }
 
     func testArabicVariantNoteOnlyForNativePersian() {

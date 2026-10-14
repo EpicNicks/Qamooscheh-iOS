@@ -18,6 +18,7 @@ public struct TypeInExercise: View {
     private let pending: String?
     private let caret: Int?
     private let onUseInAppKeyboard: (() -> Void)?
+    private let onCaretTap: ((Int) -> Void)?
     private let onHintUsed: () -> Void
     private let hint: String?
     private let vowelMarks: Bool
@@ -27,6 +28,18 @@ public struct TypeInExercise: View {
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focused: Bool
     @State private var hintShown = false
+    @State private var fieldWidth: CGFloat = 0
+    @State private var textWidth: CGFloat = 0
+    @ScaledMetric(relativeTo: .title3) private var entrySize: CGFloat = 22
+    @ScaledMetric(relativeTo: .title3) private var reviewSize: CGFloat = 20
+
+    // Persian in a custom family scales with Dynamic Type by itself; the system face needs the scaled metric.
+    private func courseFont(size: CGFloat, scaled: CGFloat, rtl: Bool) -> Font {
+        if rtl, let family = persianFamily, !family.isEmpty {
+            return DirectionalText.font(size: size, rtl: rtl, family: persianFamily)
+        }
+        return DirectionalText.font(size: scaled, rtl: rtl, family: persianFamily)
+    }
 
     public init(
         exercise: ExerciseArtifact,
@@ -39,6 +52,7 @@ public struct TypeInExercise: View {
         pending: String? = nil,
         caret: Int? = nil,
         onUseInAppKeyboard: (() -> Void)? = nil,
+        onCaretTap: ((Int) -> Void)? = nil,
         onHintUsed: @escaping () -> Void = {},
         hint: String? = nil,
         vowelMarks: Bool = true,
@@ -55,6 +69,7 @@ public struct TypeInExercise: View {
         self.pending = pending
         self.caret = caret
         self.onUseInAppKeyboard = onUseInAppKeyboard
+        self.onCaretTap = onCaretTap
         self.onHintUsed = onHintUsed
         self.hint = hint
         self.vowelMarks = vowelMarks
@@ -113,6 +128,7 @@ public struct TypeInExercise: View {
             .directionalText(rtl: rtl)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(TypeInModel.answerDescription(reviewed.text, reviewing: true))
+            .accessibilityValue(TypeInModel.reviewAccessibilityValue(words))
         }
     }
 
@@ -126,7 +142,7 @@ public struct TypeInExercise: View {
         case .missing: color = p.info; background = p.infoBg
         }
         return Text(word.text)
-            .font(DirectionalText.font(size: 20, rtl: rtl, family: persianFamily).weight(.semibold))
+            .font(courseFont(size: 20, scaled: reviewSize, rtl: rtl).weight(.semibold))
             .strikethrough(word.mark == .wrong)
             .foregroundColor(Color(argb: color))
             .padding(.horizontal, 3)
@@ -148,7 +164,7 @@ public struct TypeInExercise: View {
                     TypeInModel.placeholder(scriptMode: exercise.scriptMode, inAppKeyboard: false),
                     text: text
                 )
-                .font(DirectionalText.font(size: 22, rtl: rtl, family: persianFamily))
+                .font(courseFont(size: 22, scaled: entrySize, rtl: rtl))
                 .focused($focused)
                 .submitLabel(.done)
                 .autocorrectionDisabled(true)
@@ -173,8 +189,8 @@ public struct TypeInExercise: View {
     @ViewBuilder
     private func inAppField(rtl: Bool) -> some View {
         let value = text.wrappedValue
-        let shown = TypeInModel.shownText(text: value, caret: caret ?? value.count, pending: pending)
-        let font = DirectionalText.font(size: 22, rtl: rtl, family: persianFamily)
+        let shown = TypeInModel.shownText(text: value, caret: caret ?? value.unicodeScalars.count, pending: pending)
+        let font = courseFont(size: 22, scaled: entrySize, rtl: rtl)
         let empty = value.isEmpty && pending == nil
         ZStack(alignment: .leading) {
             if empty {
@@ -189,8 +205,23 @@ public struct TypeInExercise: View {
                 VirtualCaret(palette: p, height: 28)
                 if !shown.after.isEmpty { Text(shown.after).font(font).foregroundColor(Color(argb: p.text)) }
             }
+            .fixedSize()
+            .background(GeometryReader { g in Color.clear.preference(key: TypeInTextWidthKey.self, value: g.size.width) })
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(GeometryReader { g in Color.clear.preference(key: TypeInFieldWidthKey.self, value: g.size.width) })
+        .onPreferenceChange(TypeInTextWidthKey.self) { textWidth = $0 }
+        .onPreferenceChange(TypeInFieldWidthKey.self) { fieldWidth = $0 }
+        .contentShape(Rectangle())
+        .gesture(
+            SpatialTapGesture().onEnded { tap in
+                guard let onCaretTap = onCaretTap, textWidth > 0 else { return }
+                // The tap is in the field's own (physical) coordinates; the text starts at its leading edge.
+                let fromLeading = rtl ? fieldWidth - tap.location.x : tap.location.x
+                let fraction = Double((fromLeading - Spacing.standard.s3) / textWidth)
+                onCaretTap(TypeInModel.caretForTap(text: value, fraction: fraction))
+            }
+        )
         .padding(.horizontal, Spacing.standard.s3)
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .overlay(RoundedRectangle(cornerRadius: Radii.standard.md).stroke(Color(argb: p.current), lineWidth: 2))
@@ -228,6 +259,16 @@ public struct TypeInExercise: View {
     }
 }
 
+private struct TypeInTextWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct TypeInFieldWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 /// A speak exercise (web SpeakExercise): speech capture is not wired up on web or Android, so
 /// it is a type-in with a note saying so (Android renders SPEAK through TypeInExercise too).
 public struct SpeakExercise: View {
@@ -241,6 +282,11 @@ public struct SpeakExercise: View {
     private let pending: String?
     private let caret: Int?
     private let onUseInAppKeyboard: (() -> Void)?
+    private let onCaretTap: ((Int) -> Void)?
+    private let onHintUsed: () -> Void
+    private let hint: String?
+    private let vowelMarks: Bool
+    private let persianFamily: String?
     private let palette: AppPalette?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -256,6 +302,11 @@ public struct SpeakExercise: View {
         pending: String? = nil,
         caret: Int? = nil,
         onUseInAppKeyboard: (() -> Void)? = nil,
+        onCaretTap: ((Int) -> Void)? = nil,
+        onHintUsed: @escaping () -> Void = {},
+        hint: String? = nil,
+        vowelMarks: Bool = true,
+        persianFamily: String? = nil,
         palette: AppPalette? = nil
     ) {
         self.exercise = exercise
@@ -268,6 +319,11 @@ public struct SpeakExercise: View {
         self.pending = pending
         self.caret = caret
         self.onUseInAppKeyboard = onUseInAppKeyboard
+        self.onCaretTap = onCaretTap
+        self.onHintUsed = onHintUsed
+        self.hint = hint
+        self.vowelMarks = vowelMarks
+        self.persianFamily = persianFamily
         self.palette = palette
     }
 
@@ -285,6 +341,11 @@ public struct SpeakExercise: View {
                 pending: pending,
                 caret: caret,
                 onUseInAppKeyboard: onUseInAppKeyboard,
+                onCaretTap: onCaretTap,
+                onHintUsed: onHintUsed,
+                hint: hint,
+                vowelMarks: vowelMarks,
+                persianFamily: persianFamily,
                 palette: palette
             )
             if reviewed == nil {
