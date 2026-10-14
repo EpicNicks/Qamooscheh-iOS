@@ -62,14 +62,14 @@ final class CourseSwitcherModelTests: XCTestCase {
     }
 
     private func start(
-        _ fake: FakeCourseService, enrolled: [String] = ["fa", "ja"], active: String = "fa", seen: Seen = Seen()
+        _ fake: FakeCourseService, enrolled: [String] = ["fa", "ja"], active: String = "fa", seen: Seen? = nil
     ) async -> CourseSwitcherModel {
         await fake.seed(enrolled)
         await fake.setCatalog(.success([entry("fa", "Persian"), entry("ja", "Japanese"), entry("es", "Spanish")]))
         let boot = BootstrapResponse(
             course: CourseRef(code: active, version: 1, manifestSha256: "h"),
             graders: [], enrolledCourseCodes: enrolled, onboardingComplete: true)
-        let model = CourseSwitcherModel(service: fake, bootstrap: boot, onBootstrap: { seen.bootstraps.append($0) })
+        let model = CourseSwitcherModel(service: fake, bootstrap: boot, onBootstrap: { seen?.bootstraps.append($0) })
         await model.loadCatalog()
         return model
     }
