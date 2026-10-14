@@ -60,6 +60,10 @@ public struct LocalPrefs: Codable, Equatable, Sendable {
     public var lessonsCompleted = 0
     public var reviewPromptShown = false
     public var notificationPermissionAsked = false
+    /// Daily reminder switch and time (device-level, never synced).
+    public var reminderEnabled = false
+    public var reminderHour = 19
+    public var reminderMinute = 0
 
     public init() {}
 
@@ -71,6 +75,7 @@ public struct LocalPrefs: Codable, Equatable, Sendable {
         case fontFa, fontJa, fontLatin, persianFlag, speakWordBankTiles, speakAnswers
         case shuffleVoices, hapticsEnabled, soundEffectsEnabled, lessonsCompleted
         case reviewPromptShown, notificationPermissionAsked
+        case reminderEnabled, reminderHour, reminderMinute
     }
 
     public init(from decoder: Decoder) throws {
@@ -106,6 +111,9 @@ public struct LocalPrefs: Codable, Equatable, Sendable {
         lessonsCompleted = value(.lessonsCompleted, d.lessonsCompleted)
         reviewPromptShown = value(.reviewPromptShown, d.reviewPromptShown)
         notificationPermissionAsked = value(.notificationPermissionAsked, d.notificationPermissionAsked)
+        reminderEnabled = value(.reminderEnabled, d.reminderEnabled)
+        reminderHour = min(23, max(0, value(.reminderHour, d.reminderHour)))
+        reminderMinute = min(59, max(0, value(.reminderMinute, d.reminderMinute)))
     }
 }
 

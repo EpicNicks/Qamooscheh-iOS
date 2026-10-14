@@ -33,7 +33,7 @@ public struct FileOfflineQueueStorage: OfflineQueueStorage {
         try data.write(to: directory.appendingPathComponent(name), options: [.atomic])
     }
 
-    public var lockKey: String { directory.standardizedFileURL.path }
+    public var lockKey: String { directory.resolvingSymlinksInPath().standardizedFileURL.path }
 
     public func list() throws -> [String] {
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }

@@ -17,16 +17,20 @@ public struct PathContent: Equatable, Sendable {
     }
 }
 
-/// What the Path screen reads. The app wires this to QNetwork/QData later.
-public protocol PathRepository: Sendable {
-    /// The pinned course's units, from the downloaded content.
-    func pathContent(course: CourseRef) async throws -> PathContent
-    /// GET /v1/lessons/completed: skill keys with a completion event.
-    func completedLessonKeys(courseCode: String) async throws -> Set<String>
+/// What the daily-goal ring reads: its own prefs and activity, apart from the path content.
+public protocol DailyGoalSource: Sendable {
     /// GET /v1/prefs (dailyGoalXp).
     func prefs() async throws -> PrefsResponse
     /// GET /v1/activity/{courseCode}.
     func activity(courseCode: String) async throws -> ActivityResponse
+}
+
+/// What the Path screen reads. The app wires this to QNetwork/QData later.
+public protocol PathRepository: DailyGoalSource {
+    /// The pinned course's units, from the downloaded content.
+    func pathContent(course: CourseRef) async throws -> PathContent
+    /// GET /v1/lessons/completed: skill keys with a completion event.
+    func completedLessonKeys(courseCode: String) async throws -> Set<String>
 }
 
 public enum PathLoadStatus: Equatable, Sendable {
@@ -140,6 +144,7 @@ public struct PathState: Equatable, Sendable {
     public private(set) var units: [PathUnit] = []
     public private(set) var openPopoverId: String?
     public private(set) var jumpDirection: JumpDirection?
+    public private(set) var scroll: CurrentRoadScroll?
     public private(set) var dailyGoal: DailyGoalProgress?
 
     public init() {}
@@ -167,9 +172,10 @@ public struct PathState: Equatable, Sendable {
     public var nextUnitEntry: PositionKey? { findNextUnitEntryTarget(units) }
 
     /// y of the current node within its unit's road, from QDomain's layout.
-    public func currentNodeY(config: RoadLayoutConfig) -> Double? {
+    /// Forks collapse to one row per position by default (phones), as the road itself is drawn.
+    public func currentNodeY(config: RoadLayoutConfig, collapseForks: Bool = true) -> Double? {
         guard let node = currentNode else { return nil }
-        let counts = units[node.unitIndex].standardPositions.map { $0.skills.count }
+        let counts = units[node.unitIndex].standardPositions.map { collapseForks ? 1 : $0.skills.count }
         let layout = computeRoadLayout(counts, config: config)
         return layout.nodes.first(where: { $0.positionIndex == node.positionIndex })?.y
     }
@@ -203,6 +209,10 @@ public struct PathState: Equatable, Sendable {
 
     public mutating func setFailed(_ message: String) {
         status = .failed(message)
+        content = nil
+        units = []
+        openPopoverId = nil
+        jumpDirection = nil
     }
 
     public mutating func setCompleted(_ keys: Set<String>) {
@@ -233,6 +243,11 @@ public struct PathState: Equatable, Sendable {
     }
 
     public mutating func setScroll(_ scroll: CurrentRoadScroll?) {
+        self.scroll = scroll
+        updateJumpDirection()
+    }
+
+    private mutating func updateJumpDirection() {
         jumpDirection = currentNode == nil ? nil : jumpToCurrentDirection(scroll)
     }
 
@@ -243,15 +258,17 @@ public struct PathState: Equatable, Sendable {
         dailyGoal = nil
         openPopoverId = nil
         jumpDirection = nil
+        scroll = nil
     }
 
     private mutating func recompute() {
         guard let content = content else {
             units = []
+            updateJumpDirection()
             return
         }
         units = computePathProgress(content.units, position: position, completedSkillKeys: completedSkillKeys)
-        if currentNode == nil { jumpDirection = nil }
+        updateJumpDirection()
         if let open = openPopoverId, !hasSkill(popoverId: open) { openPopoverId = nil }
     }
 
@@ -290,12 +307,14 @@ public final class PathModel: ObservableObject {
     @Published public private(set) var state = PathState()
 
     private let repository: PathRepository
+    private let dailyGoalSource: DailyGoalSource
     private let now: () -> Date
     private let calendar: Calendar
     private var generation = 0
 
-    public init(repository: PathRepository, now: @escaping () -> Date = { Date() }, calendar: Calendar = .current) {
+    public init(repository: PathRepository, dailyGoalSource: DailyGoalSource? = nil, now: @escaping () -> Date = { Date() }, calendar: Calendar = .current) {
         self.repository = repository
+        self.dailyGoalSource = dailyGoalSource ?? repository
         self.now = now
         self.calendar = calendar
     }
@@ -307,11 +326,12 @@ public final class PathModel: ObservableObject {
         state.setBootstrap(bootstrap)
         guard let course = bootstrap.course else { return }
         let repository = self.repository
+        let goalSource = self.dailyGoalSource
 
         let content = await capturePathResult { try await repository.pathContent(course: course) }
         let completed = await capturePathResult { try await repository.completedLessonKeys(courseCode: course.code) }
-        let prefs = await capturePathResult { try await repository.prefs() }
-        let activity = await capturePathResult { try await repository.activity(courseCode: course.code) }
+        let prefs = await capturePathResult { try await goalSource.prefs() }
+        let activity = await capturePathResult { try await goalSource.activity(courseCode: course.code) }
         guard mine == generation else { return }
 
         if case let .success(keys) = completed { state.setCompleted(keys) }

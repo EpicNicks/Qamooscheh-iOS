@@ -2,6 +2,17 @@ import Foundation
 import Combine
 import QDomain
 
+/// Term table column shares (web table: Term 30%, Romanization 30%, Meaning 40%).
+public enum GlossaryColumns {
+    public static let shares: [Double] = [0.3, 0.3, 0.4]
+
+    /// Column widths for `available` points with `spacing` between the three columns.
+    public static func widths(available: Double, spacing: Double) -> [Double] {
+        let usable = max(available - spacing * Double(shares.count - 1), 0)
+        return shares.map { usable * $0 }
+    }
+}
+
 /// What the glossary is showing (Android GlossaryPage).
 public enum GlossaryPage: Equatable {
     case tree([GlossaryEntry])
