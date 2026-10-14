@@ -132,4 +132,52 @@ final class FlashcardsModelTests: XCTestCase {
         await model.answer(correct: true)
         XCTAssertEqual(submitter.requests.first?.courseCode, "fa")
     }
+
+    func testFailedRoundStaysSettlingUntilDiscarded() async {
+        let submitter = FakeSubmitter()
+        submitter.failures = 1
+        let model = await makeModel(submitter)
+        model.start()
+        await model.answer(correct: true)
+        await model.answer(correct: true)
+        XCTAssertTrue(model.isSettlingXp)
+        XCTAssertEqual(model.xp, .failed("Try later"))
+        model.discardRound()
+        XCTAssertFalse(model.isSettlingXp)
+        XCTAssertNil(model.deck)
+        XCTAssertEqual(model.xp, .idle)
+    }
+
+    func testSavedRoundIsNotSettling() async {
+        let model = await makeModel(FakeSubmitter())
+        model.start()
+        await model.answer(correct: true)
+        await model.answer(correct: true)
+        XCTAssertFalse(model.isSettlingXp)
+    }
+
+    func testRetryKeepsTheTimeTheRoundEnded() async {
+        let submitter = FakeSubmitter()
+        submitter.failures = 1
+        let source = FakeVocabSource()
+        source.loadHandler = { .ready(sampleContent) }
+        source.starredHandler = { StarredVocabResponse(tags: ["a", "b"], limit: 100, refused: []) }
+        let clock = ClockBox()
+        let model = FlashcardsModel(
+            store: VocabularyStore(source: source), submitter: submitter, shuffle: { $0 },
+            newId: { "sub-1" }, now: { clock.value })
+        await model.refresh()
+        model.start()
+        clock.value = Date(timeIntervalSince1970: 100)
+        await model.answer(correct: true)
+        clock.value = Date(timeIntervalSince1970: 200)
+        await model.answer(correct: true)
+        clock.value = Date(timeIntervalSince1970: 900)
+        await model.retrySubmit()
+        XCTAssertEqual(submitter.requests.map { $0.occurredAt }, [Date(timeIntervalSince1970: 200), Date(timeIntervalSince1970: 200)])
+    }
+}
+
+private final class ClockBox: @unchecked Sendable {
+    var value = Date(timeIntervalSince1970: 0)
 }

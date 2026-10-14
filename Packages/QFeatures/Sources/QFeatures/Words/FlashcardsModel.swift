@@ -52,6 +52,7 @@ public final class FlashcardsModel: ObservableObject {
     private var roundId = 0
     private var roundCourse: String?
     private var submissionId = ""
+    private var roundEndedAt = Date(timeIntervalSince1970: 0)
     private var forwarding: AnyCancellable?
 
     public init(
@@ -84,6 +85,18 @@ public final class FlashcardsModel: ObservableObject {
         return deck[results.count]
     }
 
+    /// True while the round's XP is being saved or has failed and is waiting on a retry or an explicit
+    /// discard; the screen keeps the learner on the result until then so the XP isn't lost silently.
+    public var isSettlingXp: Bool {
+        switch xp {
+        case .saving, .failed: return true
+        case .idle, .saved: return false
+        }
+    }
+
+    /// Gives up on a round whose XP couldn't be saved; the learner chose to.
+    public func discardRound() { stop() }
+
     /// The kind can't change mid-round.
     public func setKind(_ next: FlashcardKind) {
         if deck == nil { kind = next }
@@ -114,7 +127,10 @@ public final class FlashcardsModel: ObservableObject {
     public func answer(correct: Bool) async {
         guard let card = current, let deck = deck else { return }
         results.append(FlashcardResult(tag: card.tag, correct: correct))
-        if results.count == deck.count && kind == .translation { await submit() }
+        if results.count == deck.count && kind == .translation {
+            roundEndedAt = now()
+            await submit()
+        }
     }
 
     /// Sends the finished round again after a failure; the same submission id keeps it from counting twice.
@@ -127,7 +143,7 @@ public final class FlashcardsModel: ObservableObject {
         let id = roundId
         xp = .saving
         let request = SubmitFlashcardsRequest(
-            submissionId: submissionId, courseCode: course, occurredAt: now(), inRemix: false,
+            submissionId: submissionId, courseCode: course, occurredAt: roundEndedAt, inRemix: false,
             cards: results.map { SubmittedFlashcard(tag: $0.tag, kind: .translation, correct: $0.correct) })
         do {
             let response = try await submitter.submit(request)

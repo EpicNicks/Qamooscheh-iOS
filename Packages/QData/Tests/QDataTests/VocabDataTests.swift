@@ -74,14 +74,88 @@ final class VocabDataTests: XCTestCase {
         XCTAssertEqual(held["c"]?.stability, 4)
     }
 
-    func testUnreadableFileReadsAsEmptyAndIsReplaced() async throws {
+    func testNilIncomingNeverOverwritesAReviewedCard() async throws {
+        let store = CardStateStore(store: InMemoryContentStore())
+        try await store.merge(userId: "u", cards: [card("a", stability: 9, reviewed: 200)])
+        try await store.merge(userId: "u", cards: [card("a", stability: 1, reviewed: nil)])
+        let held = await store.all(userId: "u")
+        XCTAssertEqual(held["a"]?.stability, 9)
+    }
+
+    func testReviewedIncomingBeatsANilHeldCard() async throws {
+        let store = CardStateStore(store: InMemoryContentStore())
+        try await store.merge(userId: "u", cards: [card("a", stability: 1, reviewed: nil)])
+        try await store.merge(userId: "u", cards: [card("a", stability: 5, reviewed: 10)])
+        let held = await store.all(userId: "u")
+        XCTAssertEqual(held["a"]?.stability, 5)
+    }
+
+    func testCorruptFileIsQuarantinedNotSilentlyDropped() async throws {
         let backing = InMemoryContentStore()
-        try backing.write(Data("not json".utf8), to: CardStateStore.key(userId: "u"))
+        let key = CardStateStore.key(userId: "u")
+        try backing.write(Data("not json".utf8), to: key)
         let store = CardStateStore(store: backing)
         let before = await store.all(userId: "u")
         XCTAssertTrue(before.isEmpty)
+        XCTAssertEqual(backing.keys, [key])
         try await store.merge(userId: "u", cards: [card("a", stability: 1, reviewed: 1)])
         let after = await store.all(userId: "u")
         XCTAssertEqual(after.count, 1)
+        XCTAssertEqual(try backing.read(key + ".corrupt"), Data("not json".utf8))
+        // A second corrupt file gets its own name.
+        try backing.write(Data("again".utf8), to: key)
+        try await store.merge(userId: "u", cards: [card("b", stability: 1, reviewed: 1)])
+        XCTAssertEqual(try backing.read(key + ".corrupt"), Data("not json".utf8))
+        XCTAssertEqual(try backing.read(key + ".corrupt.2"), Data("again".utf8))
     }
+
+    func testOneBadCardKeepsTheOthersAndQuarantinesTheFile() async throws {
+        let backing = InMemoryContentStore()
+        let key = CardStateStore.key(userId: "u")
+        let good = try QJSON.makeEncoder().encode([card("a", stability: 4, reviewed: 1)])
+        var text = String(data: good, encoding: .utf8) ?? "[]"
+        text.removeLast()
+        text += ",{\"lexemeTag\":\"bad\"}]"
+        try backing.write(Data(text.utf8), to: key)
+        let store = CardStateStore(store: backing)
+        let before = await store.all(userId: "u")
+        XCTAssertEqual(before["a"]?.stability, 4)
+        XCTAssertNil(before["bad"])
+        try await store.merge(userId: "u", cards: [card("c", stability: 2, reviewed: 2)])
+        let after = await store.all(userId: "u")
+        XCTAssertEqual(Set(after.keys), ["a", "c"])
+        XCTAssertNotNil(try backing.read(key + ".corrupt"))
+    }
+
+    func testFailedReadDoesNotOverwriteTheMirror() async throws {
+        let backing = FlakyReadStore()
+        let store = CardStateStore(store: backing)
+        try await store.merge(userId: "u", cards: [card("a", stability: 7, reviewed: 1)])
+        backing.failReads = true
+        let during = await store.all(userId: "u")
+        XCTAssertTrue(during.isEmpty)
+        do {
+            try await store.merge(userId: "u", cards: [card("b", stability: 1, reviewed: 1)])
+            XCTFail("expected throw")
+        } catch {}
+        backing.failReads = false
+        let after = await store.all(userId: "u")
+        XCTAssertEqual(Set(after.keys), ["a"])
+        XCTAssertEqual(after["a"]?.stability, 7)
+    }
+}
+
+private struct ReadFailure: Error {}
+
+private final class FlakyReadStore: ContentFileStore, @unchecked Sendable {
+    private let inner = InMemoryContentStore()
+    var failReads = false
+
+    func read(_ key: String) throws -> Data? {
+        if failReads { throw ReadFailure() }
+        return try inner.read(key)
+    }
+
+    func write(_ data: Data, to key: String) throws { try inner.write(data, to: key) }
+    func remove(_ key: String) throws { try inner.remove(key) }
 }

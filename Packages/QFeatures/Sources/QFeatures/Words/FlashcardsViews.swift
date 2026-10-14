@@ -32,7 +32,7 @@ struct FlashcardsContent: View {
         VStack(alignment: .leading, spacing: 16) {
             if model.store.status != .ready {
                 VocabStatusView(status: model.store.status, p: p) { Task { await model.refresh() } }
-            } else if model.deck == nil || model.words.isEmpty {
+            } else if model.deck == nil || (model.words.isEmpty && !model.isSettlingXp) {
                 start(p)
             } else if let current = model.current, let deck = model.deck {
                 ProgressView(value: Double(model.results.count), total: Double(deck.count))
@@ -69,7 +69,7 @@ struct FlashcardsContent: View {
             let count = min(model.words.count, FlashcardsModel.roundSize)
             primaryButton("Start \(count) card\(count == 1 ? "" : "s")", p) { model.start() }
         }
-        Button("Back to vocabulary", action: onBack).buttonStyle(.bordered)
+        Button("Back to vocabulary") { model.stop(); onBack() }.buttonStyle(.bordered)
     }
 
     @ViewBuilder
@@ -88,12 +88,15 @@ struct FlashcardsContent: View {
             case .failed(let message):
                 Text(message).foregroundColor(Color(argb: p.danger))
                 Button("Try saving again") { Task { await model.retrySubmit() } }.buttonStyle(.bordered)
+                Button("Discard this round's XP", role: .destructive) { model.discardRound() }.buttonStyle(.bordered)
             case .idle:
                 EmptyView()
             }
         }
         primaryButton("Another round", p) { model.start() }
+            .disabled(model.isSettlingXp)
         Button("Back to vocabulary") { model.stop(); onBack() }.buttonStyle(.bordered)
+            .disabled(model.isSettlingXp)
     }
 
     private func primaryButton(_ title: String, _ p: AppPalette, _ action: @escaping () -> Void) -> some View {
