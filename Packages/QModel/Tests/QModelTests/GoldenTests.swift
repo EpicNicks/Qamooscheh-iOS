@@ -186,6 +186,8 @@ final class GoldenTests: XCTestCase {
         try golden(UpdateProfileRequest.self, #"{"displayName":"Nick","fullName":"Nicholas","country":"CA"}"#)
         let p = try decode(ProfileResponse.self, #"{"displayName":null,"fullName":null,"country":null}"#)
         XCTAssertNil(p.displayName)
+        let full = try golden(ProfileResponse.self, #"{"displayName":"Nick","fullName":"Nicholas","country":"CA"}"#)
+        XCTAssertEqual(full.country, "CA")
     }
 
     func testSocial() throws {
