@@ -38,13 +38,62 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(loaded.map { $0.submissionId }, ["ok"])
     }
 
-    func testEmptyQueueForNonArrayJSON() async throws {
+    func testNonArrayJSONIsUndecodableAndFlushFailsLoudly() async throws {
         let storage = InMemoryOfflineQueueStorage()
         let q = OfflineQueue(storage: storage)
         let userId = "user-non-array"
-        try storage.write(OfflineQueue.fileName(userId), Data("{\"not\":\"an array\"}".utf8))
+        let name = OfflineQueue.fileName(userId)
+        let junk = Data("{\"not\":\"an array\"}".utf8)
+        try storage.write(name, junk)
         let loaded = try await q.loadQueue(userId: userId)
         XCTAssertEqual(loaded, [])
+        let undecodable = try await q.undecodableCount(userId: userId)
+        XCTAssertEqual(undecodable, 1)
+        let unsent = try await q.unsentCount(userId: userId)
+        XCTAssertEqual(unsent, 1)
+        do {
+            _ = try await q.eligible(userId: userId)
+            XCTFail("eligible should throw")
+        } catch let error as OfflineQueueError {
+            XCTAssertEqual(error, .undecodableEntries(count: 1, submissionIds: []))
+        }
+        XCTAssertEqual(try storage.read(name), junk)
+        try await q.enqueue(userId: userId, session: session("a"))
+        XCTAssertEqual(try storage.read(name + ".corrupt"), junk)
+    }
+
+    func testUnknownEntryFieldsSurviveRewrite() async throws {
+        let storage = InMemoryOfflineQueueStorage()
+        let q = OfflineQueue(storage: storage)
+        let name = OfflineQueue.fileName("u")
+        try await q.enqueue(userId: "u", session: session("a"))
+        var array = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(storage.read(name))) as? [Any])
+        var entry = try XCTUnwrap(array[0] as? [String: Any])
+        entry["futureField"] = ["x": 1]
+        array[0] = entry
+        try storage.write(name, JSONSerialization.data(withJSONObject: array))
+
+        try await q.recordFailure(userId: "u", submissionIds: ["a"], error: "boom")
+        try await q.enqueue(userId: "u", session: session("b"))
+        let after = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(storage.read(name))) as? [Any])
+        let first = try XCTUnwrap(after[0] as? [String: Any])
+        XCTAssertEqual((first["futureField"] as? [String: Any])?["x"] as? Int, 1)
+        XCTAssertEqual(first["attempts"] as? Int, 1)
+        XCTAssertEqual(first["lastError"] as? String, "boom")
+    }
+
+    func testLockKeyResolvesSymlinks() throws {
+        let real = tempDir()
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        let link = tempDir()
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        defer {
+            try? FileManager.default.removeItem(at: link)
+            try? FileManager.default.removeItem(at: real)
+        }
+        let viaLink = FileOfflineQueueStorage(directory: link)
+        let direct = FileOfflineQueueStorage(directory: real)
+        XCTAssertEqual(viaLink.lockKey, direct.lockKey)
     }
 
     func testRemovesOnlySettledSubmissions() async throws {
