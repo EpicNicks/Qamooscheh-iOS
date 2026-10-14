@@ -15,6 +15,8 @@ public protocol OnboardingService: Sendable {
     func setDisplayName(_ displayName: String) async throws -> ProfileResponse
     func enrollAll(courseCodes: [String], active: String) async throws -> BootstrapResponse
     func completeOnboarding() async throws -> Bool
+    func enroll(courseCode: String) async throws -> BootstrapResponse
+    func switchActive(courseCode: String) async throws -> BootstrapResponse
 }
 
 extension OnboardingApi: OnboardingService {}
