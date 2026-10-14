@@ -38,20 +38,16 @@ public struct ShareCardView: View {
                     line(xp, size: 37, color: Self.green).padding(.top, 14)
                 }
                 if let streak = content.streakLine {
-                    Text(streak)
-                        .font(.system(size: 26, weight: .bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.4)
-                        .foregroundStyle(LinearGradient(colors: [Self.fireStart, Self.fireEnd], startPoint: .leading, endPoint: .trailing))
-                        .padding(.top, 14)
+                    ShrinkingText(text: streak, size: 26) {
+                        $0.foregroundStyle(LinearGradient(colors: [Self.fireStart, Self.fireEnd], startPoint: .leading, endPoint: .trailing))
+                    }
+                    .padding(.top, 14)
                 }
                 Spacer(minLength: 8)
                 if let word = content.word {
-                    Text(word)
-                        .font(fonts.font(.persian, size: 44, weight: .bold))
-                        .foregroundColor(Self.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.3)
+                    ShrinkingText(text: word, size: 44, font: { fonts.font(.persian, size: $0, weight: .bold) }) {
+                        $0.foregroundColor(Self.ink)
+                    }
                 }
                 if let reading = content.reading {
                     line(reading, size: 17, color: Self.muted, weight: .regular).padding(.top, 6)
@@ -72,11 +68,58 @@ public struct ShareCardView: View {
     }
 
     private func line(_ text: String, size: CGFloat, color: Color, weight: Font.Weight = .bold) -> some View {
-        Text(text)
-            .font(.system(size: size, weight: weight))
-            .foregroundColor(color)
+        ShrinkingText(text: text, size: size, weight: weight) { $0.foregroundColor(color) }
+    }
+}
+
+/// One line that shrinks like Android's ShareCard.kt: 4 px steps (4/3 pt at 3x) down to a 24 px (8 pt)
+/// floor, then clips. Candidate sizes are tried largest first with ViewThatFits. Differs from Android only
+/// in using SwiftUI text measurement and the 280 pt panel width instead of Android's pixel measureText.
+struct ShrinkingText<Styled: View>: View {
+    static var floorPoints: CGFloat { 8 }
+    static var stepPoints: CGFloat { 4.0 / 3.0 }
+
+    let text: String
+    let size: CGFloat
+    let weight: Font.Weight
+    let font: ((CGFloat) -> Font)?
+    let style: (Text) -> Styled
+
+    init(text: String, size: CGFloat, weight: Font.Weight = .bold, font: ((CGFloat) -> Font)? = nil,
+         style: @escaping (Text) -> Styled) {
+        self.text = text
+        self.size = size
+        self.weight = weight
+        self.font = font
+        self.style = style
+    }
+
+    /// Largest first, ending at the floor.
+    static func sizes(from start: CGFloat) -> [CGFloat] {
+        var result: [CGFloat] = []
+        var current = start
+        while current > floorPoints + 0.001 {
+            result.append(current)
+            current -= stepPoints
+        }
+        result.append(floorPoints)
+        return result
+    }
+
+    private func candidate(_ pt: CGFloat) -> some View {
+        style(Text(text).font(font?(pt) ?? Font.system(size: pt, weight: weight)))
             .lineLimit(1)
-            .minimumScaleFactor(0.4)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            ForEach(Self.sizes(from: size), id: \.self) { pt in
+                candidate(pt)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .clipped()
     }
 }
 
@@ -108,9 +151,11 @@ public struct ShareCardImage: Transferable {
 
     public static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .png) { item in
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("share-\(UUID().uuidString)", isDirectory: true)
+            // One fixed directory and file (like Android's single cache file) so exports never accumulate.
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("share-card", isDirectory: true)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let url = dir.appendingPathComponent(item.fileName)
+            try? FileManager.default.removeItem(at: url)
             try item.png.write(to: url, options: .atomic)
             return SentTransferredFile(url)
         }

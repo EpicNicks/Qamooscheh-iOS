@@ -14,7 +14,7 @@ final class ShareCardContentTests: XCTestCase {
 
     func testBlankAndNonPositiveFieldsAreDropped() {
         let c = ShareCardContent(xp: 0, streakDays: 0, word: "  ", reading: "\n", gloss: "")
-        XCTAssertNil(c.xpLine)
+        XCTAssertEqual(c.xpLine, "+0 XP")
         XCTAssertNil(c.streakLine)
         XCTAssertNil(c.word)
         XCTAssertNil(c.reading)
@@ -60,6 +60,34 @@ final class ShareCardContentTests: XCTestCase {
         let image = try XCTUnwrap(ctx.makeImage())
         let data = try ShareCardPNG.encode(image)
         XCTAssertEqual(Array(data.prefix(8)), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+    }
+
+    func testZWNJZWJAndDirectionMarksSurviveCleaning() {
+        let khane = "\u{062E}\u{0627}\u{0646}\u{0647}\u{200C}\u{0647}\u{0627}\u{06CC}\u{200C}\u{0645}\u{0646}"
+        let c = ShareCardContent(headline: khane, word: khane, reading: "\u{200F}khane\u{200E}", gloss: "a\u{200D}b")
+        XCTAssertEqual(c.headline, khane)
+        XCTAssertEqual(c.word, khane)
+        XCTAssertEqual(c.word?.unicodeScalars.filter { $0.value == 0x200C }.count, 2)
+        XCTAssertEqual(c.reading, "\u{200F}khane\u{200E}")
+        XCTAssertEqual(c.gloss, "a\u{200D}b")
+    }
+
+    func testUnsafeFormatAndControlCharactersAreStripped() {
+        let c = ShareCardContent(headline: "A\u{FEFF}B\u{202E}C\u{00AD}D\u{0000}E\u{200C}F")
+        XCTAssertEqual(c.headline, "ABCDE\u{200C}F")
+    }
+
+    func testXPLineShownForZeroOnLessonCardOnly() {
+        XCTAssertEqual(ShareCardContent(xp: 0).xpLine, "+0 XP")
+        XCTAssertNil(ShareCardContent.streak(days: 3)?.xpLine)
+    }
+
+    func testShrinkSizesStepFourPixelsToTwentyFourPixelFloor() {
+        let sizes = ShrinkingText<Text>.sizes(from: 44)
+        XCTAssertEqual(sizes.first, 44)
+        XCTAssertEqual(sizes.last, 8)
+        XCTAssertEqual(sizes[0] - sizes[1], 4.0 / 3.0, accuracy: 0.0001)
+        XCTAssertTrue(sizes.allSatisfy { $0 >= 8 })
     }
 
     func testAccessibilityTextListsEveryShownField() {

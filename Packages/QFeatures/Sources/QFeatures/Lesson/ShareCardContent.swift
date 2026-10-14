@@ -22,7 +22,7 @@ public struct ShareCardContent: Equatable, Sendable {
 
     public let kind: Kind
     public let headline: String
-    /// Hidden on the streak card and when zero.
+    /// Shown as "+N XP" on the lesson card even when zero (as Android); hidden on the streak card.
     public let xp: Int
     /// Hidden when nil or not positive.
     public let streakDays: Int?
@@ -55,7 +55,7 @@ public struct ShareCardContent: Equatable, Sendable {
         return ShareCardContent(kind: .streak, headline: nil, xp: 0, streakDays: days, word: word, reading: reading, gloss: gloss)
     }
 
-    public var xpLine: String? { xp > 0 ? "+\(xp) XP" : nil }
+    public var xpLine: String? { kind == .lessonComplete ? "+\(xp) XP" : nil }
     public var streakLine: String? { streakDays.map { "\($0)-day streak" } }
     public var glossLine: String? { gloss.map { "\u{201C}" + $0 + "\u{201D}" } }
 
@@ -74,9 +74,22 @@ public struct ShareCardContent: Equatable, Sendable {
         return parts.joined(separator: ", ")
     }
 
+    /// Joining and directional marks Persian text needs (ZWNJ, ZWJ, LRM, RLM, ALM, isolates).
+    private static let keptFormatScalars: Set<UInt32> = [0x200C, 0x200D, 0x200E, 0x200F, 0x061C, 0x2066, 0x2067, 0x2068, 0x2069]
+
+    /// Drops control characters (Cc) and unsafe format characters (Cf: BOM, bidi overrides, soft hyphen);
+    /// keeps ZWNJ, ZWJ and the directional marks.
+    static func isSafe(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .control: return false
+        case .format: return keptFormatScalars.contains(scalar.value)
+        default: return true
+        }
+    }
+
     static func clean(_ value: String?, limit: Int) -> String? {
         guard let value = value else { return nil }
-        let kept = value.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
+        let kept = value.unicodeScalars.filter { ShareCardContent.isSafe($0) }
         let text = String(String.UnicodeScalarView(kept)).trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty { return nil }
         return String(text.prefix(limit))
