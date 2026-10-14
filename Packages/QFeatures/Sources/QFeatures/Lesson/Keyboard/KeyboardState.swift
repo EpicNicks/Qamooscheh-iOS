@@ -37,6 +37,27 @@ public final class KeyboardState: ObservableObject {
         activeKeyId = nil
     }
 
+    /// A finger went down on a key. False when that key's touch is already live (repeat events).
+    func beginTouch(keyId: String) -> Bool {
+        if activeKeyId == keyId { return false }
+        activeKeyId = keyId
+        return true
+    }
+
+    /// The finger lifted: returns the candidate it was over, if any.
+    func endTouch() -> Int? {
+        let over = hovered
+        activeKeyId = nil
+        hovered = nil
+        return over
+    }
+
+    /// The gesture was cancelled (no end event): clear the pressed state so the next tap registers.
+    func cancelTouch() {
+        activeKeyId = nil
+        hovered = nil
+    }
+
     public func press(_ action: KeyAction, keyId: String, textBefore: String) -> Edit {
         let edit = engine.press(action, textBefore: textBefore)
         anchorKeyId = engine.candidates != nil ? keyId : nil

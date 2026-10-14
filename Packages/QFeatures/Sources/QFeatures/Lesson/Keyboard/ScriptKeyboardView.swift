@@ -12,6 +12,13 @@ private struct KeyFramesKey: PreferenceKey {
     }
 }
 
+private struct HeaderHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private let keyboardSpace = "scriptKeyboard"
 
 /// The in-app keyboard for one input method (Android `ScriptKeyboard`): rows of keys, an
@@ -26,6 +33,8 @@ public struct ScriptKeyboardView<Header: View>: View {
     private let header: Header
 
     @Environment(\.colorScheme) private var colorScheme
+    @GestureState private var touching = false
+    @State private var headerHeight: CGFloat = 0
 
     public init(
         state: KeyboardState,
@@ -43,7 +52,8 @@ public struct ScriptKeyboardView<Header: View>: View {
         self.header = header()
     }
 
-    private var reserve: CGFloat { KeyboardMetrics.candidateHeight + KeyboardMetrics.stripGap }
+    private var reserve: CGFloat { KeyboardMetrics.bandHeight }
+    private var keysTop: CGFloat { KeyboardMetrics.keysTop(headerHeight: headerHeight) }
 
     public var body: some View {
         let p = palette ?? (colorScheme == .dark ? AppPalette.dark : AppPalette.light)
@@ -52,12 +62,18 @@ public struct ScriptKeyboardView<Header: View>: View {
         ZStack(alignment: .topLeading) {
             header
                 .frame(maxWidth: .infinity, minHeight: reserve, alignment: .leading)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: HeaderHeightKey.self, value: proxy.size.height)
+                    }
+                )
+                .onPreferenceChange(HeaderHeightKey.self) { headerHeight = $0 }
             VStack(spacing: KeyboardMetrics.rowSpacing) {
                 ForEach(0..<layout.rows.count, id: \.self) { r in
                     row(layout.rows[r], rowIndex: r, palette: p)
                 }
             }
-            .padding(.top, reserve)
+            .padding(.top, keysTop)
             if let list = state.candidates, !rects.isEmpty {
                 PhoneticCandidatePicker(candidates: list, rects: rects, hovered: state.hovered, palette: p) { index in
                     onEdit(state.pick(index))
@@ -74,6 +90,9 @@ public struct ScriptKeyboardView<Header: View>: View {
                 Color.clear.preference(key: KeyFramesKey.self, value: ["__width": proxy.frame(in: .named(keyboardSpace))])
             }
         )
+        .onChange(of: touching) { isDown in
+            if !isDown { state.cancelTouch() }
+        }
         .onPreferenceChange(KeyFramesKey.self) { frames in
             var keys = frames
             if let w = keys.removeValue(forKey: "__width") { state.width = w.width }
@@ -120,9 +139,9 @@ public struct ScriptKeyboardView<Header: View>: View {
 
     private func keyGesture(_ key: Key, id: String) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(keyboardSpace))
+            .updating($touching) { _, isDown, _ in isDown = true }
             .onChanged { value in
-                if state.activeKeyId != id {
-                    state.activeKeyId = id
+                if state.beginTouch(keyId: id) {
                     haptic()
                     onEdit(state.press(key.action, keyId: id, textBefore: textBefore()))
                 }
@@ -131,9 +150,7 @@ public struct ScriptKeyboardView<Header: View>: View {
                 if over != state.hovered { state.hovered = over }
             }
             .onEnded { _ in
-                let over = state.hovered
-                state.activeKeyId = nil
-                state.hovered = nil
+                let over = state.endTouch()
                 if let over = over { onEdit(state.pick(over)) }
             }
     }

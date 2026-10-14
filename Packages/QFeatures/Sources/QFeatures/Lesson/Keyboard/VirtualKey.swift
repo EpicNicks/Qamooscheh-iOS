@@ -6,6 +6,7 @@ import QDesign
 public struct VirtualKey: View {
     private let key: Key
     private let palette: AppPalette
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
 
     public init(key: Key, palette: AppPalette) {
         self.key = key
@@ -22,11 +23,14 @@ public struct VirtualKey: View {
         }
     }
 
+    /// Disabled keys stay in the VoiceOver order, announced as dimmed.
+    public static func isAccessibilityDisabled(for key: Key) -> Bool { !key.enabled }
+
     public var body: some View {
         let shape = RoundedRectangle(cornerRadius: 8)
         let long = key.label.count > 2
         Text(key.label)
-            .font(.system(size: long ? 14 : 20, weight: long ? .semibold : .regular))
+            .font(.system(size: KeyboardMetrics.labelSize(base: long ? 14 : 20, scale: textScale), weight: long ? .semibold : .regular))
             .foregroundColor(Color(argb: palette.text))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -38,5 +42,6 @@ public struct VirtualKey: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(VirtualKey.accessibilityName(for: key))
             .accessibilityAddTraits(.isButton)
+            .disabled(VirtualKey.isAccessibilityDisabled(for: key))
     }
 }

@@ -10,6 +10,19 @@ public enum KeyboardMetrics {
     public static let keySpacing: CGFloat = 4
     public static let sidePadding: CGFloat = 4
     public static let bottomPadding: CGFloat = 6
+    public static let maxLabelScale: CGFloat = 1.3
+
+    /// Space kept above the first key row: the candidate band, or the header when it is taller.
+    public static var bandHeight: CGFloat { candidateHeight + stripGap }
+
+    public static func keysTop(headerHeight: CGFloat) -> CGFloat {
+        max(bandHeight, headerHeight)
+    }
+
+    /// Key label size under Dynamic Type: grows with the text size up to 1.3x, never shrinks.
+    public static func labelSize(base: CGFloat, scale: CGFloat) -> CGFloat {
+        base * min(max(scale, 1), maxLabelScale)
+    }
 }
 
 /// Where the candidate cells sit: a strip centered over the pressed key, clamped to the keyboard.
