@@ -1,19 +1,29 @@
 import XCTest
 import QModel
+import QNetwork
+import QDomain
 @testable import QFeatures
 
 private final class FakeProfileService: ProfileService, @unchecked Sendable {
     var stored = ProfileResponse(displayName: "Nick", fullName: nil, country: "CA")
     var fetchFails = false
     var saveFails = false
+    var saveError: Error?
+    var fetchError: Error?
+    var fetchCount = 0
+    var onSave: (() -> Void)?
     var saved: [UpdateProfileRequest] = []
 
     func fetch() async throws -> ProfileResponse {
+        fetchCount += 1
+        if let e = fetchError { throw e }
         if fetchFails { throw URLError(.notConnectedToInternet) }
         return stored
     }
 
     func save(_ request: UpdateProfileRequest) async throws -> ProfileResponse {
+        onSave?()
+        if let e = saveError { throw e }
         if saveFails { throw URLError(.notConnectedToInternet) }
         saved.append(request)
         stored = ProfileResponse(displayName: request.displayName, fullName: request.fullName, country: request.country)
@@ -128,7 +138,7 @@ final class ProfileModelTests: XCTestCase {
         await model.load()
         model.edit { $0.displayName = "Changed" }
         await model.save()
-        XCTAssertEqual(model.saveError, "Couldn't save your profile.")
+        XCTAssertEqual(model.saveError, AuthRules.offline)
         XCTAssertEqual(model.form?.displayName, "Changed")
         XCTAssertFalse(model.saved)
         XCTAssertFalse(model.saving)
@@ -148,5 +158,126 @@ final class ProfileModelTests: XCTestCase {
     func testTotalXp() {
         let context = ProfileContext(courseCode: "fa", enrolledCount: 1, activity: [ActivityDay(localDay: "2026-10-12", reviews: 1, xp: 30), ActivityDay(localDay: "2026-10-11", reviews: 1, xp: 20)])
         XCTAssertEqual(ProfileModel(service: nil, context: context).totalXpValue, 50)
+    }
+
+    func testReloadKeepsDraft() async {
+        let service = FakeProfileService()
+        let model = ProfileModel(service: service)
+        await model.load()
+        model.edit { $0.displayName = "Typed" }
+        await model.load()
+        await model.loadProfile()
+        XCTAssertEqual(model.form?.displayName, "Typed")
+        XCTAssertEqual(service.fetchCount, 1)
+    }
+
+    func testFailedStreakRefreshKeepsLastGood() async {
+        let service = FakeStreakService(streak: sampleStreak())
+        let model = ProfileModel(service: FakeProfileService(), streakService: service)
+        await model.load()
+        XCTAssertEqual(model.streak?.currentStreakDays, 4)
+        service.streak = nil
+        await model.load()
+        XCTAssertEqual(model.streak?.currentStreakDays, 4)
+    }
+
+    func testTodayFallbackRespectsLastDayStart() async {
+        let now = Date(timeIntervalSince1970: 1_791_856_800)
+        let none = ProfileModel(service: nil)
+        XCTAssertEqual(none.today(now: now), todayLocalDay(now: now, calendar: .current))
+        let model = ProfileModel(service: nil, streakService: FakeStreakService(streak: sampleStreak(dayStartHour: 3)))
+        await model.load()
+        XCTAssertEqual(model.today(now: Date(timeIntervalSince1970: 1_791_774_000 + 86_400 + 60)), "2026-10-13")
+    }
+
+    func testEditDuringSaveKeepsNewerEditsAndSaysSaved() async {
+        let service = FakeProfileService()
+        let model = ProfileModel(service: service)
+        await model.load()
+        model.edit { $0.fullName = "Full" }
+        service.onSave = { [unowned model] in
+            MainActor.assumeIsolated { model.edit { $0.displayName = "Newer" } }
+        }
+        await model.save()
+        XCTAssertEqual(model.form, ProfileForm(displayName: "Newer", fullName: "Full", country: "CA"))
+        XCTAssertTrue(model.savedWithNewerEdits)
+        XCTAssertFalse(model.saved)
+        model.edit { $0.country = "US" }
+        XCTAssertFalse(model.savedWithNewerEdits)
+    }
+
+    func testServerMessageShownAndUnauthorizedReported() async {
+        let service = FakeProfileService()
+        service.saveError = ApiError(status: 400, body: ApiErrorBody(error: "Display name is taken."))
+        let model = ProfileModel(service: service)
+        await model.load()
+        await model.save()
+        XCTAssertEqual(model.saveError, "Display name is taken.")
+
+        let box = CallBox()
+        let unauthorized = FakeProfileService()
+        unauthorized.saveError = ApiError(status: 401, body: nil)
+        let m2 = ProfileModel(service: unauthorized, onUnauthorized: { box.hit() })
+        await m2.load()
+        await m2.save()
+        XCTAssertEqual(box.count, 1)
+        unauthorized.fetchError = ApiError(status: 401, body: nil)
+        let m3 = ProfileModel(service: unauthorized, onUnauthorized: { box.hit() })
+        await m3.load()
+        XCTAssertEqual(box.count, 2)
+        XCTAssertNotNil(m3.loadError)
+    }
+
+    func testSignOutStaysBusyAfterSuccess() async {
+        let box = CallBox()
+        let model = ProfileModel(service: nil, signOut: { box.hit() })
+        await model.signOut()
+        await model.signOut()
+        XCTAssertEqual(box.count, 1)
+        XCTAssertTrue(model.signingOut)
+    }
+}
+
+private final class CallBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    func hit() { lock.lock(); n += 1; lock.unlock() }
+    var count: Int { lock.lock(); defer { lock.unlock() }; return n }
+}
+
+private final class FakeStreakService: StreakService, @unchecked Sendable {
+    var streak: StreakResponse?
+    init(streak: StreakResponse?) { self.streak = streak }
+    func fetch() async throws -> StreakResponse {
+        guard let streak = streak else { throw URLError(.notConnectedToInternet) }
+        return streak
+    }
+    func pause(_ request: StreakPauseRequest) async throws {}
+    func cancelPause() async throws {}
+}
+
+private func sampleStreak(dayStartHour: Int = 3) -> StreakResponse {
+    StreakResponse(
+        currentStreakDays: 4, longestStreakDays: 9, practicedToday: false, pausedToday: false,
+        pauseDaysAvailable: 10, timeZone: "UTC", dayStartHour: dayStartHour,
+        today: "2026-10-12", nextDayStartsAt: Date(timeIntervalSince1970: 1_791_774_000))  // 2026-10-12T03:00:00Z
+
+}
+
+final class CurrentStreakDayTests: XCTestCase {
+    func testAdvancesPastNextDayStart() {
+        let streak = sampleStreak()
+        let next = streak.nextDayStartsAt
+        XCTAssertEqual(currentStreakDay(streak, now: next.addingTimeInterval(-60)), "2026-10-12")
+        XCTAssertEqual(currentStreakDay(streak, now: next), "2026-10-13")
+        XCTAssertEqual(currentStreakDay(streak, now: next.addingTimeInterval(86_400 + 5)), "2026-10-14")
+    }
+
+    func testUnparseableTodayUsesDayStartShift() {
+        var streak = sampleStreak()
+        streak.today = "garbled"
+        // 01:00 UTC on 2026-10-13, 3am day start: still the 12th.
+        let now = Date(timeIntervalSince1970: 1_791_853_200)
+        XCTAssertEqual(currentStreakDay(streak, now: now), "2026-10-12")
     }
 }

@@ -104,14 +104,15 @@ private struct StatsCard: View {
             if let streak = model.streak {
                 streakBlock(streak)
             }
-            let today = model.today(now: Date())
-            let todayXp = xpToday(model.context.activity, today: today)
-            HStack(alignment: .top, spacing: 16) {
-                stat("Total XP", "\(model.totalXpValue)")
-                if let goal = model.context.dailyGoalXp {
-                    stat("Today", "\(todayXp) / \(goal) XP")
-                } else {
-                    stat("Today", "\(todayXp) XP")
+            TimelineView(.everyMinute) { clock in
+                let todayXp = xpToday(model.context.activity, today: model.today(now: clock.date))
+                HStack(alignment: .top, spacing: 16) {
+                    stat("Total XP", "\(model.totalXpValue)")
+                    if let goal = model.context.dailyGoalXp {
+                        stat("Today", "\(todayXp) / \(goal) XP")
+                    } else {
+                        stat("Today", "\(todayXp) XP")
+                    }
                 }
             }
             if model.context.courseCode != nil {
@@ -157,17 +158,19 @@ private struct ActivityCard: View {
     let p: AppPalette
 
     var body: some View {
-        let today = model.today(now: Date())
-        let week = recentActivity(model.context.activity, today: today)
-        let goal = model.context.dailyGoalXp
-        let peak = max(week.map { $0.xp }.max() ?? 0, goal ?? 0, 1)
         SettingsCard("This week", p) {
-            HStack(alignment: .bottom, spacing: 8) {
-                ForEach(week, id: \.day) { day in
-                    bar(day, today: today, goal: goal, peak: peak)
+            TimelineView(.everyMinute) { clock in
+                let today = model.today(now: clock.date)
+                let week = recentActivity(model.context.activity, today: today)
+                let goal = model.context.dailyGoalXp
+                let peak = max(week.map { $0.xp }.max() ?? 0, goal ?? 0, 1)
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(week, id: \.day) { day in
+                        bar(day, today: today, goal: goal, peak: peak)
+                    }
                 }
+                .frame(height: 140)
             }
-            .frame(height: 140)
         }
     }
 
@@ -208,9 +211,9 @@ private struct ProfileFormCard: View {
                 if let error = model.saveError {
                     Text(error).font(.callout).foregroundColor(Color(argb: p.danger))
                 }
-                field("Display name", text: form.displayName) { v in model.edit { $0.displayName = v } }
-                field("Full name (optional, private)", text: form.fullName) { v in model.edit { $0.fullName = v } }
-                field("Country (optional, 2 letters, e.g. US)", text: form.country) { v in model.edit { $0.country = v } }
+                field("Display name", text: form.displayName, caps: .words) { v in model.edit { $0.displayName = v } }
+                field("Full name (optional, private)", text: form.fullName, caps: .words) { v in model.edit { $0.fullName = v } }
+                field("Country (optional, 2 letters, e.g. US)", text: form.country, caps: .characters) { v in model.edit { $0.country = v } }
                 Button(action: { Task { await model.save() } }) {
                     Text(model.saving ? "Saving\u{2026}" : "Save")
                         .font(.headline)
@@ -220,6 +223,8 @@ private struct ProfileFormCard: View {
                 .disabled(model.saving)
                 if model.saved {
                     Text("Saved.").font(.callout).foregroundColor(Color(argb: p.success))
+                } else if model.savedWithNewerEdits {
+                    Text("Saved. Your newer changes aren't saved yet.").font(.callout).foregroundColor(Color(argb: p.success))
                 }
             } else if let error = model.loadError {
                 Text(error).font(.callout).foregroundColor(Color(argb: p.danger))
@@ -234,13 +239,30 @@ private struct ProfileFormCard: View {
         }
     }
 
-    private func field(_ label: String, text: String, onChange: @escaping (String) -> Void) -> some View {
+    private func field(_ label: String, text: String, caps: FieldCaps, onChange: @escaping (String) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.subheadline).foregroundColor(Color(argb: p.text))
             TextField("", text: Binding(get: { text }, set: onChange))
                 .textFieldStyle(.roundedBorder)
+                .fieldTraits(caps)
                 .frame(minHeight: 44)
         }
+    }
+}
+
+/// Capitalization for a profile field (Android: country is Characters).
+enum FieldCaps { case words, characters }
+
+extension View {
+    /// Autocorrect is off for names and codes; capitalization per field. iOS only (the package also builds on macOS).
+    @ViewBuilder
+    func fieldTraits(_ caps: FieldCaps) -> some View {
+        #if os(iOS)
+        self.textInputAutocapitalization(caps == .characters ? .characters : .words)
+            .autocorrectionDisabled(true)
+        #else
+        self
+        #endif
     }
 }
 

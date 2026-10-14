@@ -61,6 +61,15 @@ public func profileRequest(_ form: ProfileForm) -> UpdateProfileRequest {
         country: blankToNil(form.country))
 }
 
+/// Today's streak-day as the clock moves: the streak's own `today`, advanced one day (plus any whole days
+/// more) once `now` passes `nextDayStartsAt`, like Android's currentStreakDay.
+public func currentStreakDay(_ streak: StreakResponse, now: Date) -> String {
+    let base = streakToday(streak, now: now)
+    guard base == streak.today, now >= streak.nextDayStartsAt else { return base }
+    let extra = Int(now.timeIntervalSince(streak.nextDayStartsAt) / 86_400)
+    return addDays(base, 1 + extra)
+}
+
 /// One bar of the activity chart.
 public struct DayXp: Equatable, Sendable {
     public let day: String
