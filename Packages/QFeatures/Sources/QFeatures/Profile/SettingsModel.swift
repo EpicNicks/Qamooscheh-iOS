@@ -17,9 +17,11 @@ public final class SettingsModel: ObservableObject {
     /// True while an edit has not reached the server (shown as a badge).
     @Published public private(set) var hasUnsyncedEdit = false
     @Published public private(set) var notice: SettingsNotice?
-    @Published public private(set) var streak: StreakResponse?
-    @Published public private(set) var pauseBusy = false
-    @Published public private(set) var pauseError: String?
+    /// The Streak section's state; its changes republish through this model.
+    public let streakPause: StreakPauseModel
+    public var streak: StreakResponse? { streakPause.streak }
+    public var pauseBusy: Bool { streakPause.busy }
+    public var pauseError: String? { streakPause.error }
     @Published public private(set) var signingOut = false
     @Published public private(set) var signOutError: String?
     @Published public private(set) var previewNotice: String?
@@ -35,7 +37,7 @@ public final class SettingsModel: ObservableObject {
     private let sync: PrefsSync
     private let localStore: LocalPrefsStore
     private let scheduler: ReminderScheduling
-    private let streakService: StreakService?
+    private var pauseObserver: AnyCancellable?
     private let signOutAction: (() async throws -> Void)?
     private let previewer: VoicePreviewing?
     private var dirty = false
@@ -57,7 +59,7 @@ public final class SettingsModel: ObservableObject {
         self.sync = sync
         self.localStore = localStore
         self.scheduler = scheduler
-        self.streakService = streakService
+        self.streakPause = StreakPauseModel(service: streakService)
         self.voices = voices
         self.accountName = accountName
         self.signOutAction = signOut
@@ -70,6 +72,7 @@ public final class SettingsModel: ObservableObject {
         r.minute = stored.reminderMinute
         self.reminders = r
         scheduler.apply(r)
+        self.pauseObserver = streakPause.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     /// Loads cached prefs at once, then syncs with the server.
@@ -97,9 +100,7 @@ public final class SettingsModel: ObservableObject {
             loadError = "Couldn't load your settings. Check your connection and try again."
         }
         hasUnsyncedEdit = await sync.hasPendingEdit
-        if let service = streakService {
-            streak = try? await service.fetch()
-        }
+        await streakPause.load()
     }
 
     public func edit(_ change: (inout UpdatePrefsRequest) -> Void) {
@@ -192,29 +193,11 @@ public final class SettingsModel: ObservableObject {
 
     /// Books a pause of `days` days starting `startDay` ("yyyy-MM-dd").
     public func pauseStreak(startDay: String, days: Int) async {
-        guard let service = streakService, !pauseBusy, days >= 1 else { return }
-        pauseBusy = true
-        pauseError = nil
-        do {
-            try await service.pause(StreakPauseRequest(startDay: startDay, endDay: addDays(startDay, days - 1)))
-            streak = try? await service.fetch()
-        } catch {
-            pauseError = "Couldn't pause your streak. Try again."
-        }
-        pauseBusy = false
+        await streakPause.book(startDay: startDay, days: days)
     }
 
     public func cancelStreakPause() async {
-        guard let service = streakService, !pauseBusy else { return }
-        pauseBusy = true
-        pauseError = nil
-        do {
-            try await service.cancelPause()
-            streak = try? await service.fetch()
-        } catch {
-            pauseError = "Couldn't change your pause. Try again."
-        }
-        pauseBusy = false
+        await streakPause.cancel()
     }
 
     /// Seeds a loaded screen without any network (snapshot showcases).
@@ -232,7 +215,7 @@ public final class SettingsModel: ObservableObject {
             localStore: store, scheduler: scheduler, streakService: nil, voices: voices,
             accountName: accountName, signOut: signOutStub, previewer: nil)
         model.form = form
-        model.streak = streak
+        model.streakPause.seed(streak)
         return model
     }
 }
