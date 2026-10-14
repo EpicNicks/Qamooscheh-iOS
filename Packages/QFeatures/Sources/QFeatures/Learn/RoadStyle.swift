@@ -85,6 +85,16 @@ public func nodeStatusWord(status: SkillStatus, completed: Bool) -> String {
     return completed && status != .unlocked ? "\(word), completed" : word
 }
 
+/// Mirrors an x across the road's width in a right-to-left layout; edges and nodes share this.
+public func roadMirroredX(_ x: Double, width: Double, rtl: Bool) -> Double {
+    return rtl ? width - x : x
+}
+
+/// The fold depth of a node corner: deeper while pressed, never on a locked node.
+public func nodeFoldDepth(pressed: Bool, locked: Bool) -> Double {
+    return pressed && !locked ? 26 : 18
+}
+
 /// A road connector with its endpoints resolved against the layout's nodes.
 public struct RoadEdgeGeometry: Equatable, Sendable {
     public var fromPositionIndex: Int

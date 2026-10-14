@@ -42,7 +42,7 @@ public struct SkillRoadView: View {
     }
 
     private func mirrored(_ x: CGFloat, width: CGFloat) -> CGFloat {
-        return layoutDirection == .rightToLeft ? width - x : x
+        return CGFloat(roadMirroredX(Double(x), width: Double(width), rtl: layoutDirection == .rightToLeft))
     }
 
     @ViewBuilder

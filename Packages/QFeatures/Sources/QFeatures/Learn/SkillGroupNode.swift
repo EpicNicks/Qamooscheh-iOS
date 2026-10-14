@@ -50,13 +50,14 @@ public struct SkillGroupNodeView: View {
                 icon: icon,
                 completed: allBranchesFinished(position),
                 branch: false,
+                springFold: true,
                 accessibilityLabel: "\(count) lesson choices\(groupDoneNote(position)): \(position.skills.map { $0.title }.joined(separator: ", "))",
                 theme: theme,
                 palette: p,
                 onTap: onTap,
                 badge: {
                     Text("\(count)")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(Color(argb: p.primaryContrast))
                         .padding(.horizontal, 4)
                         .frame(minWidth: 18, minHeight: 18)
