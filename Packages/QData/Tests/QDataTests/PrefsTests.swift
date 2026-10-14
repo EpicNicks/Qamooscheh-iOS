@@ -91,7 +91,7 @@ final class PrefsTests: XCTestCase {
         let defaults = makeDefaults()
         let sync = PrefsSync(userId: "u", courseCode: "fa", api: makeAPI(), defaults: defaults)
         let seen = GoalLog()
-        await sync.setApplyPrefs { seen.add($0.dailyGoalXp) }
+        await sync.addApplyPrefs { seen.add($0.dailyGoalXp) }
         XCTAssertEqual(seen.values, [])
         _ = try await sync.sync()
         XCTAssertEqual(seen.values, [50])
@@ -100,8 +100,43 @@ final class PrefsTests: XCTestCase {
         XCTAssertEqual(seen.values, [50, 80])
         // Re-registering with cached prefs applies them at once (load).
         let again = GoalLog()
-        await sync.setApplyPrefs { again.add($0.dailyGoalXp) }
+        let token = await sync.addApplyPrefs { again.add($0.dailyGoalXp) }
         XCTAssertEqual(again.values, [80])
+        // Both hooks stay registered; removing one leaves the other.
+        _ = try await sync.update { $0.dailyGoalXp = 90 }
+        XCTAssertEqual(seen.values, [50, 80, 80, 90])
+        XCTAssertEqual(again.values, [80, 90])
+        await sync.removeApplyPrefs(token)
+        _ = try await sync.update { $0.dailyGoalXp = 95 }
+        XCTAssertEqual(again.values, [80, 90])
+        XCTAssertEqual(seen.values.last, 95)
+    }
+
+    func testProviderClearWipesStoredCoursesNotInstantiatedThisSession() async throws {
+        let json = serverJson
+        StubURLProtocol.install { _ in StubResponse(200, json) }
+        let defaults = makeDefaults()
+        // Previous session: pending edits stored for two courses and a corrupt copy.
+        for course in ["fa", "ja"] {
+            let s = PrefsSync(userId: "u", courseCode: course, api: makeAPI(), defaults: defaults)
+            _ = try await s.sync()
+            StubURLProtocol.install { _ in StubResponse(failing: .notConnectedToInternet) }
+            _ = try await s.update { $0.dailyGoalXp = 70 }
+        }
+        defaults.set(Data("x".utf8), forKey: "qamooscheh.serverPrefs.u.fa.corrupt.1")
+        let other = PrefsSync(userId: "v", courseCode: "fa", api: makeAPI(), defaults: defaults)
+        StubURLProtocol.install { _ in StubResponse(200, json) }
+        _ = try await other.sync()
+        // Relaunch: a new provider, no instance requested yet, then sign-out.
+        let provider = PrefsSyncProvider(api: makeAPI(), defaults: defaults)
+        await provider.clear(userId: "u")
+        let keys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("qamooscheh.serverPrefs.u.") }
+        XCTAssertTrue(keys.isEmpty)
+        let fresh = PrefsSync(userId: "u", courseCode: "ja", api: makeAPI(), defaults: defaults)
+        let freshPrefs = await fresh.prefs
+        XCTAssertNil(freshPrefs)
+        let otherPrefs = await other.prefs
+        XCTAssertNotNil(otherPrefs)
     }
 
     func testProviderSharesOneSyncPerUserAndCourse() async {

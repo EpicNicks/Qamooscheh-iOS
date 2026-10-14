@@ -81,7 +81,8 @@ public actor PrefsSync {
     private var inFlight: Task<PrefsSyncOutcome, Error>?
     private var inFlightRevision = 0
     private var generation = 0
-    private var applyHook: (@Sendable (PrefsResponse) -> Void)?
+    private var applyHooks: [Int: @Sendable (PrefsResponse) -> Void] = [:]
+    private var nextHookToken = 0
 
     public init(userId: String, courseCode: String, api: PrefsAPI, defaults: UserDefaults = .standard) {
         self.userId = userId
@@ -108,10 +109,29 @@ public actor PrefsSync {
 
     /// Registers the applyPrefs hook, called with the merged prefs after load
     /// (at once, when prefs are cached), after each local edit and after each
-    /// server merge (pull or accepted push). Replaces any earlier hook.
-    public func setApplyPrefs(_ hook: (@Sendable (PrefsResponse) -> Void)?) {
-        applyHook = hook
-        if let hook = hook, let current = load()?.prefs { hook(current) }
+    /// server merge (pull or accepted push). Several hooks may be registered
+    /// (the instance is shared per user and course); keep the returned token
+    /// to remove one with `removeApplyPrefs(_:)`.
+    ///
+    /// The edit hook fires optimistically, before the server accepts the edit,
+    /// on purpose: the local copy is what the app shows and acts on. If the
+    /// server rejects the edit the hooks fire again with the server copy when
+    /// the follow-up pull succeeds.
+    @discardableResult
+    public func addApplyPrefs(_ hook: @escaping @Sendable (PrefsResponse) -> Void) -> Int {
+        nextHookToken += 1
+        let token = nextHookToken
+        applyHooks[token] = hook
+        if let current = load()?.prefs { hook(current) }
+        return token
+    }
+
+    public func removeApplyPrefs(_ token: Int) {
+        applyHooks.removeValue(forKey: token)
+    }
+
+    private func fireApply(_ prefs: PrefsResponse) {
+        for hook in applyHooks.values { hook(prefs) }
     }
 
     public func dismissRejectedEdit() {
@@ -129,7 +149,7 @@ public actor PrefsSync {
         record.pending = true
         record.revision += 1
         store(record)
-        applyHook?(record.prefs)
+        fireApply(record.prefs)
         return try await sync()
     }
 
@@ -179,6 +199,18 @@ public actor PrefsSync {
         }
     }
 
+    private static let keyRoot = "qamooscheh.serverPrefs."
+
+    /// Removes every stored record (all courses, quarantined copies included)
+    /// for one user, whether or not an instance exists this session. User ids
+    /// are opaque ids without dots, so the "<root><userId>." prefix is exact.
+    static func wipeStored(userId: String, defaults: UserDefaults) {
+        let prefix = keyRoot + userId + "."
+        for k in defaults.dictionaryRepresentation().keys where k.hasPrefix(prefix) {
+            defaults.removeObject(forKey: k)
+        }
+    }
+
     private func runSync(start: Record?, generation gen: Int) async throws -> PrefsSyncOutcome {
         do {
             if let start = start, start.pending {
@@ -191,7 +223,7 @@ public actor PrefsSync {
                         latest.pending = false
                         latest.rejected = nil
                         store(latest)
-                        applyHook?(saved)
+                        fireApply(saved)
                         return .synced(saved)
                     }
                     // Edited during the PUT: keep the newer local copy pending.
@@ -214,7 +246,7 @@ public actor PrefsSync {
         if let current = current, current.pending { return .offline(current.prefs) }
         store(Record(prefs: fetched, pending: false, revision: (current?.revision ?? 0) + 1,
                      rejected: current?.rejected))
-        applyHook?(fetched)
+        fireApply(fetched)
         return .synced(fetched)
     }
 
@@ -249,7 +281,7 @@ public actor PrefsSync {
         return false
     }
 
-    private var key: String { "qamooscheh.serverPrefs.\(userId).\(courseCode)" }
+    private var key: String { "\(Self.keyRoot)\(userId).\(courseCode)" }
     private var quarantinePrefix: String { key + ".corrupt." }
 
     private func load() -> Record? {
@@ -292,12 +324,19 @@ public final class PrefsSyncProvider: @unchecked Sendable {
     }
 
     /// Sign-out: clears and forgets this user's instances.
+    /// Also wipes stored records for courses never requested this session.
     public func clear(userId: String) async {
+        let doomed = removeInstances(userId: userId)
+        for entry in doomed { await entry.clear() }
+        PrefsSync.wipeStored(userId: userId, defaults: defaults)
+    }
+
+    private func removeInstances(userId: String) -> [PrefsSync] {
         lock.lock()
+        defer { lock.unlock() }
         let prefix = userId + "|"
         let doomed = syncs.filter { $0.key.hasPrefix(prefix) }
         for k in doomed.keys { syncs.removeValue(forKey: k) }
-        lock.unlock()
-        for entry in doomed.values { await entry.clear() }
+        return Array(doomed.values)
     }
 }
