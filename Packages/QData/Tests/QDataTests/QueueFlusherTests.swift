@@ -441,7 +441,7 @@ final class QueueFlusherTests: XCTestCase {
         let trigger = ManualFlushTrigger()
         let driver = QueueFlushDriver(flusher: flusher)
         let errors = ResultBox()
-        driver.start(userId: user, sources: [trigger], onError: { _ in errors.bump() })
+        driver.start(userId: user, sources: [trigger], onReport: { _, _ in }, onError: { _ in errors.bump() })
         defer { driver.stop() }
 
         try await waitUntil { (try? await queue.loadQueue(userId: "u1").isEmpty) == true }
@@ -463,10 +463,128 @@ final class QueueFlusherTests: XCTestCase {
         let flusher = QueueFlusher(queue: queue, submitter: submitter)
         let driver = QueueFlushDriver(flusher: flusher)
         let errors = ResultBox()
-        driver.start(userId: user, sources: [], onError: { _ in errors.bump() })
+        driver.start(userId: user, sources: [], onReport: { _, _ in }, onError: { _ in errors.bump() })
         defer { driver.stop() }
         try await waitUntil { errors.count >= 1 }
         XCTAssertEqual(submitter.calls.count, 0)
+    }
+
+    func testDriverRetriesWhenBackoffExpiresAndReportsEveryFlush() async throws {
+        let clock = TestClock()
+        let queue = makeQueue(clock: clock)
+        try await queue.enqueue(userId: user, session: session("a"))
+        let submitter = MockSubmitter { index, sessions in
+            if index == 0 { throw ApiError(status: 503, body: nil) }
+            return ok(sessions)
+        }
+        let flusher = QueueFlusher(queue: queue, submitter: submitter)
+        let slept = ResultBox()
+        let driver = QueueFlushDriver(
+            flusher: flusher,
+            nowMillis: { clock.now },
+            sleeper: { nanos in
+                slept.record(nanos)
+                clock.advance(Int64(nanos / 1_000_000))
+            })
+        let reports = ResultBox()
+        driver.start(userId: user, sources: [], onReport: { _, report in reports.add(report) }, onError: { _ in })
+        defer { driver.stop() }
+
+        try await waitUntil { reports.reports.count >= 2 }
+        let left = try await queue.loadQueue(userId: user)
+        XCTAssertEqual(left, [])
+        XCTAssertEqual(slept.sleeps, [UInt64(30_000) * 1_000_000])
+        XCTAssertEqual(submitter.allSentIds, ["a", "a"])
+        XCTAssertEqual(reports.reports.last?.outcome, .completed)
+    }
+
+    func testNewTriggerCancelsThePendingRetry() async throws {
+        let clock = TestClock()
+        let queue = makeQueue(clock: clock)
+        try await queue.enqueue(userId: user, session: session("a"))
+        let submitter = MockSubmitter { index, sessions in
+            if index == 0 { throw ApiError(status: 503, body: nil) }
+            return ok(sessions)
+        }
+        let flusher = QueueFlusher(queue: queue, submitter: submitter)
+        let probe = ResultBox()
+        let trigger = ManualFlushTrigger()
+        let driver = QueueFlushDriver(
+            flusher: flusher,
+            nowMillis: { clock.now },
+            sleeper: { nanos in
+                probe.record(nanos)
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) } catch { probe.bump(); throw error }
+            })
+        driver.start(userId: user, sources: [trigger], onReport: { _, _ in }, onError: { _ in })
+        defer { driver.stop() }
+
+        try await waitUntil { probe.sleeps.count == 1 }
+        try await waitUntil {
+            trigger.fire(.reachabilityRegained)
+            return (try? await queue.loadQueue(userId: "u1").isEmpty) == true
+        }
+        try await waitUntil { probe.count == 1 }
+        XCTAssertEqual(submitter.calls.count, 2)
+    }
+
+    func testDriverDoesNotRetryAPermanentFailure() async throws {
+        let clock = TestClock()
+        let queue = makeQueue(clock: clock)
+        try await queue.enqueue(userId: user, session: session("a"))
+        let submitter = MockSubmitter { _, _ in throw ApiError(status: 400, body: nil) }
+        let flusher = QueueFlusher(queue: queue, submitter: submitter)
+        let slept = ResultBox()
+        let reports = ResultBox()
+        let driver = QueueFlushDriver(flusher: flusher, nowMillis: { clock.now }, sleeper: { nanos in slept.record(nanos) })
+        driver.start(userId: user, sources: [], onReport: { _, report in reports.add(report) }, onError: { _ in })
+        defer { driver.stop() }
+        try await waitUntil { reports.reports.count >= 1 }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(slept.sleeps, [])
+        XCTAssertEqual(submitter.calls.count, 1)
+    }
+
+    func testEnqueuedTriggerHonoursBackoffButForegroundDoesNot() async throws {
+        let queue = makeQueue()
+        try await queue.enqueue(userId: user, session: session("a"))
+        let submitter = MockSubmitter { index, sessions in
+            if index == 0 { throw ApiError(status: 503, body: nil) }
+            return ok(sessions)
+        }
+        let flusher = QueueFlusher(queue: queue, submitter: submitter)
+        _ = try await flusher.flush(userId: user, reason: .manual)
+        let postLesson = try await flusher.flush(userId: user, reason: .enqueued)
+        XCTAssertEqual(postLesson.outcome, .idle)
+        XCTAssertNotNil(postLesson.nextRetryAtMillis)
+        XCTAssertEqual(submitter.calls.count, 1)
+        let foreground = try await flusher.flush(userId: user, reason: .appForeground)
+        XCTAssertEqual(foreground.outcome, .completed)
+    }
+
+    // MARK: shared flusher
+
+    func testProviderReturnsOneFlusherPerUser() async throws {
+        let queue = makeQueue()
+        let made = ResultBox()
+        let provider = QueueFlusherProvider(make: { _ in
+            made.bump()
+            return QueueFlusher(queue: queue, submitter: MockSubmitter())
+        })
+        let flushers = await withTaskGroup(of: QueueFlusher.self) { group in
+            for _ in 0..<8 { group.addTask { await provider.flusher(for: "u1") } }
+            var all: [QueueFlusher] = []
+            for await f in group { all.append(f) }
+            return all
+        }
+        XCTAssertTrue(flushers.allSatisfy { $0 === flushers[0] })
+        let other = await provider.flusher(for: "u2")
+        XCTAssertFalse(other === flushers[0])
+        XCTAssertEqual(made.count, 2)
+        await provider.discard(userId: "u1")
+        let rebuilt = await provider.flusher(for: "u1")
+        XCTAssertFalse(rebuilt === flushers[0])
+        XCTAssertEqual(made.count, 3)
     }
 
     private func waitUntil(_ condition: @escaping () async -> Bool) async throws {
@@ -488,6 +606,12 @@ private final class ResultBox: @unchecked Sendable {
         lock.lock(); _ids = ids; _queuedCount = queuedCount; lock.unlock()
     }
     func bump() { lock.lock(); _count += 1; lock.unlock() }
+    private var _sleeps: [UInt64] = []
+    private var _reports: [FlushReport] = []
+    func record(_ nanos: UInt64) { lock.lock(); _sleeps.append(nanos); lock.unlock() }
+    func add(_ report: FlushReport) { lock.lock(); _reports.append(report); lock.unlock() }
+    var sleeps: [UInt64] { lock.lock(); defer { lock.unlock() }; return _sleeps }
+    var reports: [FlushReport] { lock.lock(); defer { lock.unlock() }; return _reports }
     var ids: [String] { lock.lock(); defer { lock.unlock() }; return _ids }
     var queuedCount: Int { lock.lock(); defer { lock.unlock() }; return _queuedCount }
     var count: Int { lock.lock(); defer { lock.unlock() }; return _count }

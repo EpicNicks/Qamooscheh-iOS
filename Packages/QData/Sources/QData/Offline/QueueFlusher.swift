@@ -265,30 +265,46 @@ public final class ManualFlushTrigger: FlushTriggerSource, @unchecked Sendable {
 }
 
 /// Flushes `userId`'s queue once on start and again for every trigger.
-/// Failures (including undecodable queue entries) go to `onError`, never swallowed.
+/// Every flush result is handed to `onReport` (with the reason that caused it);
+/// failures (including undecodable queue entries) go to `onError`, never swallowed.
+///
+/// When a flush leaves entries queued behind a backoff, the driver sleeps until
+/// the earliest `nextRetryAtMillis` and flushes again (honouring backoff). A new
+/// trigger cancels the pending retry. A permanent 4xx is not retried (Android
+/// worker `Result.failure`).
 public final class QueueFlushDriver: @unchecked Sendable {
+    public typealias Sleeper = @Sendable (_ nanoseconds: UInt64) async throws -> Void
+
     private let flusher: QueueFlusher
+    private let nowMillis: @Sendable () -> Int64
+    private let sleeper: Sleeper
     private let lock = NSLock()
     private var tasks: [Task<Void, Never>] = []
+    private var retryTask: Task<Void, Never>?
+    private var stopped = false
 
-    public init(flusher: QueueFlusher) {
+    public init(
+        flusher: QueueFlusher,
+        nowMillis: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
+        sleeper: @escaping Sleeper = { try await Task.sleep(nanoseconds: $0) }
+    ) {
         self.flusher = flusher
+        self.nowMillis = nowMillis
+        self.sleeper = sleeper
     }
 
     public func start(
         userId: String,
         sources: [FlushTriggerSource],
-        onReport: (@Sendable (FlushReport) -> Void)? = nil,
+        onReport: @escaping @Sendable (_ reason: FlushReason, _ report: FlushReport) -> Void,
         onError: @escaping @Sendable (Error) -> Void
     ) {
-        let flusher = self.flusher
-        let run: @Sendable (FlushReason) async -> Void = { reason in
-            do {
-                let report = try await flusher.flush(userId: userId, reason: reason)
-                onReport?(report)
-            } catch {
-                onError(error)
-            }
+        lock.lock()
+        stopped = false
+        lock.unlock()
+        let run: @Sendable (FlushReason) async -> Void = { [self] reason in
+            cancelRetry()
+            await perform(userId: userId, reason: reason, onReport: onReport, onError: onError)
         }
         var started: [Task<Void, Never>] = [Task { await run(.manual) }]
         for source in sources {
@@ -307,9 +323,90 @@ public final class QueueFlushDriver: @unchecked Sendable {
 
     public func stop() {
         lock.lock()
+        stopped = true
         let all = tasks
         tasks = []
+        let retry = retryTask
+        retryTask = nil
         lock.unlock()
         for task in all { task.cancel() }
+        retry?.cancel()
+    }
+
+    private func cancelRetry() {
+        lock.lock()
+        let retry = retryTask
+        retryTask = nil
+        lock.unlock()
+        retry?.cancel()
+    }
+
+    private func perform(
+        userId: String,
+        reason: FlushReason,
+        onReport: @escaping @Sendable (FlushReason, FlushReport) -> Void,
+        onError: @escaping @Sendable (Error) -> Void
+    ) async {
+        do {
+            let report = try await flusher.flush(userId: userId, reason: reason)
+            onReport(reason, report)
+            scheduleRetry(userId: userId, report: report, onReport: onReport, onError: onError)
+        } catch {
+            onError(error)
+        }
+    }
+
+    private func scheduleRetry(
+        userId: String,
+        report: FlushReport,
+        onReport: @escaping @Sendable (FlushReason, FlushReport) -> Void,
+        onError: @escaping @Sendable (Error) -> Void
+    ) {
+        if case .permanentFailure = report.outcome { return }
+        guard let next = report.nextRetryAtMillis else { return }
+        let delayMillis = max(0, next - nowMillis())
+        let sleeper = self.sleeper
+        let task = Task { [self] in
+            do {
+                try await sleeper(UInt64(delayMillis) * 1_000_000)
+            } catch {
+                return
+            }
+            if Task.isCancelled { return }
+            await perform(userId: userId, reason: .manual, onReport: onReport, onError: onError)
+        }
+        lock.lock()
+        if stopped {
+            lock.unlock()
+            task.cancel()
+            return
+        }
+        let previous = retryTask
+        retryTask = task
+        lock.unlock()
+        previous?.cancel()
+    }
+}
+
+/// One `QueueFlusher` per user, shared by every view and driver, so the
+/// single-flight guarantee holds app-wide rather than per call site.
+public actor QueueFlusherProvider {
+    private let make: @Sendable (_ userId: String) -> QueueFlusher
+    private var flushers: [String: QueueFlusher] = [:]
+
+    public init(make: @escaping @Sendable (_ userId: String) -> QueueFlusher) {
+        self.make = make
+    }
+
+    public func flusher(for userId: String) -> QueueFlusher {
+        if let existing = flushers[userId] { return existing }
+        let created = make(userId)
+        flushers[userId] = created
+        return created
+    }
+
+    /// Drops the cached flusher (sign-out); a later call builds a fresh one.
+    public func discard(userId: String) {
+        flushers[userId] = nil
     }
 }
