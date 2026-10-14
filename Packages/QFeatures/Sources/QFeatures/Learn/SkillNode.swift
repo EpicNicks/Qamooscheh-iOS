@@ -11,6 +11,7 @@ public struct SkillNodeView<Badge: View>: View {
     private let icon: String?
     private let completed: Bool
     private let branch: Bool
+    private let springFold: Bool
     private let accessibilityText: String
     private let theme: PathTheme
     private let palette: AppPalette?
@@ -25,6 +26,7 @@ public struct SkillNodeView<Badge: View>: View {
         icon: String?,
         completed: Bool = false,
         branch: Bool = true,
+        springFold: Bool = false,
         accessibilityLabel: String? = nil,
         theme: PathTheme = .standard,
         palette: AppPalette? = nil,
@@ -36,6 +38,7 @@ public struct SkillNodeView<Badge: View>: View {
         self.icon = icon
         self.completed = completed
         self.branch = branch
+        self.springFold = springFold
         self.accessibilityText = accessibilityLabel ?? title
         self.theme = theme
         self.palette = palette
@@ -51,7 +54,7 @@ public struct SkillNodeView<Badge: View>: View {
                 theme: theme, palette: p, badge: badge
             )
         }
-        .buttonStyle(NodePressStyle(locked: status == .locked, theme: theme, palette: p, status: status, completed: completed, branch: branch))
+        .buttonStyle(NodePressStyle(locked: status == .locked, theme: theme, palette: p, status: status, completed: completed, branch: branch, springFold: springFold))
         .disabled(status == .locked)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(accessibilityText), \(nodeStatusWord(status: status, completed: completed))")
@@ -66,13 +69,14 @@ extension SkillNodeView where Badge == EmptyView {
         icon: String?,
         completed: Bool = false,
         branch: Bool = true,
+        springFold: Bool = false,
         accessibilityLabel: String? = nil,
         theme: PathTheme = .standard,
         palette: AppPalette? = nil,
         onTap: @escaping () -> Void = {}
     ) {
         self.init(
-            title: title, status: status, icon: icon, completed: completed, branch: branch,
+            title: title, status: status, icon: icon, completed: completed, branch: branch, springFold: springFold,
             accessibilityLabel: accessibilityLabel, theme: theme, palette: palette, onTap: onTap,
             badge: { EmptyView() }
         )
@@ -88,15 +92,18 @@ private struct NodePressStyle: ButtonStyle {
     let status: SkillStatus
     let completed: Bool
     let branch: Bool
+    let springFold: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.overlay(
+        let depth = CGFloat(nodeFoldDepth(pressed: configuration.isPressed, locked: locked))
+        return configuration.label.overlay(
             FoldCorner(
                 colors: nodeColors(status: status, palette: palette, completed: completed, branch: branch),
-                fold: configuration.isPressed && !locked ? 26 : 18,
+                fold: depth,
                 backdrop: palette.bg,
                 size: theme.nodeSize
             )
+            .animation(springFold ? .spring(response: 0.3, dampingFraction: 0.55) : nil, value: depth)
         )
     }
 }
@@ -130,10 +137,10 @@ struct SkillNodeFace<Badge: View>: View {
                 .frame(width: side, height: side)
             VStack(spacing: 4) {
                 if let icon = icon {
-                    Text(icon).font(.system(size: 20))
+                    Text(icon).font(.title3)
                 }
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(Color(argb: colors.title))
                     .multilineTextAlignment(.center)
                     // A story/conversation/song card's icon costs a line.
@@ -144,7 +151,7 @@ struct SkillNodeFace<Badge: View>: View {
             badge
             if completed {
                 Text("\u{2713}")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(Color(argb: palette.primaryContrast))
                     .frame(width: 20, height: 20)
                     .background(Circle().fill(Color(argb: branch ? palette.current : palette.primary)))
