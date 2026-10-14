@@ -147,7 +147,6 @@ public struct SkillVocabularyScreen: View {
             SkillVocabularyContent(model: model).padding(16).frame(maxWidth: .infinity)
         }
         .navigationTitle("Vocabulary")
-        .navigationBarTitleDisplayMode(.inline)
         .task { await model.refresh() }
     }
 }
@@ -171,8 +170,7 @@ struct SkillVocabularyContent: View {
                 .pickerStyle(.segmented)
                 TextField("Search words", text: $model.query)
                     .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+                    .searchLikeInput()
                 if let message = model.store.starMessage {
                     Text(message).font(.callout).foregroundColor(Color(argb: p.danger))
                 }
@@ -190,5 +188,17 @@ struct SkillVocabularyContent: View {
             }
         }
         .frame(maxWidth: vocabColumnWidth, alignment: .leading)
+    }
+}
+
+extension View {
+    /// Search and answer boxes: no autocorrect, no capitalization (the capitalization modifier is iOS only).
+    @ViewBuilder
+    func searchLikeInput() -> some View {
+        #if os(iOS)
+        self.autocorrectionDisabled().textInputAutocapitalization(.never)
+        #else
+        self.autocorrectionDisabled()
+        #endif
     }
 }

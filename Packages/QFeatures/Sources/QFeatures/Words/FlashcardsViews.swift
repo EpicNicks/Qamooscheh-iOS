@@ -18,7 +18,6 @@ public struct FlashcardsScreen: View {
             FlashcardsContent(model: model, onBack: onBack).padding(16).frame(maxWidth: .infinity)
         }
         .navigationTitle("Flashcards")
-        .navigationBarTitleDisplayMode(.inline)
         .task { await model.refresh() }
     }
 }
@@ -155,8 +154,7 @@ struct FlashcardView: View {
             } else {
                 TextField("Type the meaning in English", text: $typed)
                     .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+                    .searchLikeInput()
                     .disabled(graded != nil)
                     .submitLabel(.done)
                     .onSubmit { check() }
