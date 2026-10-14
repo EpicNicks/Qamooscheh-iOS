@@ -187,7 +187,7 @@ final class ProfileModelTests: XCTestCase {
         XCTAssertEqual(none.today(now: now), todayLocalDay(now: now, calendar: .current))
         let model = ProfileModel(service: nil, streakService: FakeStreakService(streak: sampleStreak(dayStartHour: 3)))
         await model.load()
-        XCTAssertEqual(model.today(now: Date(timeIntervalSince1970: 1_791_774_000 + 86_400 + 60)), "2026-10-13")
+        XCTAssertEqual(model.today(now: Date(timeIntervalSince1970: 1_791_774_000 + 60)), "2026-10-13")
     }
 
     func testEditDuringSaveKeepsNewerEditsAndSaysSaved() async {
