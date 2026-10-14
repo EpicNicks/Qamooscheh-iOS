@@ -32,6 +32,8 @@ public struct FlushReport: Equatable, Sendable {
     public var rejected: [String] = []
     /// Sent but missing from the response; kept for the next flush.
     public var unanswered: [String] = []
+    /// The server's per-session answers (settled and rejected) for sessions in this flush.
+    public var results: [SubmittedSessionResponse] = []
     public var outcome: FlushOutcome = .idle
     /// Earliest `nextEligibleAtMillis` among the still-queued items, if any.
     public var nextRetryAtMillis: Int64?
@@ -104,6 +106,7 @@ public actor QueueFlusher {
             report.settled += pass.settled
             report.rejected += pass.rejected
             report.unanswered += pass.unanswered
+            report.results += pass.results
             report.nextRetryAtMillis = pass.nextRetryAtMillis
             if pass.outcome != .idle { report.outcome = pass.outcome }
             // No suspension between the checks below and clearing the flight,
@@ -172,6 +175,7 @@ public actor QueueFlusher {
             try await queue.removeFromQueue(userId: userId, submissionIds: settled)
         }
         report.settled = settled
+        report.results = results
         report.unanswered = sentIds.filter { !seen.contains($0) }
         if !report.unanswered.isEmpty {
             try await queue.recordFailure(userId: userId, submissionIds: report.unanswered, error: "no result in response")
