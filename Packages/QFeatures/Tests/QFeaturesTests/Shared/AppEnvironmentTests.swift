@@ -132,7 +132,9 @@ final class AppEnvironmentTests: XCTestCase {
     }
 
     func testStreakPauseAndCancel() async throws {
-        EnvStubProtocol.install { _ in EnvStub(200, "{}") }
+        EnvStubProtocol.install { _ in
+            EnvStub(200, #"{"currentStreakDays":4,"longestStreakDays":9,"practicedToday":false,"pausedToday":false,"pauseDaysAvailable":11,"timeZone":"UTC","dayStartHour":3,"today":"2026-10-13","nextDayStartsAt":"2026-10-14T03:00:00.000Z"}"#)
+        }
         let env = makeEnv()
         try await env.streak.pause(StreakPauseRequest(startDay: "2026-10-14", endDay: "2026-10-16"))
         XCTAssertEqual(lastRequest()?.httpMethod, "POST")
