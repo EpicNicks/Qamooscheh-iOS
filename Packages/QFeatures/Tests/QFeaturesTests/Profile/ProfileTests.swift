@@ -11,7 +11,7 @@ private final class FakeProfileService: ProfileService, @unchecked Sendable {
     var saveError: Error?
     var fetchError: Error?
     var fetchCount = 0
-    var onSave: (() -> Void)?
+    var onSave: (@MainActor () -> Void)?
     var saved: [UpdateProfileRequest] = []
 
     func fetch() async throws -> ProfileResponse {
@@ -22,7 +22,7 @@ private final class FakeProfileService: ProfileService, @unchecked Sendable {
     }
 
     func save(_ request: UpdateProfileRequest) async throws -> ProfileResponse {
-        onSave?()
+        if let hook = onSave { await MainActor.run { hook() } }
         if let e = saveError { throw e }
         if saveFails { throw URLError(.notConnectedToInternet) }
         saved.append(request)
@@ -195,9 +195,7 @@ final class ProfileModelTests: XCTestCase {
         let model = ProfileModel(service: service)
         await model.load()
         model.edit { $0.fullName = "Full" }
-        service.onSave = { [unowned model] in
-            MainActor.assumeIsolated { model.edit { $0.displayName = "Newer" } }
-        }
+        service.onSave = { [unowned model] in model.edit { $0.displayName = "Newer" } }
         await model.save()
         XCTAssertEqual(model.form, ProfileForm(displayName: "Newer", fullName: "Full", country: "CA"))
         XCTAssertTrue(model.savedWithNewerEdits)
