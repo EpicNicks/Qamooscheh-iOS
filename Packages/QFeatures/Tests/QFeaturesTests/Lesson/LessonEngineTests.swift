@@ -131,6 +131,7 @@ final class LessonEngineTests: XCTestCase {
         let when = Date(timeIntervalSince1970: 1_000)
         var n = 0
         let done = e.completion(courseCode: "fa", courseVersion: 7, occurredAt: when, exerciseCountBySkill: ["s": 4], newId: { n += 1; return "id\(n)" })
+        guard let done = done else { return XCTFail("finished lesson completes") }
         XCTAssertEqual(done.sessions.count, 1)
         let s = done.sessions[0]
         XCTAssertEqual(s.submissionId, "id1")
@@ -161,8 +162,51 @@ final class LessonEngineTests: XCTestCase {
         var e = LessonEngine(state: LessonState(queue: instances, practice: true), courseCode: "fa", grader: FakeGrader(["Correct"]))
         e.submit("a")
         let done = e.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 1])
-        XCTAssertTrue(done.sessions.isEmpty)
-        XCTAssertNil(done.locallyCompleted)
+        XCTAssertTrue(done?.sessions.isEmpty ?? false)
+        XCTAssertNil(done?.locallyCompleted)
+    }
+
+    func testRestartAfterPracticeAgainStillCountsOnRetake() {
+        var e = engine(["a"], grader: FakeGrader(["Correct", "Correct", "Correct"]))
+        let again = e.state.queue
+        e.submit("a")
+        e.restart(again, practice: true)
+        XCTAssertTrue(e.state.practice)
+        e.submit("a")
+        e.restart(again, practice: false)
+        XCTAssertFalse(e.state.practice)
+        e.submit("a")
+        XCTAssertEqual(e.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 1])?.sessions.count, 1)
+    }
+
+    func testRestartOfPracticeSessionStaysPractice() {
+        let skill = SkillArtifact(id: "s", title: "S", exercises: [exercise("a")])
+        let instances = buildInstances(skills: [(ref: SkillRef(unitKey: nil, skillKey: "s"), skill: skill)], cards: [:])
+        var e = LessonEngine(state: LessonState(queue: instances, practice: true), courseCode: "fa", grader: nil)
+        e.restart(instances, practice: false)
+        XCTAssertTrue(e.state.practice)
+    }
+
+    func testCompletionIdsAreStableAcrossCallsAndRestoredState() throws {
+        var e = engine(["a", "b"], grader: FakeGrader(["Correct", "Correct"]))
+        e.submit("a")
+        e.submit("b")
+        var n = 0
+        let first = e.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 2], newId: { n += 1; return "id\(n)" })
+        let second = e.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 2], newId: { n += 1; return "id\(n)" })
+        XCTAssertEqual(first?.sessions.map { $0.submissionId }, ["id1"])
+        XCTAssertEqual(second?.sessions.map { $0.submissionId }, ["id1"])
+        let back = try JSONDecoder().decode(LessonState.self, from: JSONEncoder().encode(e.state))
+        var restored = LessonEngine(state: back, courseCode: "fa", grader: nil)
+        let third = restored.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 2], newId: { n += 1; return "id\(n)" })
+        XCTAssertEqual(third?.sessions.map { $0.submissionId }, ["id1"])
+    }
+
+    func testCompletionRefusedUntilFinished() {
+        var e = engine(["a", "b"], grader: FakeGrader(["Correct"]))
+        e.submit("a")
+        XCTAssertNil(e.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 2]))
+        XCTAssertNil(e.state.submissionIds)
     }
 
     func testDueTagFilterAndStateRoundTrip() throws {

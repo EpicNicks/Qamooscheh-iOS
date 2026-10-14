@@ -85,6 +85,8 @@ public struct LessonState: Codable, Equatable, Sendable {
     public var xp: Int
     /// Local practice: nothing is submitted, so nothing counts toward progress.
     public var practice: Bool
+    /// Submission ids minted for this lesson, by session group (see `sessionGroupKeys`). Stamped once by `LessonEngine.completion` so repeating it, or completing a restored finished state, yields the same ids and the queue dedupes.
+    public var submissionIds: [String: String]?
 
     public init(queue: [ExerciseInstance], totalCount: Int? = nil, items: [RecordedItem] = [], firstTryCorrect: Int = 0, firstTryPoints: Double = 0, uncheckedFirstTries: Int = 0, xp: Int = 0, practice: Bool = false) {
         self.queue = queue
@@ -141,16 +143,27 @@ public struct LessonState: Codable, Equatable, Sendable {
         LessonState(queue: instances, practice: practice)
     }
 
+    private static func groupKey(_ recorded: RecordedItem) -> String {
+        (recorded.unitKey ?? "<none>") + "|" + recorded.skillKey
+    }
+
+    /// The session groups (unit and skill) in the order first played; one session each.
+    public func sessionGroupKeys() -> [String] {
+        var order: [String] = []
+        var seen = Set<String>()
+        for recorded in items {
+            let id = LessonState.groupKey(recorded)
+            if seen.insert(id).inserted { order.append(id) }
+        }
+        return order
+    }
+
     /// One session per skill played, in the order first played, all stamped with when the lesson finished (web finishLesson). Each carries its own submissionId, so the result goes straight to `OfflineQueue.enqueue`. Empty in practice mode.
     public func buildSessions(courseCode: String, courseVersion: Int, occurredAt: Date, newId: () -> String) -> [SubmittedSession] {
         if practice { return [] }
-        var order: [String] = []
+        let order = sessionGroupKeys()
         var groups: [String: [RecordedItem]] = [:]
-        for recorded in items {
-            let id = (recorded.unitKey ?? "<none>") + "|" + recorded.skillKey
-            if groups[id] == nil { order.append(id) }
-            groups[id, default: []].append(recorded)
-        }
+        for recorded in items { groups[LessonState.groupKey(recorded), default: []].append(recorded) }
         var sessions: [SubmittedSession] = []
         for id in order {
             let recorded = groups[id] ?? []
@@ -216,11 +229,14 @@ public struct LessonEngine {
     public private(set) var state: LessonState
     public let courseCode: String?
     private let grader: Grader?
+    /// Practice as the session was opened (Android's ViewModel-level flag): a restart may turn practice on, but only this decides it stays on.
+    private let sessionPractice: Bool
     /// False once the device can't grade: every answer is pending.
     public var gradingOnDevice: Bool
 
     public init(state: LessonState, courseCode: String?, grader: Grader?, gradingOnDevice: Bool = true) {
         self.state = state
+        self.sessionPractice = state.practice
         self.courseCode = courseCode
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
@@ -250,13 +266,23 @@ public struct LessonEngine {
     }
 
     public mutating func restart(_ instances: [ExerciseInstance], practice: Bool) {
-        state = state.restart(instances, practice: practice || state.practice)
+        state = state.restart(instances, practice: practice || sessionPractice)
     }
 
-    /// The lesson's end: sessions for `OfflineQueue.enqueue` (empty for practice) and the local completion guess.
-    public func completion(courseCode: String, courseVersion: Int, occurredAt: Date, exerciseCountBySkill: [String: Int], newId: () -> String = { UUID().uuidString }) -> LessonCompletion {
-        LessonCompletion(
-            sessions: state.buildSessions(courseCode: courseCode, courseVersion: courseVersion, occurredAt: occurredAt, newId: newId),
+    /// The lesson's end: sessions for `OfflineQueue.enqueue` (empty for practice) and the local completion guess. nil until the lesson is finished. Submission ids are minted once and kept in the state, so calling again returns the same ids.
+    public mutating func completion(courseCode: String, courseVersion: Int, occurredAt: Date, exerciseCountBySkill: [String: Int], newId: () -> String = { UUID().uuidString }) -> LessonCompletion? {
+        if !state.finished { return nil }
+        var ids = state.submissionIds ?? [:]
+        let keys = state.sessionGroupKeys()
+        for key in keys where ids[key] == nil { ids[key] = newId() }
+        state.submissionIds = ids
+        var next = 0
+        let sessions = state.buildSessions(courseCode: courseCode, courseVersion: courseVersion, occurredAt: occurredAt, newId: {
+            defer { next += 1 }
+            return ids[keys[next]] ?? ""
+        })
+        return LessonCompletion(
+            sessions: sessions,
             locallyCompleted: state.localLessonCompleted(exerciseCountBySkill: exerciseCountBySkill),
             xp: state.xp,
             score: state.score
