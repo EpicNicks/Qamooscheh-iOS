@@ -53,7 +53,7 @@ final class LeaguesModelTests: XCTestCase {
         XCTAssertEqual(ui.rows.filter { $0.isMe }.map { $0.rank }, [13])
         XCTAssertFalse(ui.rows.contains { $0.outcome == .demoted })
         XCTAssertEqual(ui.rows[12].outcome, .held)
-        let upper = makeLeagueUi(league(1, 13), viewerId: { nil })
+        let upper = makeLeagueUi(league(1, 13), viewerId: nil)
         XCTAssertEqual(upper.rows[12].outcome, .demoted)
         XCTAssertTrue(upper.rows.allSatisfy { !$0.isMe })
         XCTAssertNil(upper.rows[2].displayName)
