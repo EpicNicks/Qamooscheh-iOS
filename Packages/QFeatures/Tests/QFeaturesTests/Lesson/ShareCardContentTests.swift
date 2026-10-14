@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import SwiftUI
 @testable import QFeatures
 
 final class ShareCardContentTests: XCTestCase {
