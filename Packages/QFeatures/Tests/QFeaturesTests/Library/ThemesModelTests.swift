@@ -171,6 +171,11 @@ final class ThemesModelTests: XCTestCase {
         XCTAssertEqual(picker.startTitle, "Start remix")
     }
 
+    func testPlaceholderSectionsFollowThemes() {
+        XCTAssertEqual(LibraryPlaceholders.sectionTitles, ["Stories", "Conversations", "Songs"])
+        XCTAssertEqual(LibraryPlaceholders.comingSoon, "Coming soon")
+    }
+
     func testPickerUpdateKeepsPickAndDropsVanishedTopics() {
         let all = makeLibraryTopics(sampleData()).allTopics
         let picker = RemixPickerModel(allTopics: all)

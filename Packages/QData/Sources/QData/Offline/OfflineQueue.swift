@@ -30,6 +30,11 @@ public struct QueuedSession: Codable, Equatable, Sendable {
         case submissionId, session, queuedAtMillis, attempts, nextEligibleAtMillis, lastError, rejectionReason
     }
 
+    /// Top-level keys this build owns; any other key on a stored entry is preserved on rewrite.
+    static let knownKeys: [String] = [
+        "submissionId", "session", "queuedAtMillis", "attempts", "nextEligibleAtMillis", "lastError", "rejectionReason"
+    ]
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         submissionId = try c.decode(String.self, forKey: .submissionId)
@@ -86,8 +91,9 @@ public actor OfflineQueue {
         let now = nowMillis()
         let state = try locked { try readState(userId) }
         let stuck = state.foreign.filter { !OfflineQueue.isRejected($0) }
-        if !stuck.isEmpty {
-            throw OfflineQueueError.undecodableEntries(count: stuck.count, submissionIds: stuck.compactMap { OfflineQueue.entryId($0) })
+        let rootCount = state.unreadableRoot == nil ? 0 : 1
+        if !stuck.isEmpty || rootCount > 0 {
+            throw OfflineQueueError.undecodableEntries(count: stuck.count + rootCount, submissionIds: stuck.compactMap { OfflineQueue.entryId($0) })
         }
         return state.records.filter {
             $0.rejectionReason == nil && (ignoringBackoff || ($0.nextEligibleAtMillis ?? 0) <= now)
@@ -99,11 +105,14 @@ public actor OfflineQueue {
         let state = try locked { try readState(userId) }
         return state.records.filter { $0.rejectionReason == nil }.count
             + state.foreign.filter { !OfflineQueue.isRejected($0) }.count
+            + (state.unreadableRoot == nil ? 0 : 1)
     }
 
     /// Number of stored entries this build cannot decode (kept on disk, never deleted).
+    /// A file whose JSON root is not an array counts as one undecodable entry.
     public func undecodableCount(userId: String) throws -> Int {
-        try locked { try readState(userId) }.foreign.count
+        let state = try locked { try readState(userId) }
+        return state.foreign.count + (state.unreadableRoot == nil ? 0 : 1)
     }
 
     /// True when `queue` holds a submission id that isn't in `knownIds`.
@@ -235,6 +244,8 @@ public actor OfflineQueue {
         var foreign: [Any] = []
         /// Raw bytes of a file that was not a JSON array; saved aside before overwrite.
         var unreadableRoot: Data?
+        /// Raw JSON object of each decoded entry by submissionId, so fields this build does not know survive a rewrite.
+        var raw: [String: [String: Any]] = [:]
     }
 
     /// Per-user file name; hex of the UTF-8 id so any id is filesystem-safe and distinct.
@@ -272,6 +283,9 @@ public actor OfflineQueue {
                let bytes = try? JSONSerialization.data(withJSONObject: element),
                let record = try? decoder.decode(QueuedSession.self, from: bytes) {
                 state.records.append(record)
+                if let dict = element as? [String: Any], state.raw[record.submissionId] == nil {
+                    state.raw[record.submissionId] = dict
+                }
             } else {
                 state.foreign.append(element)
             }
@@ -295,7 +309,15 @@ public actor OfflineQueue {
         var elements: [Any] = []
         for record in state.records {
             let bytes = try encoder.encode(record)
-            elements.append(try JSONSerialization.jsonObject(with: bytes))
+            let encoded = try JSONSerialization.jsonObject(with: bytes)
+            if var merged = state.raw[record.submissionId], let fresh = encoded as? [String: Any] {
+                // Unknown top-level keys from the stored object ride along; known keys come from the decoded record.
+                for key in QueuedSession.knownKeys { merged[key] = nil }
+                for (key, value) in fresh { merged[key] = value }
+                elements.append(merged)
+            } else {
+                elements.append(encoded)
+            }
         }
         elements.append(contentsOf: state.foreign)
         let data = try JSONSerialization.data(withJSONObject: elements)

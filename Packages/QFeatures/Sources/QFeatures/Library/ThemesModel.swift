@@ -72,6 +72,12 @@ public func makeLibraryTopics(_ data: ThemeLibraryData) -> LibraryTopics {
     return LibraryTopics(topics: roots, allTopics: all)
 }
 
+/// Library sections that are not built yet: a header plus a "Coming soon" row (Android LibraryScreen).
+public enum LibraryPlaceholders {
+    public static let comingSoon = "Coming soon"
+    public static let sectionTitles: [String] = ["Stories", "Conversations", "Songs"]
+}
+
 public enum LibraryState: Equatable, Sendable {
     case loading
     case unavailable(String)

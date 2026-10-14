@@ -45,6 +45,14 @@ private actor FakeOnboardingService: OnboardingService {
             graders: [], enrolledCourseCodes: courseCodes, onboardingComplete: false)
     }
 
+    func enroll(courseCode: String) async throws -> BootstrapResponse {
+        BootstrapResponse(graders: [], enrolledCourseCodes: [courseCode], onboardingComplete: true)
+    }
+
+    func switchActive(courseCode: String) async throws -> BootstrapResponse {
+        BootstrapResponse(graders: [], enrolledCourseCodes: [courseCode], onboardingComplete: true)
+    }
+
     func completeOnboarding() async throws -> Bool {
         completeCalls += 1
         try await pause()
