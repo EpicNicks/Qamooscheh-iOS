@@ -236,3 +236,29 @@ public func streakLine(days: Int) -> String {
 public func goalCelebrationLine(xpToday: Int, goalXp: Int) -> String {
     return "\(xpToday) of \(goalXp) XP today. Nice work."
 }
+
+/// Key that resets per-answer UI state (Android keys revealed on instance key + submitted text).
+public func feedbackResetKey(instanceKey: String, submittedText: String) -> String {
+    return instanceKey + "|" + submittedText
+}
+
+/// Spoken when the verdict panel appears (Android: polite live region).
+public func feedbackAnnouncement(_ kind: FeedbackKind) -> String {
+    switch kind {
+    case .correct: return "Correct!"
+    case .incorrect: return "Not quite."
+    case .pending: return "Answer saved. It will be checked when you sync."
+    }
+}
+
+/// Try again is never offered for a rejected save; a rejected session is never resubmitted.
+public func offersTryAgain(end: LessonEndKind) -> Bool {
+    if case .rejected = end { return false }
+    return true
+}
+
+/// Physical x offset of the pass-mark tick; mirrored under right-to-left layout.
+public func passMarkOffset(width: Double, mark: Double, rightToLeft: Bool) -> Double {
+    let x = width * mark
+    return rightToLeft ? -x : x
+}

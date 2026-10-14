@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 import QDesign
 import QDomain
 import QModel
@@ -95,11 +98,6 @@ public struct AnswerFeedbackView: View {
     private let startRevealed: Bool
     private let animated: Bool
 
-    @State private var revealed = false
-    @State private var reporting = false
-    @State private var showOthers = false
-    @Environment(\.colorScheme) private var colorScheme
-
     public init(
         review: FeedbackReview,
         onContinue: @escaping () -> Void,
@@ -117,6 +115,29 @@ public struct AnswerFeedbackView: View {
     }
 
     public var body: some View {
+        AnswerFeedbackContent(
+            review: review, onContinue: onContinue, onPlayAnswer: onPlayAnswer,
+            makeReportModel: makeReportModel, startRevealed: startRevealed, animated: animated
+        )
+        .id(feedbackResetKey(instanceKey: review.instance.key, submittedText: review.submittedText))
+    }
+}
+
+/// Holds the per-answer state; `.id` on it resets revealed/reporting/showOthers for each new answer.
+private struct AnswerFeedbackContent: View {
+    let review: FeedbackReview
+    let onContinue: () -> Void
+    let onPlayAnswer: (() -> Void)?
+    let makeReportModel: (() -> ReportIssueModel)?
+    let startRevealed: Bool
+    let animated: Bool
+
+    @State private var revealed = false
+    @State private var reporting = false
+    @State private var showOthers = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
         let p = lessonPalette(colorScheme)
         let kind = feedbackKind(review.feedback.verdict)
         let fill: UInt32 = kind == .pending ? p.surface : (kind == .correct ? p.successBg : p.dangerBg)
@@ -181,12 +202,13 @@ public struct AnswerFeedbackView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(argb: fill))
         .accessibilityElement(children: .contain)
+        .onAppear { postVerdictAnnouncement(feedbackAnnouncement(kind)) }
         .sheet(isPresented: $showOthers) {
             AlsoAcceptedSheet(lines: others, exercise: review.instance.exercise)
         }
         .sheet(isPresented: $reporting) {
             if let make = makeReportModel {
-                ReportIssueSheet(model: make(), onClose: { reporting = false })
+                ReportIssueHost(make: make, onClose: { reporting = false })
             }
         }
     }
@@ -227,6 +249,27 @@ private struct AlsoAcceptedSheet: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Close") { dismiss() } } }
         }
     }
+}
+
+/// Creates the report model once per sheet presentation so parent re-renders cannot reset the form.
+private struct ReportIssueHost: View {
+    @StateObject private var model: ReportIssueModel
+    private let onClose: () -> Void
+
+    init(make: @escaping () -> ReportIssueModel, onClose: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: make())
+        self.onClose = onClose
+    }
+
+    var body: some View {
+        ReportIssueSheet(model: model, onClose: onClose)
+    }
+}
+
+private func postVerdictAnnouncement(_ text: String) {
+    #if canImport(UIKit)
+    UIAccessibility.post(notification: .announcement, argument: text)
+    #endif
 }
 
 /// Flag an exercise as wrong or confusing (Android ReportDialog), as a sheet.
@@ -308,6 +351,7 @@ public struct LessonScoreBar: View {
     @State private var shown: Double = 0
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
 
     public init(correct: Int, total: Int, score: Double, passMark: Double?, animated: Bool = true) {
         self.correct = correct
@@ -330,7 +374,7 @@ public struct LessonScoreBar: View {
                     Rectangle().fill(Color(argb: p.border))
                     Rectangle().fill(Color(argb: p.primary)).frame(width: proxy.size.width * CGFloat(current / 100))
                     if let mark = passMark {
-                        Rectangle().fill(Color(argb: p.text)).frame(width: 3).offset(x: proxy.size.width * CGFloat(mark))
+                        Rectangle().fill(Color(argb: p.text)).frame(width: 3).offset(x: CGFloat(passMarkOffset(width: Double(proxy.size.width), mark: mark, rightToLeft: layoutDirection == .rightToLeft)))
                     }
                     PercentLabel(value: current)
                         .font(.system(size: 16, weight: .bold))
@@ -406,12 +450,14 @@ public struct LessonResultsView: View {
     public var body: some View {
         let p = lessonPalette(colorScheme)
         let copy = lessonResultsCopy(end: end, savedPractice: savedPractice)
+        let retry: (() -> Void)? = offersTryAgain(end: end) ? onTryAgain : nil
         ScrollView {
             VStack(spacing: Spacing.standard.s3) {
                 Text(copy.title)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundColor(Color(argb: p.text))
                     .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
                 if !copy.body.isEmpty {
                     Text(copy.body)
                         .font(.system(size: 17))
@@ -429,6 +475,7 @@ public struct LessonResultsView: View {
                         Text("\u{1F525} " + streakLine(days: days))
                             .font(.system(size: 17, weight: .bold))
                             .foregroundColor(Color(argb: p.streakFire))
+                            .accessibilityLabel(streakLine(days: days))
                     }
                     if copy.passed, let today = stats.goalXpToday, let goal = stats.goalXp {
                         DailyGoalRingView(xp: today, goal: goal, palette: p)
@@ -438,10 +485,10 @@ public struct LessonResultsView: View {
                 }
                 VStack(spacing: Spacing.standard.s2) {
                     if copy.showsScore {
-                        if !copy.passed && onTryAgain != nil, let again = onTryAgain {
+                        if !copy.passed, let again = retry {
                             actionButton("Try again", primary: true, p: p, action: again)
                         }
-                        actionButton(savedPractice ? "Back to vocabulary" : "Back to path", primary: copy.passed || onTryAgain == nil, p: p, action: onBack)
+                        actionButton(savedPractice ? "Back to vocabulary" : "Back to path", primary: copy.passed || retry == nil, p: p, action: onBack)
                         if copy.passed, end != .practice, !savedPractice, let share = onShare {
                             actionButton("Share", primary: false, p: p, action: share)
                         }

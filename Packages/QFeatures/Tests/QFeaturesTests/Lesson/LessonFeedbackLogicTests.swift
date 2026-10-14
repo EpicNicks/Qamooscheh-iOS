@@ -131,6 +131,21 @@ final class LessonFeedbackLogicTests: XCTestCase {
         XCTAssertEqual(streakLine(days: 5), "5 day streak")
         XCTAssertEqual(goalCelebrationLine(xpToday: 50, goalXp: 50), "50 of 50 XP today. Nice work.")
     }
+
+    func testTryAgainNeverForRejected() {
+        XCTAssertFalse(offersTryAgain(end: .rejected(partial: false, reason: nil)))
+        XCTAssertFalse(offersTryAgain(end: .rejected(partial: true, reason: "x")))
+        XCTAssertTrue(offersTryAgain(end: .saved(completed: false, alreadyRecorded: false)))
+    }
+
+    func testResetKeyAndAnnouncementAndRtlOffset() {
+        XCTAssertNotEqual(feedbackResetKey(instanceKey: "a", submittedText: "x"), feedbackResetKey(instanceKey: "a", submittedText: "y"))
+        XCTAssertNotEqual(feedbackResetKey(instanceKey: "a", submittedText: "x"), feedbackResetKey(instanceKey: "b", submittedText: "x"))
+        XCTAssertEqual(feedbackAnnouncement(.correct), "Correct!")
+        XCTAssertEqual(feedbackAnnouncement(.incorrect), "Not quite.")
+        XCTAssertEqual(passMarkOffset(width: 200, mark: 0.8, rightToLeft: false), 160, accuracy: 0.001)
+        XCTAssertEqual(passMarkOffset(width: 200, mark: 0.8, rightToLeft: true), -160, accuracy: 0.001)
+    }
 }
 
 private actor ReportBox {
