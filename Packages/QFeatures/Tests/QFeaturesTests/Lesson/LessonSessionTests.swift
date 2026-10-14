@@ -173,7 +173,7 @@ final class LessonSessionTests: XCTestCase {
     }
 
     func testThrownSubmitEndsQueuedNeverRejected() async throws {
-        let setup = LessonSetup(courseCode: "fa", courseVersion: 1, instances: [instance(0, .wordBank, answer: "a")])
+        let setup = LessonSetup(courseCode: "fa", courseVersion: 1, instances: [instance(0, .wordBank, answer: "a")], exerciseCountBySkill: ["s": 1])
         let grader: Grader? = ScriptedGrader()
         let deps = LessonDependencies(grader: grader, gradingOnDevice: true, submit: { _ in throw Boom() })
         let session = LessonSession(setup: setup, dependencies: deps)

@@ -236,7 +236,7 @@ final class LessonSessionDeliveryTests: XCTestCase {
         await second.waitForDelivery()
         XCTAssertEqual(sent.log.count, 1)
         XCTAssertEqual(sent.log.first, saved?.submissionIds?.values.first)
-        XCTAssertEqual(second.phase, .ended(.queued(completed: true)))
+        XCTAssertEqual(second.phase, .ended(.queued(completed: false)))
     }
 
     func testPracticeAgainDraftIsKeptApartFromTheCountedDraft() {
@@ -324,7 +324,7 @@ final class LessonEnvironmentTests: XCTestCase {
     private func lesson() -> LessonSetup {
         let exercise = ExerciseArtifact(type: .wordBank, scriptMode: .native, prompt: "p", tiles: ["a"], answer: ["a"], tags: ["t"])
         let instance = ExerciseInstance(key: "u/s/0", unitKey: "u", skillKey: "s", ordinal: 0, exercise: exercise, renderType: .wordBank)
-        return LessonSetup(courseCode: "fa", courseVersion: 1, instances: [instance])
+        return LessonSetup(courseCode: "fa", courseVersion: 1, instances: [instance], exerciseCountBySkill: ["s": 1])
     }
 
     func testNoUserBlocksTheLessonBeforeItStarts() async {
