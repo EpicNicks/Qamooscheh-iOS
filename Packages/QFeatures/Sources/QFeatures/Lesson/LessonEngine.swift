@@ -87,6 +87,8 @@ public struct LessonState: Codable, Equatable, Sendable {
     public var practice: Bool
     /// Submission ids minted for this lesson, by session group (see `sessionGroupKeys`). Stamped once by `LessonEngine.completion` so repeating it, or completing a restored finished state, yields the same ids and the queue dedupes.
     public var submissionIds: [String: String]?
+    /// Practice as the session was opened (Android's planned-session flag), kept so an engine rebuilt after process death mid "practice again" doesn't mistake the round's practice for the session's. nil in states saved before this field existed.
+    public var sessionPractice: Bool?
 
     public init(queue: [ExerciseInstance], totalCount: Int? = nil, items: [RecordedItem] = [], firstTryCorrect: Int = 0, firstTryPoints: Double = 0, uncheckedFirstTries: Int = 0, xp: Int = 0, practice: Bool = false) {
         self.queue = queue
@@ -234,9 +236,13 @@ public struct LessonEngine {
     /// False once the device can't grade: every answer is pending.
     public var gradingOnDevice: Bool
 
-    public init(state: LessonState, courseCode: String?, grader: Grader?, gradingOnDevice: Bool = true) {
+    /// `sessionPractice` is the flag of the planned session; when nil it comes from the saved state, else from `state.practice` (a fresh lesson).
+    public init(state: LessonState, courseCode: String?, grader: Grader?, gradingOnDevice: Bool = true, sessionPractice: Bool? = nil) {
+        let session = sessionPractice ?? state.sessionPractice ?? state.practice
+        var state = state
+        state.sessionPractice = session
         self.state = state
-        self.sessionPractice = state.practice
+        self.sessionPractice = session
         self.courseCode = courseCode
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
@@ -266,7 +272,9 @@ public struct LessonEngine {
     }
 
     public mutating func restart(_ instances: [ExerciseInstance], practice: Bool) {
-        state = state.restart(instances, practice: practice || sessionPractice)
+        var next = state.restart(instances, practice: practice || sessionPractice)
+        next.sessionPractice = sessionPractice
+        state = next
     }
 
     /// The lesson's end: sessions for `OfflineQueue.enqueue` (empty for practice) and the local completion guess. nil until the lesson is finished. Submission ids are minted once and kept in the state, so calling again returns the same ids.

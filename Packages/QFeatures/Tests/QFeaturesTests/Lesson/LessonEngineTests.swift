@@ -130,8 +130,7 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertTrue(e.state.finished)
         let when = Date(timeIntervalSince1970: 1_000)
         var n = 0
-        let done = e.completion(courseCode: "fa", courseVersion: 7, occurredAt: when, exerciseCountBySkill: ["s": 4], newId: { n += 1; return "id\(n)" })
-        guard let done = done else { return XCTFail("finished lesson completes") }
+        guard let done = e.completion(courseCode: "fa", courseVersion: 7, occurredAt: when, exerciseCountBySkill: ["s": 4], newId: { n += 1; return "id\(n)" }) else { return XCTFail("finished lesson completes") }
         XCTAssertEqual(done.sessions.count, 1)
         let s = done.sessions[0]
         XCTAssertEqual(s.submissionId, "id1")
@@ -185,6 +184,29 @@ final class LessonEngineTests: XCTestCase {
         var e = LessonEngine(state: LessonState(queue: instances, practice: true), courseCode: "fa", grader: nil)
         e.restart(instances, practice: false)
         XCTAssertTrue(e.state.practice)
+    }
+
+    func testRestoredPracticeAgainRoundKeepsRetakeCounted() throws {
+        var e = engine(["a"], grader: FakeGrader(["Correct", "Correct", "Correct"]))
+        let again = e.state.queue
+        e.submit("a")
+        e.restart(again, practice: true)
+        // process death mid practice-again round
+        let back = try JSONDecoder().decode(LessonState.self, from: JSONEncoder().encode(e.state))
+        XCTAssertTrue(back.practice)
+        var restored = LessonEngine(state: back, courseCode: "fa", grader: FakeGrader(["Correct"]))
+        restored.restart(again, practice: false)
+        XCTAssertFalse(restored.state.practice)
+        restored.submit("a")
+        XCTAssertEqual(restored.completion(courseCode: "fa", courseVersion: 1, occurredAt: Date(), exerciseCountBySkill: ["s": 1])?.sessions.count, 1)
+        // an old saved state without the field falls back to its practice flag
+        var legacy = LessonEngine(state: LessonState(queue: again, practice: true), courseCode: "fa", grader: nil, sessionPractice: nil)
+        legacy.restart(again, practice: false)
+        XCTAssertTrue(legacy.state.practice)
+        // an explicit session flag wins over the state's round flag
+        var planned = LessonEngine(state: LessonState(queue: again, practice: true), courseCode: "fa", grader: nil, sessionPractice: false)
+        planned.restart(again, practice: false)
+        XCTAssertFalse(planned.state.practice)
     }
 
     func testCompletionIdsAreStableAcrossCallsAndRestoredState() throws {
