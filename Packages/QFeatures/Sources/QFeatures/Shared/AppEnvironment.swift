@@ -111,7 +111,7 @@ public struct AppEnvironment: @unchecked Sendable {
         }
         return AppEnvironment(
             profile: LiveProfileService(client: client),
-            streak: LiveStreakService(client: client),
+            streak: StreakRepository(client: client),
             friends: FriendsRepository(client: client),
             leagues: LeagueRepository(client: client),
             vocabulary: LiveVocabularySource(

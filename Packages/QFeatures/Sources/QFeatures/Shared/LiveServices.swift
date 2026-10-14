@@ -20,27 +20,6 @@ public struct LiveProfileService: ProfileService {
     }
 }
 
-/// GET /v1/streak, POST/DELETE /v1/streak/pause. The pause calls answer with the new streak, which the screen refetches.
-public struct LiveStreakService: StreakService {
-    private let client: ApiClient
-
-    public init(client: ApiClient) {
-        self.client = client
-    }
-
-    public func fetch() async throws -> StreakResponse {
-        try await client.send(.get, "/v1/streak")
-    }
-
-    public func pause(_ request: StreakPauseRequest) async throws {
-        try await client.sendNoContent(.post, "/v1/streak/pause", body: request)
-    }
-
-    public func cancelPause() async throws {
-        try await client.sendNoContent(.delete, "/v1/streak/pause")
-    }
-}
-
 /// Submits flashcards, then runs `afterSubmit` so the caller can refresh the day's progress and streak.
 public struct LiveFlashcardSubmitter: FlashcardSubmitter {
     private let repository: VocabRepository
