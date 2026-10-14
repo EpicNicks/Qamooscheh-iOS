@@ -109,6 +109,19 @@ final class VocabDataTests: XCTestCase {
         XCTAssertEqual(try backing.read(key + ".corrupt.2"), Data("again".utf8))
     }
 
+    func testClearAlsoRemovesQuarantinedCopies() async throws {
+        let backing = InMemoryContentStore()
+        let key = CardStateStore.key(userId: "u")
+        try backing.write(Data("not json".utf8), to: key)
+        let store = CardStateStore(store: backing)
+        try await store.merge(userId: "u", cards: [card("a", stability: 1, reviewed: 1)])
+        try backing.write(Data("again".utf8), to: key)
+        try await store.merge(userId: "u", cards: [card("b", stability: 1, reviewed: 1)])
+        XCTAssertNotNil(try backing.read(key + ".corrupt.2"))
+        try await store.clear(userId: "u")
+        XCTAssertTrue(backing.keys.isEmpty)
+    }
+
     func testOneBadCardKeepsTheOthersAndQuarantinesTheFile() async throws {
         let backing = InMemoryContentStore()
         let key = CardStateStore.key(userId: "u")

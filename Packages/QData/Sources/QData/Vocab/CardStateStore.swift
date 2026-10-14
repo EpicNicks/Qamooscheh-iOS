@@ -85,6 +85,14 @@ public actor CardStateStore {
 
     /// Forgets this user's cards (sign-out of that account).
     public func clear(userId: String) throws {
-        try store.remove(CardStateStore.key(userId: userId))
+        let key = CardStateStore.key(userId: userId)
+        try store.remove(key)
+        // Quarantined copies hold this user's cards too.
+        try store.remove(key + ".corrupt")
+        var n = 2
+        while try store.read(key + ".corrupt." + String(n)) != nil {
+            try store.remove(key + ".corrupt." + String(n))
+            n += 1
+        }
     }
 }
