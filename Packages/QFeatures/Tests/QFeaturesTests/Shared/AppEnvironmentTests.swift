@@ -224,6 +224,29 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(data?.headers["l1"], ThemeLessonHeader(title: "Greetings", category: .standard))
     }
 
+    func testOfflineLoadsUseCachedPin() async throws {
+        let store = try seededStore()
+        let env = makeEnv(store: store)
+        EnvStubProtocol.install { _ in EnvStub(200, self.bootstrapWithCourse) }
+        let online = try await env.themes.load()
+        XCTAssertNotNil(online)
+        EnvStubProtocol.install { _ in EnvStub(503, #"{"error":"down"}"#) }
+        let offlineThemes = try await env.themes.load()
+        XCTAssertEqual(offlineThemes?.index.themes.map { $0.id }, ["food"])
+        let offlineVocab = try await env.vocabulary.load()
+        guard case .ready = offlineVocab else { return XCTFail("expected ready, got \(offlineVocab)") }
+        let pin = try await env.pinnedCourse()
+        XCTAssertEqual(pin, course)
+    }
+
+    func testOfflineWithoutCachedPinStillThrows() async {
+        EnvStubProtocol.install { _ in EnvStub(503, #"{"error":"down"}"#) }
+        do {
+            _ = try await makeEnv(store: InMemoryContentStore()).themes.load()
+            XCTFail("expected throw")
+        } catch {}
+    }
+
     func testThemesNilWhenNotDownloaded() async throws {
         EnvStubProtocol.install { _ in EnvStub(200, self.bootstrapWithCourse) }
         let data = try await makeEnv().themes.load()
@@ -299,8 +322,14 @@ final class AppEnvironmentTests: XCTestCase {
 
     func testContentKeyResolvesDotDot() {
         XCTAssertEqual(CourseContentReader.key(course: course, path: "units/u1.json"), "course/fa/v3/units/u1.json")
-        XCTAssertEqual(CourseContentReader.key(course: course, path: "../../../audio/x.mp3"), "audio/x.mp3")
-        XCTAssertNil(CourseContentReader.key(course: course, path: "../../../../x"))
+        XCTAssertEqual(CourseContentReader.key(course: course, path: "units/../skills/s1.json"), "course/fa/v3/skills/s1.json")
+        XCTAssertNil(CourseContentReader.key(course: course, path: "../x"))
+        XCTAssertNil(CourseContentReader.key(course: course, path: "../../other/v1/x.json"))
+        XCTAssertNil(CourseContentReader.key(course: course, path: "../../../audio/x.mp3"))
+        XCTAssertNil(CourseContentReader.key(course: course, path: "units/../../x"))
+        XCTAssertNil(CourseContentReader.key(course: course, path: "/abs/x.json"))
+        XCTAssertNil(CourseContentReader.key(course: course, path: ""))
+        XCTAssertNil(CourseContentReader.key(course: course, path: ".."))
         XCTAssertNil(CourseContentReader.key(course: course, path: "a//b"))
     }
 }

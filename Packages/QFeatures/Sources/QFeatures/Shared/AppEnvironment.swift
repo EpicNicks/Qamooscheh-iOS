@@ -98,8 +98,16 @@ public struct AppEnvironment: @unchecked Sendable {
         let vocab = VocabRepository(client: client)
         let userId: @Sendable () async -> String? = { await sessions.load()?.userId }
         let pinned: @Sendable () async throws -> CourseRef? = {
-            let response: BootstrapResponse = try await client.send(.get, "/v1/bootstrap")
-            return response.course
+            let uid = await userId()
+            do {
+                let response: BootstrapResponse = try await client.send(.get, "/v1/bootstrap")
+                PinCache.save(response.course, userId: uid, store: contentStore)
+                return response.course
+            } catch {
+                // Offline (or server down): fall back to the last pin this user saw, like Android.
+                if let cached = PinCache.load(userId: uid, store: contentStore) { return cached }
+                throw error
+            }
         }
         return AppEnvironment(
             profile: LiveProfileService(client: client),
@@ -123,5 +131,28 @@ public struct AppEnvironment: @unchecked Sendable {
                 await auth.logout()
             },
             previewer: previewer)
+    }
+}
+
+/// The last pinned course seen from /v1/bootstrap, per user, so offline loads still find the downloaded course.
+enum PinCache {
+    static func key(userId: String?) -> String? {
+        guard let userId, !userId.isEmpty,
+              userId.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return nil }
+        return "pin/\(userId).json"
+    }
+
+    static func save(_ course: CourseRef?, userId: String?, store: ContentFileStore) {
+        guard let key = key(userId: userId) else { return }
+        if let course, let data = try? QJSON.makeEncoder().encode(course) {
+            try? store.write(data, to: key)
+        } else if course == nil {
+            try? store.remove(key)
+        }
+    }
+
+    static func load(userId: String?, store: ContentFileStore) -> CourseRef? {
+        guard let key = key(userId: userId), let data = try? store.read(key) else { return nil }
+        return try? QJSON.makeDecoder().decode(CourseRef.self, from: data)
     }
 }

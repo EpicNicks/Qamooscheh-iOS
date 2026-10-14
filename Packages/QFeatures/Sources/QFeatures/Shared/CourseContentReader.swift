@@ -12,22 +12,23 @@ public struct CourseContentReader: Sendable {
         self.store = store
     }
 
-    /// The store key for a path relative to the version root; ".." resolves as the CDN does.
-    /// Nil for an empty segment or a path that climbs out of the tree.
+    /// The store key for a path relative to the version root; ".." resolves within the version tree only.
+    /// Nil for an empty or "." segment, an absolute path, or one that climbs above the version root.
     static func key(course: CourseRef, path: String) -> String? {
-        var parts = ["course", course.code, "v\(course.version)"]
+        let root = ["course", course.code, "v\(course.version)"]
+        var parts = root
         for segment in path.split(separator: "/", omittingEmptySubsequences: false).map(String.init) {
             switch segment {
             case "", ".":
                 return nil
             case "..":
-                if parts.isEmpty { return nil }
+                if parts.count <= root.count { return nil }
                 parts.removeLast()
             default:
                 parts.append(segment)
             }
         }
-        return parts.isEmpty ? nil : parts.joined(separator: "/")
+        return parts.count > root.count ? parts.joined(separator: "/") : nil
     }
 
     /// True when every file of the pinned version is on disk.
