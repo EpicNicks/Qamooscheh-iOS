@@ -156,12 +156,20 @@ public struct LessonEnvironment {
         let submit = self.submit
         let enqueue = self.enqueue
         var draft = LessonDraftStore.none
+        var practiceDraft: LessonDraftStore?
         if let directory = draftDirectory {
             let key = LessonDraftStore.key(
                 userId: id, courseCode: setup.courseCode, unitKey: route.unitKey, skillKey: route.skillKey,
                 practice: setup.practice, checkpoint: setup.isCheckpoint
             )
             draft = LessonDraftStore.file(directory: directory, key: key)
+            if !setup.practice {
+                let practiceKey = LessonDraftStore.key(
+                    userId: id, courseCode: setup.courseCode, unitKey: route.unitKey, skillKey: route.skillKey,
+                    practice: true, checkpoint: setup.isCheckpoint
+                )
+                practiceDraft = LessonDraftStore.file(directory: directory, key: practiceKey)
+            }
         }
         let deps = LessonDependencies(
             grader: grader,
@@ -169,6 +177,7 @@ public struct LessonEnvironment {
             submit: { session in try await submit(id, session) },
             enqueue: { session in try await enqueue(id, session) },
             draft: draft,
+            practiceDraft: practiceDraft,
             onLessonCounted: { _ = store.update(userId: id) { $0.lessonsCompleted += 1 } },
             loadExtras: loadExtras,
             savePrefs: { next in _ = store.update(userId: id) { $0 = next } },

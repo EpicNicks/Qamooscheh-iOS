@@ -60,12 +60,13 @@ final class LessonSessionDeliveryTests: XCTestCase {
         count: Int = 2,
         practice: Bool = false,
         draft: LessonDraftStore = .none,
+        practiceDraft: LessonDraftStore? = nil,
         enqueue: @escaping LessonEnqueueFunction = { _ in },
         submit: @escaping LessonSubmitFunction = { _ in .queued },
         counted: Counter = Counter()
     ) -> LessonSession {
         let deps = LessonDependencies(
-            grader: AlwaysRight(), gradingOnDevice: true, submit: submit, enqueue: enqueue, draft: draft,
+            grader: AlwaysRight(), gradingOnDevice: true, submit: submit, enqueue: enqueue, draft: draft, practiceDraft: practiceDraft,
             onLessonCounted: { counted.bump() }
         )
         return LessonSession(setup: setup(count: count, practice: practice), dependencies: deps)
@@ -215,6 +216,43 @@ final class LessonSessionDeliveryTests: XCTestCase {
         XCTAssertEqual(sent.log.count, 1)
         XCTAssertEqual(sent.log.first, saved?.submissionIds?.values.first)
         XCTAssertEqual(second.phase, .ended(.queued(completed: true)))
+    }
+
+    func testFinishedDraftIsDeliveredEvenWhenTheSetupChanged() async {
+        let source = MemoryLessonDraft()
+        let first = make(draft: source.store, submit: { _ in
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+            return .queued
+        })
+        answerAll(first)
+        let saved = source.state
+        XCTAssertEqual(saved?.finished, true)
+        let draft = MemoryLessonDraft(saved)
+        let sent = Probe()
+        let second = make(count: 3, draft: draft.store, submit: { s in
+            sent.add(s.submissionId)
+            return .queued
+        })
+        await second.waitForDelivery()
+        XCTAssertEqual(sent.log.count, 1)
+        XCTAssertEqual(sent.log.first, saved?.submissionIds?.values.first)
+        XCTAssertEqual(second.phase, .ended(.queued(completed: true)))
+    }
+
+    func testPracticeAgainDraftIsKeptApartFromTheCountedDraft() {
+        let counted = MemoryLessonDraft()
+        let practice = MemoryLessonDraft()
+        let first = make(draft: counted.store, practiceDraft: practice.store)
+        first.practiceAgain()
+        XCTAssertNil(counted.state)
+        XCTAssertEqual(practice.state?.practice, true)
+        let later = make(draft: counted.store, practiceDraft: practice.store)
+        XCTAssertFalse(later.state.practice)
+        XCTAssertEqual(later.state.completedCount, 0)
+        later.practiceAgain()
+        later.tryAgain()
+        XCTAssertNil(practice.state)
+        XCTAssertEqual(counted.state?.practice, false)
     }
 
     func testLeavingMidLessonClearsTheDraftButLeavingWhileSavingDoesNot() {

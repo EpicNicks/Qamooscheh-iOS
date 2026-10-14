@@ -22,6 +22,8 @@ public struct LessonDependencies {
     public var enqueue: LessonEnqueueFunction
     /// The lesson in progress, kept across a killed app and cleared once the lesson is saved or left.
     public var draft: LessonDraftStore
+    /// Where a practice-again round of a counted lesson is kept, apart from the counted lesson's draft; nil uses `draft`.
+    public var practiceDraft: LessonDraftStore?
     /// Called once when a counted lesson completes (Android bumps `localPrefs.lessonsCompleted`).
     public var onLessonCounted: @Sendable () -> Void
     /// Streak and daily goal after the lesson, for the results screen. Called once per finished lesson.
@@ -45,6 +47,7 @@ public struct LessonDependencies {
         submit: @escaping LessonSubmitFunction,
         enqueue: @escaping LessonEnqueueFunction = { _ in },
         draft: LessonDraftStore = .none,
+        practiceDraft: LessonDraftStore? = nil,
         onLessonCounted: @escaping @Sendable () -> Void = {},
         loadExtras: @escaping @Sendable () async -> LessonResultsExtras = { LessonResultsExtras.none },
         savePrefs: @escaping (LocalPrefs) -> Void = { _ in },
@@ -61,6 +64,7 @@ public struct LessonDependencies {
         self.submit = submit
         self.enqueue = enqueue
         self.draft = draft
+        self.practiceDraft = practiceDraft
         self.onLessonCounted = onLessonCounted
         self.loadExtras = loadExtras
         self.savePrefs = savePrefs
@@ -143,7 +147,8 @@ public final class LessonSession: ObservableObject {
         self.serverPrefs = serverPrefs
         var initial = LessonState(queue: setup.instances, practice: setup.practice)
         if let saved = dependencies.draft.load() {
-            if LessonSession.isRestorable(saved, for: setup) {
+            // A finished draft is self-contained and may be the only copy of the answers: deliver it, whatever the setup is now.
+            if saved.finished || LessonSession.isRestorable(saved, for: setup) {
                 initial = saved
             } else {
                 dependencies.draft.clear()
@@ -166,6 +171,12 @@ public final class LessonSession: ObservableObject {
         if saved.totalCount != setup.instances.count { return false }
         let keys = Set(setup.instances.map { $0.key })
         return saved.queue.allSatisfy { keys.contains($0.key) }
+    }
+
+    /// The draft of the round on screen: a practice-again round of a counted lesson has its own, so a later counted start never resumes it.
+    private var activeDraft: LessonDraftStore {
+        if engine.state.practice && !setup.practice, let other = deps.practiceDraft { return other }
+        return deps.draft
     }
 
     // MARK: Derived
@@ -259,7 +270,7 @@ public final class LessonSession: ObservableObject {
         if engine.state.finished {
             finish()
         } else {
-            deps.draft.save(engine.state)
+            activeDraft.save(engine.state)
             rebuildKeyboard()
             exerciseShown()
         }
@@ -297,10 +308,10 @@ public final class LessonSession: ObservableObject {
         let sessions = completion?.sessions ?? []
         pending = PendingDelivery(sessions: sessions, locallyCompleted: completion?.locallyCompleted, state: state)
         if state.practice || sessions.isEmpty {
-            deps.draft.clear()
+            activeDraft.clear()
         } else {
             // The finished state, with its submission ids, is on disk before the first await.
-            deps.draft.save(state)
+            activeDraft.save(state)
         }
         startDelivery()
     }
@@ -384,7 +395,10 @@ public final class LessonSession: ObservableObject {
     /// Leaving the lesson: stops speech, and drops the draft of a lesson abandoned part way.
     public func leave() {
         deps.speech?.stop()
-        if phase == .active { deps.draft.clear() }
+        if phase == .active {
+            deps.draft.clear()
+            deps.practiceDraft?.clear()
+        }
     }
 
     /// The same lesson again from the top, counting this time ("Try again" after a miss).
@@ -395,7 +409,9 @@ public final class LessonSession: ObservableObject {
 
     private func restart(practice: Bool) {
         engine.restart(setup.instances, practice: practice)
-        deps.draft.save(engine.state)
+        // Only one of the two drafts is live: the round that just ended leaves none behind.
+        if practice { deps.draft.clear() } else { deps.practiceDraft?.clear() }
+        activeDraft.save(engine.state)
         review = nil
         stats = nil
         phase = .active
