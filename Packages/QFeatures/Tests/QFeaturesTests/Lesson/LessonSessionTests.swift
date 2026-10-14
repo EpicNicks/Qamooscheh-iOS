@@ -172,7 +172,7 @@ final class LessonSessionTests: XCTestCase {
         XCTAssertEqual(session.state.completedCount, 0)
     }
 
-    func testSubmitFailureEndsRejectedWithAMessage() async throws {
+    func testThrownSubmitEndsQueuedNeverRejected() async throws {
         let setup = LessonSetup(courseCode: "fa", courseVersion: 1, instances: [instance(0, .wordBank, answer: "a")])
         let grader: Grader? = ScriptedGrader()
         let deps = LessonDependencies(grader: grader, gradingOnDevice: true, submit: { _ in throw Boom() })
@@ -181,12 +181,7 @@ final class LessonSessionTests: XCTestCase {
         session.check()
         session.continueOn()
         try await waitUntilEnded(session)
-        if case .ended(.rejected(let partial, let reason)) = session.phase {
-            XCTAssertFalse(partial)
-            XCTAssertNotNil(reason)
-        } else {
-            XCTFail("expected rejected, got \(session.phase)")
-        }
+        XCTAssertEqual(session.phase, .ended(.queued(completed: true)))
     }
 
     func testPrefsChangeIsSavedAndRebuildsTheKeyboard() {

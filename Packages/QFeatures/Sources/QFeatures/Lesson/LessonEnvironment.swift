@@ -53,11 +53,18 @@ public struct UnwiredLessonSetupLoader: LessonSetupLoading {
     public func saveScriptMode(_ mode: ScriptMode) async {}
 }
 
+/// Submit and write-ahead functions that take the user the lesson was started for (resolved once, before the lesson begins).
+public typealias LessonUserSubmitFunction = @Sendable (String, SubmittedSession) async throws -> LessonSubmitResult
+public typealias LessonUserEnqueueFunction = @Sendable (String, SubmittedSession) async throws -> Void
+
 public struct LessonEnvironment {
     public var loader: LessonSetupLoading
     public var userId: @Sendable () async -> String?
     public var prefsStore: LocalPrefsStore
-    public var submit: LessonSubmitFunction
+    public var submit: LessonUserSubmitFunction
+    public var enqueue: LessonUserEnqueueFunction
+    /// Where in-progress lessons are kept; nil keeps none.
+    public var draftDirectory: URL?
     public var loadExtras: @Sendable () async -> LessonResultsExtras
     /// PLACEHOLDER until M1 decides the grader runtime (JavaScriptCore vs a hidden WKWebView over the shared grader build): nil grades nothing, so answers are "checked when you sync".
     public var grader: Grader?
@@ -72,7 +79,9 @@ public struct LessonEnvironment {
         loader: LessonSetupLoading,
         userId: @escaping @Sendable () async -> String?,
         prefsStore: LocalPrefsStore = LocalPrefsStore(),
-        submit: @escaping LessonSubmitFunction,
+        submit: @escaping LessonUserSubmitFunction,
+        enqueue: @escaping LessonUserEnqueueFunction = { _, _ in },
+        draftDirectory: URL? = nil,
         loadExtras: @escaping @Sendable () async -> LessonResultsExtras = { LessonResultsExtras.none },
         grader: Grader? = PlaceholderGraderSource.grader,
         gradingOnDevice: Bool = PlaceholderGraderSource.gradingOnDevice,
@@ -86,6 +95,8 @@ public struct LessonEnvironment {
         self.userId = userId
         self.prefsStore = prefsStore
         self.submit = submit
+        self.enqueue = enqueue
+        self.draftDirectory = draftDirectory
         self.loadExtras = loadExtras
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
@@ -118,10 +129,13 @@ public struct LessonEnvironment {
         return LessonEnvironment(
             loader: loader,
             userId: { await store.load()?.userId },
-            submit: { session in
-                guard let userId = await store.load()?.userId else { throw LessonEnvironmentError.signedOut }
-                return try await submitter.submit(userId: userId, session: session)
+            submit: { userId, session in
+                try await submitter.submit(userId: userId, session: session)
             },
+            enqueue: { userId, session in
+                _ = try await queue.enqueue(userId: userId, session: session)
+            },
+            draftDirectory: support.appendingPathComponent("lesson-drafts", isDirectory: true),
             speech: speech,
             onFeedback: onFeedback,
             onInstallVoice: onInstallVoice
@@ -130,18 +144,32 @@ public struct LessonEnvironment {
 
     /// A ready session for the route, or nil when there is nothing to play. Throws when the lesson can't be set up.
     public func makeSession(for route: LessonRoute) async throws -> LessonSession? {
+        // The queue is per user: with nobody signed in the lesson must not start, because its answers would have nowhere to be saved.
+        guard let id = await userId(), !id.isEmpty else { throw LessonEnvironmentError.signedOut }
         guard var setup = try await loader.setup(for: route), !setup.instances.isEmpty else { return nil }
         if route.practice { setup.practice = true }
         if route.checkpointSummary != nil { setup.checkpointSummary = route.checkpointSummary }
-        let id = await userId() ?? ""
         let prefs = prefsStore.current(userId: id)
         let server = await loader.serverPrefs()
         let store = prefsStore
         let loader = self.loader
+        let submit = self.submit
+        let enqueue = self.enqueue
+        var draft = LessonDraftStore.none
+        if let directory = draftDirectory {
+            let key = LessonDraftStore.key(
+                userId: id, courseCode: setup.courseCode, unitKey: route.unitKey, skillKey: route.skillKey,
+                practice: setup.practice, checkpoint: setup.isCheckpoint
+            )
+            draft = LessonDraftStore.file(directory: directory, key: key)
+        }
         let deps = LessonDependencies(
             grader: grader,
             gradingOnDevice: gradingOnDevice,
-            submit: submit,
+            submit: { session in try await submit(id, session) },
+            enqueue: { session in try await enqueue(id, session) },
+            draft: draft,
+            onLessonCounted: { _ = store.update(userId: id) { $0.lessonsCompleted += 1 } },
             loadExtras: loadExtras,
             savePrefs: { next in _ = store.update(userId: id) { $0 = next } },
             saveScriptMode: { mode in Task { await loader.saveScriptMode(mode) } },

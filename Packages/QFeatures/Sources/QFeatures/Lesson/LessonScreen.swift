@@ -35,32 +35,40 @@ public struct LessonScreen: View {
 
     public var body: some View {
         let p = screenPalette(colorScheme)
+        let leaving = session.confirmingLeave && session.phase == .active
+        let exit: () -> Void = { session.leave(); onExit() }
         ZStack {
             Color(argb: p.bg).ignoresSafeArea()
-            switch session.phase {
-            case .active:
-                sessionView(p)
-            case .saving:
-                LessonResultsView(
-                    end: .saving,
-                    stats: LessonResultsStats(correct: 0, total: 0, score: 0, xp: 0),
-                    onBack: onExit
-                )
-            case .ended(let end):
-                LessonResultsView(
-                    end: end,
-                    stats: session.stats ?? LessonResultsStats(correct: 0, total: 0, score: 0, xp: 0),
-                    onBack: onExit,
-                    onTryAgain: { session.tryAgain() },
-                    onShare: nil,
-                    onPracticeAgain: { session.practiceAgain() }
-                )
+            Group {
+                switch session.phase {
+                case .active:
+                    sessionView(p)
+                case .saving:
+                    LessonResultsView(
+                        end: .saving,
+                        stats: LessonResultsStats(correct: 0, total: 0, score: 0, xp: 0),
+                        onBack: exit
+                    )
+                case .saveFailed:
+                    saveFailedView(p, onBack: exit)
+                case .ended(let end):
+                    LessonResultsView(
+                        end: end,
+                        stats: session.stats ?? LessonResultsStats(correct: 0, total: 0, score: 0, xp: 0),
+                        onBack: exit,
+                        onTryAgain: { session.tryAgain() },
+                        onShare: nil,
+                        onPracticeAgain: { session.practiceAgain() }
+                    )
+                }
             }
-            if session.confirmingLeave && session.phase == .active {
+            // The dialog is the only thing VoiceOver can reach while it is up.
+            .accessibilityHidden(leaving)
+            if leaving {
                 if session.setup.isCheckpoint {
-                    LeaveCheckpointModal(onKeepGoing: { session.confirmingLeave = false }, onLeave: onExit)
+                    LeaveCheckpointModal(onKeepGoing: { session.confirmingLeave = false }, onLeave: exit)
                 } else {
-                    SkipLessonModal(onKeepGoing: { session.confirmingLeave = false }, onLeave: onExit)
+                    SkipLessonModal(onKeepGoing: { session.confirmingLeave = false }, onLeave: exit)
                 }
             }
         }
@@ -78,6 +86,37 @@ public struct LessonScreen: View {
             .presentationDetents([.medium, .large])
         }
         .task { session.exerciseShown() }
+    }
+
+    private func saveFailedView(_ p: AppPalette, onBack: @escaping () -> Void) -> some View {
+        VStack(spacing: Spacing.standard.s3) {
+            Text(LessonScreenLogic.saveFailedTitle)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(Color(argb: p.text))
+                .multilineTextAlignment(.center)
+            Text(LessonScreenLogic.saveFailedBody)
+                .font(.system(size: 16))
+                .foregroundColor(Color(argb: p.textMuted))
+                .multilineTextAlignment(.center)
+            Button(action: { session.retrySave() }) {
+                Text("Try again")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color(argb: p.primaryContrast))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(RoundedRectangle(cornerRadius: Radii.standard.md, style: .continuous).fill(Color(argb: p.primary)))
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: 420)
+            Button(action: onBack) {
+                Text(LessonScreenLogic.backToPath)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Color(argb: p.primary))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: 420)
+        }
+        .padding(Spacing.standard.s4)
     }
 
     // MARK: Session
@@ -293,7 +332,7 @@ public struct LessonHostView: View {
                 state = .empty
             }
         } catch {
-            state = .failed("Check your connection and try again.")
+            state = .failed(LessonScreenLogic.loadFailureMessage(for: error))
         }
     }
 

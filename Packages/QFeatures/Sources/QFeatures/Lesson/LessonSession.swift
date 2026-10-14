@@ -7,6 +7,9 @@ import QKeyboard
 /// Hands one finished session to the offline queue and the server (production: `LessonSubmitter.submit`, which enqueues first, then flushes).
 public typealias LessonSubmitFunction = @Sendable (SubmittedSession) async throws -> LessonSubmitResult
 
+/// Writes one finished session to the offline queue before anything else happens to it (write-ahead).
+public typealias LessonEnqueueFunction = @Sendable (SubmittedSession) async throws -> Void
+
 /// What the lesson screen needs from the outside, as plain closures so tests and snapshots inject fakes.
 public struct LessonDependencies {
     /// Grades answers on the device. nil (with `gradingOnDevice == false`) makes every answer "checked when you sync".
@@ -15,6 +18,12 @@ public struct LessonDependencies {
     public var grader: Grader?
     public var gradingOnDevice: Bool
     public var submit: LessonSubmitFunction
+    /// Write-ahead persistence of a finished session; awaited before the submit. Production: `OfflineQueue.enqueue`.
+    public var enqueue: LessonEnqueueFunction
+    /// The lesson in progress, kept across a killed app and cleared once the lesson is saved or left.
+    public var draft: LessonDraftStore
+    /// Called once when a counted lesson completes (Android bumps `localPrefs.lessonsCompleted`).
+    public var onLessonCounted: @Sendable () -> Void
     /// Streak and daily goal after the lesson, for the results screen. Called once per finished lesson.
     public var loadExtras: @Sendable () async -> LessonResultsExtras
     /// Persists the device prefs the lesson changes (settings popover, switching keyboards).
@@ -34,6 +43,9 @@ public struct LessonDependencies {
         grader: Grader? = nil,
         gradingOnDevice: Bool = false,
         submit: @escaping LessonSubmitFunction,
+        enqueue: @escaping LessonEnqueueFunction = { _ in },
+        draft: LessonDraftStore = .none,
+        onLessonCounted: @escaping @Sendable () -> Void = {},
         loadExtras: @escaping @Sendable () async -> LessonResultsExtras = { LessonResultsExtras.none },
         savePrefs: @escaping (LocalPrefs) -> Void = { _ in },
         saveScriptMode: @escaping (ScriptMode) -> Void = { _ in },
@@ -47,6 +59,9 @@ public struct LessonDependencies {
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
         self.submit = submit
+        self.enqueue = enqueue
+        self.draft = draft
+        self.onLessonCounted = onLessonCounted
         self.loadExtras = loadExtras
         self.savePrefs = savePrefs
         self.saveScriptMode = saveScriptMode
@@ -71,6 +86,8 @@ public enum LessonPhase: Equatable {
     case active
     /// Finished; submitting the sessions.
     case saving
+    /// The finished lesson could not be written to the phone's queue; the draft is kept and "Try again" saves it again.
+    case saveFailed
     case ended(LessonEndKind)
 }
 
@@ -103,20 +120,52 @@ public final class LessonSession: ObservableObject {
     private var keyboardMethod: InputMethod?
     private var shownAt: Date
     private var finishing = false
+    private var pending: PendingDelivery?
+    private var deliveryTask: Task<Void, Never>?
+
+    /// What `finish` hands to the delivery step, kept so a failed save can be retried.
+    private struct PendingDelivery {
+        var sessions: [SubmittedSession]
+        var locallyCompleted: Bool?
+        var state: LessonState
+    }
+
+    struct Delivery: Equatable {
+        var results: [LessonSubmitResult]
+        /// A session that is neither in the queue nor accepted by the server.
+        var unsaved: Bool
+    }
 
     public init(setup: LessonSetup, prefs: LocalPrefs = LocalPrefs(), serverPrefs: LessonServerPrefs = LessonServerPrefs(), dependencies: LessonDependencies) {
         self.setup = setup
         self.deps = dependencies
         self.prefs = prefs
         self.serverPrefs = serverPrefs
+        var initial = LessonState(queue: setup.instances, practice: setup.practice)
+        if let saved = dependencies.draft.load() {
+            if LessonSession.isRestorable(saved, for: setup) {
+                initial = saved
+            } else {
+                dependencies.draft.clear()
+            }
+        }
         self.engine = LessonEngine(
-            state: LessonState(queue: setup.instances, practice: setup.practice),
+            state: initial,
             courseCode: setup.courseCode,
             grader: dependencies.grader,
             gradingOnDevice: dependencies.gradingOnDevice
         )
         self.shownAt = dependencies.now()
         rebuildKeyboard()
+        // A draft saved at the very end (killed while saving): deliver it again; the queue dedupes by submission id.
+        if engine.state.finished && !engine.state.items.isEmpty { finish(resumed: true) }
+    }
+
+    /// A saved lesson belongs to this setup when it was cut from the same exercises.
+    static func isRestorable(_ saved: LessonState, for setup: LessonSetup) -> Bool {
+        if saved.totalCount != setup.instances.count { return false }
+        let keys = Set(setup.instances.map { $0.key })
+        return saved.queue.allSatisfy { keys.contains($0.key) }
     }
 
     // MARK: Derived
@@ -210,6 +259,7 @@ public final class LessonSession: ObservableObject {
         if engine.state.finished {
             finish()
         } else {
+            deps.draft.save(engine.state)
             rebuildKeyboard()
             exerciseShown()
         }
@@ -232,11 +282,11 @@ public final class LessonSession: ObservableObject {
 
     // MARK: Finish
 
-    private func finish() {
+    private func finish(resumed: Bool = false) {
         if finishing { return }
         finishing = true
         phase = .saving
-        deps.onFeedback(.lessonComplete)
+        if !resumed { deps.onFeedback(.lessonComplete) }
         let completion = engine.completion(
             courseCode: setup.courseCode,
             courseVersion: setup.courseVersion,
@@ -245,31 +295,96 @@ public final class LessonSession: ObservableObject {
         )
         let state = engine.state
         let sessions = completion?.sessions ?? []
-        let locally = completion?.locallyCompleted
-        let practice = state.practice
-        let submit = deps.submit
-        let loadExtras = deps.loadExtras
-        Task { @MainActor [weak self] in
-            var results: [LessonSubmitResult] = []
-            var failed = false
-            for session in sessions {
-                do {
-                    results.append(try await submit(session))
-                } catch {
-                    failed = true
-                    results.append(.rejected(reason: "Couldn't save this lesson on your phone. Try again."))
+        pending = PendingDelivery(sessions: sessions, locallyCompleted: completion?.locallyCompleted, state: state)
+        if state.practice || sessions.isEmpty {
+            deps.draft.clear()
+        } else {
+            // The finished state, with its submission ids, is on disk before the first await.
+            deps.draft.save(state)
+        }
+        startDelivery()
+    }
+
+    /// Writes each session to the queue, then submits it; only then does the lesson end. A thrown submit after the
+    /// session is queued is "saved offline", never a rejection (only the server can reject).
+    static func deliver(sessions: [SubmittedSession], enqueue: LessonEnqueueFunction, submit: LessonSubmitFunction) async -> Delivery {
+        var results: [LessonSubmitResult] = []
+        var unsaved = false
+        for session in sessions {
+            var persisted = true
+            do {
+                try await enqueue(session)
+            } catch {
+                persisted = false
+            }
+            do {
+                results.append(try await submit(session))
+            } catch {
+                if persisted {
+                    results.append(.queued)
+                } else {
+                    unsaved = true
                 }
             }
-            let end = LessonScreenLogic.endKind(results: results, locallyCompleted: locally, practice: practice)
-            let extras = (failed || practice) ? LessonResultsExtras.none : await loadExtras()
+        }
+        return Delivery(results: results, unsaved: unsaved)
+    }
+
+    private func startDelivery() {
+        guard let work = pending else { return }
+        let deps = self.deps
+        deliveryTask = Task { @MainActor [weak self] in
+            let delivery = await LessonSession.deliver(sessions: work.sessions, enqueue: deps.enqueue, submit: deps.submit)
+            let practice = work.state.practice
+            if delivery.unsaved {
+                // Keep the draft: reopening the lesson delivers it again.
+                self?.finishing = false
+                self?.phase = .saveFailed
+                return
+            }
+            deps.draft.clear()
+            let end = LessonScreenLogic.endKind(results: delivery.results, locallyCompleted: work.locallyCompleted, practice: practice)
+            if !practice && LessonSession.countsAsCompleted(end) { deps.onLessonCounted() }
+            var extras = LessonResultsExtras.none
+            if !practice { extras = await deps.loadExtras() }
             guard let self = self else { return }
+            let state = work.state
             self.stats = LessonResultsStats(
                 correct: state.firstTryCorrect, total: state.totalCount, score: state.score, xp: state.xp,
                 streakDays: extras.streakDays, goalXpToday: extras.goalXpToday, goalXp: extras.goalXp
             )
             self.phase = .ended(end)
             self.finishing = false
+            self.pending = nil
         }
+    }
+
+    /// Android: lessonsCompleted counts saved or queued lessons unless the device knows it was not completed.
+    static func countsAsCompleted(_ end: LessonEndKind) -> Bool {
+        switch end {
+        case .saved(let completed, _): return completed != false
+        case .queued(let completed): return completed != false
+        default: return false
+        }
+    }
+
+    /// "Try again" on the save-failed screen.
+    public func retrySave() {
+        guard phase == .saveFailed, !finishing else { return }
+        finishing = true
+        phase = .saving
+        startDelivery()
+    }
+
+    /// Waits for the save-and-submit step started by the last Continue (tests, and callers that must not move on before it).
+    public func waitForDelivery() async {
+        await deliveryTask?.value
+    }
+
+    /// Leaving the lesson: stops speech, and drops the draft of a lesson abandoned part way.
+    public func leave() {
+        deps.speech?.stop()
+        if phase == .active { deps.draft.clear() }
     }
 
     /// The same lesson again from the top, counting this time ("Try again" after a miss).
@@ -280,6 +395,7 @@ public final class LessonSession: ObservableObject {
 
     private func restart(practice: Bool) {
         engine.restart(setup.instances, practice: practice)
+        deps.draft.save(engine.state)
         review = nil
         stats = nil
         phase = .active

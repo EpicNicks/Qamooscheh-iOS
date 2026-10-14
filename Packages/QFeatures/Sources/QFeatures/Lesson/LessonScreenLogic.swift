@@ -63,6 +63,22 @@ public struct LessonResultsExtras: Equatable, Sendable {
 }
 
 public enum LessonScreenLogic {
+    /// Why a lesson could not start, in words the learner can act on.
+    public static func loadFailureMessage(for error: Error) -> String {
+        if let known = error as? LessonEnvironmentError, known == .signedOut {
+            return "You're signed out. Sign in again to start this lesson."
+        }
+        if error is UnwiredLessonSetupLoader.NotWired {
+            return "This lesson isn't available in this version of the app yet."
+        }
+        if error is URLError {
+            return "Check your connection and try again."
+        }
+        return "Something went wrong while opening this lesson. Try again in a moment."
+    }
+
+    public static let saveFailedTitle = "Couldn't save your lesson"
+    public static let saveFailedBody = "Your answers are kept on this phone. Try saving again."
     public static let checkLabel = "Check"
     public static let nextLabel = "Next"
     public static let leaveLessonTitle = "Leave this lesson?"
