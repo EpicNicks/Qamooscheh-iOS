@@ -85,7 +85,7 @@ struct FriendsContent: View {
     @ViewBuilder
     private func section<Row: View>(
         _ title: String, _ list: FriendsList, loading: String, empty: String, _ p: AppPalette,
-        @ViewBuilder row: (FriendRefResponse) -> Row
+        @ViewBuilder row: @escaping (FriendRefResponse) -> Row
     ) -> some View {
         Text(title).font(.title3.weight(.semibold)).foregroundColor(Color(argb: p.text))
             .padding(.top, 16)
