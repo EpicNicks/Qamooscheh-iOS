@@ -150,10 +150,45 @@ public protocol StreakService: Sendable {
 public struct SettingsVoice: Equatable, Sendable {
     public let id: String
     public let label: String
+    /// A short phrase the Play button speaks; nil hides the button (Android hides it without a sample).
+    public let sampleText: String?
+    /// BCP-47 tag of the sample's language, e.g. "fa-IR".
+    public let sampleLanguage: String?
 
-    public init(id: String, label: String) {
+    public init(id: String, label: String, sampleText: String? = nil, sampleLanguage: String? = nil) {
         self.id = id
         self.label = label
+        self.sampleText = sampleText
+        self.sampleLanguage = sampleLanguage
+    }
+
+    public var canPreview: Bool {
+        guard let text = sampleText, let language = sampleLanguage else { return false }
+        return !text.isEmpty && !language.isEmpty
+    }
+}
+
+/// Plays a voice sample. Backed by SpeechService in the app; a stub in tests.
+public protocol VoicePreviewing: AnyObject {
+    /// Speaks `text` in `languageTag`; false when the device has no voice for it.
+    func preview(text: String, languageTag: String) -> Bool
+    func stop()
+}
+
+/// SpeechService behind VoicePreviewing.
+public final class SpeechVoicePreviewer: VoicePreviewing {
+    private let speech: SpeechService
+
+    public init(speech: SpeechService) {
+        self.speech = speech
+    }
+
+    public func preview(text: String, languageTag: String) -> Bool {
+        return speech.speak(text, languageTag: languageTag)
+    }
+
+    public func stop() {
+        speech.stop()
     }
 }
 
