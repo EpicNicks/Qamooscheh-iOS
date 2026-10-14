@@ -30,7 +30,7 @@ final class HelpAboutTests: XCTestCase {
 
     func testVersionLine() {
         XCTAssertEqual(AboutContent.versionLine(short: "1.2", build: "34"), "Version 1.2 (34)")
-        XCTAssertEqual(AboutContent.versionLine(short: "1.2", build: "1.2"), "Version 1.2")
+        XCTAssertEqual(AboutContent.versionLine(short: "1.2", build: "1.2"), "Version 1.2 (1.2)")
         XCTAssertEqual(AboutContent.versionLine(short: "1.2", build: nil), "Version 1.2")
         XCTAssertEqual(AboutContent.versionLine(short: nil, build: "7"), "Version 7")
         XCTAssertNil(AboutContent.versionLine(short: " ", build: ""))

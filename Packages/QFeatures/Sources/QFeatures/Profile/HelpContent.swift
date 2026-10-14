@@ -119,7 +119,7 @@ let helpFaq: [FaqEntry] = [
         id: "fonts",
         question: "Persian text is hard to read. Can I change the font?",
         paragraphs: [
-            "Yes: Settings \u{203A} Appearance lets you pick the Persian font (Vazirmatn or Noto Naskh) and set its size. These choices are saved on this iPhone only.",
+            "Yes: Settings \u{203A} Appearance lets you pick the Persian font (Vazirmatn) and set its size. These choices are saved on this iPhone only.",
         ]),
 ]
 
@@ -136,12 +136,12 @@ enum AboutContent {
     static let languages = "Persian (\u{0641}\u{0627}\u{0631}\u{0633}\u{06CC}) and Japanese (\u{65E5}\u{672C}\u{8A9E}) today, each with its own keyboard, grading rules, and course."
     static let whereItsAt = "ParsLing is in alpha: lessons, checkpoints, streaks, friends, and leagues are built and working, but new accounts are closed for now, while it's tested with a small group before opening more broadly."
 
-    /// "Version 1.2 (34)", "Version 1.2", or nil when the bundle has no version.
+    /// "Version 1.2 (34)" (short version, then CFBundleVersion), "Version 1.2", or nil when the bundle has no version.
     static func versionLine(short: String?, build: String?) -> String? {
         let s = (short ?? "").trimmingCharacters(in: .whitespaces)
         let b = (build ?? "").trimmingCharacters(in: .whitespaces)
         if s.isEmpty { return b.isEmpty ? nil : "Version \(b)" }
-        return b.isEmpty || b == s ? "Version \(s)" : "Version \(s) (\(b))"
+        return b.isEmpty ? "Version \(s)" : "Version \(s) (\(b))"
     }
 
     static func bundleVersionLine(_ bundle: Bundle = .main) -> String? {

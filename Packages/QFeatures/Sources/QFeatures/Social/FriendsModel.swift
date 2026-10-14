@@ -71,6 +71,9 @@ public final class FriendsModel: ObservableObject {
     private let onUnauthorized: (@Sendable () -> Void)?
     private var searchTask: Task<Void, Never>?
     private var lastSearched: String?
+    /// Inside load(): the two lists failing with a 401 signal once, not twice.
+    private var loadingBoth = false
+    private var signalledInLoad = false
 
     public init(service: FriendsService?, debounceNanos: UInt64 = 250_000_000, onUnauthorized: (@Sendable () -> Void)? = nil) {
         self.service = service
@@ -82,8 +85,11 @@ public final class FriendsModel: ObservableObject {
 
     /// Safe on every appearance: reloads the two lists but keeps the typed query, its results and what was sent.
     public func load() async {
+        loadingBoth = true
+        signalledInLoad = false
         await loadRequests()
         await loadFriends()
+        loadingBoth = false
     }
 
     /// Debounced (web SEARCH_DEBOUNCE_MS): a burst of typing makes one request; a superseded search never posts.
@@ -177,7 +183,10 @@ public final class FriendsModel: ObservableObject {
 
     /// The server's message when there is one (Android userMessage); a 401 also reaches `onUnauthorized`.
     private func failureMessage(_ error: Error, fallback: String) -> String {
-        if (error as? ApiError)?.status == 401 || error is SessionExpiredError { onUnauthorized?() }
+        if (error as? ApiError)?.status == 401 || error is SessionExpiredError {
+            if !(loadingBoth && signalledInLoad) { onUnauthorized?() }
+            if loadingBoth { signalledInLoad = true }
+        }
         return AuthRules.message(for: error, fallback: fallback)
     }
 

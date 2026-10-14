@@ -8,6 +8,7 @@ private final class FakeSubmitter: FlashcardSubmitter, @unchecked Sendable {
     private var log: [SubmitFlashcardsRequest] = []
     var failures = 0
     var gate: GateBox?
+    var cancelNext = false
 
     var requests: [SubmitFlashcardsRequest] {
         lock.lock()
@@ -18,10 +19,13 @@ private final class FakeSubmitter: FlashcardSubmitter, @unchecked Sendable {
     func submit(_ request: SubmitFlashcardsRequest) async throws -> SubmitFlashcardsResponse {
         lock.lock()
         log.append(request)
+        let cancel = cancelNext
+        cancelNext = false
         let fail = failures > 0
         if fail { failures -= 1 }
         lock.unlock()
         if let gate = gate { await gate.wait() }
+        if cancel { throw CancellationError() }
         if fail { throw ApiError(status: 503, body: ApiErrorBody(error: "Try later")) }
         return SubmitFlashcardsResponse(alreadyProcessed: false, xp: 10)
     }
@@ -89,6 +93,20 @@ final class FlashcardsModelTests: XCTestCase {
         XCTAssertEqual(model.xp, .saved(10))
         XCTAssertEqual(submitter.requests.map { $0.submissionId }, ["sub-1", "sub-1"])
         XCTAssertEqual(submitter.requests[0].cards, submitter.requests[1].cards)
+    }
+
+    func testCancelledSubmitDoesNotStickOnSavingAndRetries() async {
+        let submitter = FakeSubmitter()
+        submitter.cancelNext = true
+        let model = await makeModel(submitter)
+        model.start()
+        await model.answer(correct: true)
+        await model.answer(correct: true)
+        XCTAssertNotEqual(model.xp, .saving)
+        XCTAssertEqual(model.xp, .failed("Saving was interrupted. Try again."))
+        await model.retrySubmit()
+        XCTAssertEqual(model.xp, .saved(10))
+        XCTAssertEqual(submitter.requests.map { $0.submissionId }, ["sub-1", "sub-1"])
     }
 
     func testKindCannotChangeMidRound() async {

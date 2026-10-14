@@ -36,3 +36,20 @@ public func jumpArrowRotation(_ direction: JumpDirection) -> Double {
 public func streakLabel(_ days: Int) -> String {
     return "\(max(days, 0))"
 }
+
+/// The header's goal ring is 18.3pt (Android DailyGoalCounter), not 16pt.
+public let dailyGoalRingSize: Double = 18.3
+
+/// The celebration pulse scales the ring only when motion is allowed.
+public func goalCelebrationAnimates(celebrating: Bool, reduceMotion: Bool) -> Bool {
+    return celebrating && !reduceMotion
+}
+
+/// The header's lifetime XP counter.
+public func totalXpLabel(_ xp: Int) -> String {
+    return "\(max(xp, 0)) XP"
+}
+
+public func totalXpAccessibilityLabel(_ xp: Int) -> String {
+    return "\(max(xp, 0)) total XP"
+}

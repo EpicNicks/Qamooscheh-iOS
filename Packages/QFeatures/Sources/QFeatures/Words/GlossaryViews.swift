@@ -39,8 +39,6 @@ struct GlossaryContent: View {
             case .notFound:
                 Text("This glossary entry doesn't exist.").font(.callout).foregroundColor(Color(argb: p.danger))
             case .tree(let entries):
-                Text("Glossary").font(.title2.weight(.bold)).foregroundColor(Color(argb: p.text))
-                    .accessibilityAddTraits(.isHeader)
                 if entries.isEmpty {
                     Text("Nothing here yet.").font(.callout).foregroundColor(Color(argb: p.textMuted))
                 } else {
@@ -125,15 +123,17 @@ private struct TermTable: View {
     let p: AppPalette
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .body) private var termSize: CGFloat = 18
+    @State private var tableWidth: CGFloat = 0
+    private let columnSpacing: CGFloat = 12
 
     var body: some View {
         let stacked = typeSize.isAccessibilitySize
         VStack(alignment: .leading, spacing: 0) {
             if !stacked {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    header("Term")
-                    header("Romanization")
-                    header("Meaning")
+                HStack(alignment: .firstTextBaseline, spacing: columnSpacing) {
+                    header("Term", width: columns[0])
+                    header("Romanization", width: columns[1])
+                    header("Meaning", width: columns[2])
                 }
                 .padding(.vertical, 8)
                 Rectangle().fill(Color(argb: p.border)).frame(height: 2)
@@ -143,11 +143,21 @@ private struct TermTable: View {
                 Rectangle().fill(Color(argb: p.border)).frame(height: 1)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GeometryReader { proxy in
+            Color.clear
+                .onAppear { tableWidth = proxy.size.width }
+                .onChange(of: proxy.size.width) { newWidth in tableWidth = newWidth }
+        })
     }
 
-    private func header(_ text: String) -> some View {
+    private var columns: [CGFloat] {
+        GlossaryColumns.widths(available: Double(tableWidth), spacing: Double(columnSpacing)).map { CGFloat($0) }
+    }
+
+    private func header(_ text: String, width: CGFloat) -> some View {
         Text(text).font(.footnote.weight(.semibold)).foregroundColor(Color(argb: p.textMuted))
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(width: width, alignment: .leading)
     }
 
     @ViewBuilder
@@ -162,10 +172,10 @@ private struct TermTable: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
         } else {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                termText(term.term).frame(maxWidth: .infinity, alignment: .leading)
-                roman.frame(maxWidth: .infinity, alignment: .leading)
-                meaning.frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: columnSpacing) {
+                termText(term.term).frame(width: columns[0], alignment: .leading)
+                roman.frame(width: columns[1], alignment: .leading)
+                meaning.frame(width: columns[2], alignment: .leading)
             }
             .padding(.vertical, 8)
         }
