@@ -11,6 +11,15 @@ final class GlossaryModelTests: XCTestCase {
         return Glossary(courses: ["fa": [folder, abjad], "ja": [GlossaryEntry(id: "k", title: "Kana")]])
     }
 
+    func testTermTableColumnsAre30_30_40() {
+        let w = GlossaryColumns.widths(available: 344, spacing: 12)
+        XCTAssertEqual(w.count, 3)
+        XCTAssertEqual(w[0], 96, accuracy: 0.001)
+        XCTAssertEqual(w[1], 96, accuracy: 0.001)
+        XCTAssertEqual(w[2], 128, accuracy: 0.001)
+        XCTAssertEqual(GlossaryColumns.widths(available: 0, spacing: 12), [0, 0, 0])
+    }
+
     func testStartsOnTree() {
         let m = GlossaryModel(courseCode: "fa", glossary: glossary())
         guard case .tree(let e) = m.page else { return XCTFail("expected tree") }

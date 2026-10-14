@@ -275,6 +275,16 @@ final class FriendsModelTests: XCTestCase {
         XCTAssertEqual(counter.value, 2)
     }
 
+    func testUnauthorizedFiresOnceWhenBothListsFailOnLoad() async {
+        let fake = FakeFriends()
+        fake.requestsError = apiError(401)
+        fake.friendsError = apiError(401)
+        let counter = Counter()
+        let model = makeModel(fake, onUnauthorized: { counter.bump() })
+        await model.load()
+        XCTAssertEqual(counter.value, 1)
+    }
+
     func testHitActionStates() {
         XCTAssertEqual(hitAction(userId: "a", sent: [:], friendIds: []), .add)
         XCTAssertEqual(hitAction(userId: "a", sent: [:], friendIds: ["a"]), .friends)

@@ -120,4 +120,30 @@ final class RoadStyleTests: XCTestCase {
         XCTAssertEqual(PathTheme.standard.layoutFor(compact: true).rowHeight, 150)
         XCTAssertEqual(PathTheme.standard.layoutFor(compact: false).rowHeight, 190)
     }
+
+    func testRoadMirroredX() {
+        XCTAssertEqual(roadMirroredX(100, width: 360, rtl: false), 100)
+        XCTAssertEqual(roadMirroredX(100, width: 360, rtl: true), 260)
+        XCTAssertEqual(roadMirroredX(180, width: 360, rtl: true), 180)
+    }
+
+    func testRoadEdgesMirrorLikeNodes() {
+        let road = PathRoadFixtures.road(compact: true)
+        let width = 360.0
+        let scale = width / road.config.logicalWidth
+        for edge in road.edges {
+            let node = road.layout.nodes.first { $0.positionIndex == edge.fromPositionIndex && $0.skillIndex == edge.fromSkillIndex }!
+            XCTAssertEqual(
+                roadMirroredX(edge.fromX * scale, width: width, rtl: true),
+                roadMirroredX(node.x * scale, width: width, rtl: true),
+                accuracy: 0.001
+            )
+        }
+    }
+
+    func testNodeFoldDepth() {
+        XCTAssertEqual(nodeFoldDepth(pressed: false, locked: false), 18)
+        XCTAssertEqual(nodeFoldDepth(pressed: true, locked: false), 26)
+        XCTAssertEqual(nodeFoldDepth(pressed: true, locked: true), 18)
+    }
 }
