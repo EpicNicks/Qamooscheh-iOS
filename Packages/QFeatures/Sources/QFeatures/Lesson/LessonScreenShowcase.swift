@@ -14,6 +14,10 @@ public enum LessonScreenScenario: Sendable {
     case settingsPersian
     case settingsJapanese
     case gradingPending
+    case checkpointReady
+    case checkpointNoTest
+    case checkpointPassed
+    case checkpointFailedNotApplied
 }
 
 /// A grader that calls anything containing the first accepted answer correct, for screenshots.
@@ -62,16 +66,24 @@ public struct LessonScreenShowcase: View {
         var all = instances()
         var prefs = LocalPrefs()
         var checkpoint: String?
+        var plan: CheckpointPlanInfo?
         switch scenario {
         case .typeInPersianKeyboard:
             all.removeFirst()
             prefs.persianInputMethod = .layout
         case .leaveCheckpointModal:
             checkpoint = "Skipping 3 lessons \u{2014} 1 already done via deep dive."
+        case .checkpointReady:
+            checkpoint = "Skipping 3 lessons \u{2014} 1 already done via deep dive."
+            plan = CheckpointPlanInfo(courseVersion: 1, targetUnitKey: "u2", targetSkillKey: "family", skippedCount: 3, alreadyCompletedCount: 1, requiresTest: true)
+        case .checkpointNoTest:
+            all = []
+            checkpoint = "Skipping 2 lessons \u{2014} 2 already done via deep dive."
+            plan = CheckpointPlanInfo(courseVersion: 1, targetUnitKey: "u2", targetSkillKey: "family", skippedCount: 2, alreadyCompletedCount: 2, requiresTest: false)
         default:
             break
         }
-        let setup = LessonSetup(courseCode: "fa", courseVersion: 1, instances: all, exerciseCountBySkill: ["greetings": 2], checkpointSummary: checkpoint)
+        let setup = LessonSetup(courseCode: "fa", courseVersion: 1, instances: all, exerciseCountBySkill: ["greetings": 2], checkpointSummary: checkpoint, checkpoint: plan)
         let grading = scenario != .gradingPending
         let deps = LessonDependencies(
             grader: grading ? ShowcaseGrader() : PlaceholderGraderSource.grader,
@@ -85,6 +97,11 @@ public struct LessonScreenShowcase: View {
             session.check()
         case .gradingPending:
             session.setTileAnswer("\u{0635}\u{0628}\u{062D} \u{0628}\u{062E}\u{06CC}\u{0631}")
+            session.check()
+        case .checkpointReady:
+            session.setTileAnswer("\u{0635}\u{0628}\u{062D} \u{0628}\u{062E}\u{06CC}\u{0631}")
+            session.check()
+            session.setTyped("\u{0633}\u{0644}\u{0627}\u{0645}")
             session.check()
         case .leaveLessonModal, .leaveCheckpointModal:
             session.confirmingLeave = true
@@ -108,6 +125,10 @@ public struct LessonScreenShowcase: View {
                     courseCode: "ja", prefs: LocalPrefs(), serverPrefs: LessonServerPrefs(scriptMode: .both),
                     onPrefsChange: { _ in }, onScriptModeChange: { _ in }, onKeyboardModeChange: { _ in }, onDismiss: {}
                 )
+            case .checkpointPassed:
+                CheckpointResultView(outcome: CheckpointOutcome(passed: true, score: 0.85, applied: true), onBack: {})
+            case .checkpointFailedNotApplied:
+                CheckpointResultView(outcome: CheckpointOutcome(passed: false, score: 0.4, applied: false), onBack: {})
             default:
                 LessonScreen(session: session, onExit: {})
             }

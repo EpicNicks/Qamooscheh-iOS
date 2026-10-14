@@ -21,17 +21,20 @@ public struct LessonSetup: Equatable, Sendable {
     public var practice: Bool
     /// Non-nil makes this a checkpoint (a test-out): "Skipping 3 lessons." under the progress bar, "Next" instead of "Check", and its own leave warning.
     public var checkpointSummary: String?
+    /// Non-nil for a real checkpoint: answers are not marked, and everything is sent once at the end.
+    public var checkpoint: CheckpointPlanInfo?
 
-    public init(courseCode: String, courseVersion: Int, instances: [ExerciseInstance], exerciseCountBySkill: [String: Int] = [:], practice: Bool = false, checkpointSummary: String? = nil) {
+    public init(courseCode: String, courseVersion: Int, instances: [ExerciseInstance], exerciseCountBySkill: [String: Int] = [:], practice: Bool = false, checkpointSummary: String? = nil, checkpoint: CheckpointPlanInfo? = nil) {
         self.courseCode = courseCode
         self.courseVersion = courseVersion
         self.instances = instances
         self.exerciseCountBySkill = exerciseCountBySkill
         self.practice = practice
         self.checkpointSummary = checkpointSummary
+        self.checkpoint = checkpoint
     }
 
-    public var isCheckpoint: Bool { checkpointSummary != nil }
+    public var isCheckpoint: Bool { checkpointSummary != nil || checkpoint != nil }
 }
 
 /// The server-side prefs a lesson reads (the lesson settings' "Text mode" changes one of them).
