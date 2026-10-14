@@ -1,0 +1,361 @@
+import Foundation
+import QModel
+import QDomain
+import QData
+import QKeyboard
+
+/// Hands one finished session to the offline queue and the server (production: `LessonSubmitter.submit`, which enqueues first, then flushes).
+public typealias LessonSubmitFunction = @Sendable (SubmittedSession) async throws -> LessonSubmitResult
+
+/// What the lesson screen needs from the outside, as plain closures so tests and snapshots inject fakes.
+public struct LessonDependencies {
+    /// Grades answers on the device. nil (with `gradingOnDevice == false`) makes every answer "checked when you sync".
+    /// The production grader (JavaScriptCore or a hidden WKWebView over the shared .NET WASM grader) is decided by item M1;
+    /// until it lands the app injects `PlaceholderGraderSource`.
+    public var grader: Grader?
+    public var gradingOnDevice: Bool
+    public var submit: LessonSubmitFunction
+    /// Streak and daily goal after the lesson, for the results screen. Called once per finished lesson.
+    public var loadExtras: @Sendable () async -> LessonResultsExtras
+    /// Persists the device prefs the lesson changes (settings popover, switching keyboards).
+    public var savePrefs: (LocalPrefs) -> Void
+    /// Persists the one server pref the lesson changes (text mode).
+    public var saveScriptMode: (ScriptMode) -> Void
+    public var speech: SpeechService?
+    public var courseHints: [String: WordHint]
+    public var onFeedback: (FeedbackEvent) -> Void
+    public var onInstallVoice: () -> Void
+    /// Builds the report form for the answer under review; nil hides "Report".
+    public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
+    /// The clock (latency, session timestamps).
+    public var now: () -> Date
+
+    public init(
+        grader: Grader? = nil,
+        gradingOnDevice: Bool = false,
+        submit: @escaping LessonSubmitFunction,
+        loadExtras: @escaping @Sendable () async -> LessonResultsExtras = { LessonResultsExtras.none },
+        savePrefs: @escaping (LocalPrefs) -> Void = { _ in },
+        saveScriptMode: @escaping (ScriptMode) -> Void = { _ in },
+        speech: SpeechService? = nil,
+        courseHints: [String: WordHint] = emptyHintMap,
+        onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
+        onInstallVoice: @escaping () -> Void = {},
+        makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
+        now: @escaping () -> Date = { Date() }
+    ) {
+        self.grader = grader
+        self.gradingOnDevice = gradingOnDevice
+        self.submit = submit
+        self.loadExtras = loadExtras
+        self.savePrefs = savePrefs
+        self.saveScriptMode = saveScriptMode
+        self.speech = speech
+        self.courseHints = courseHints
+        self.onFeedback = onFeedback
+        self.onInstallVoice = onInstallVoice
+        self.makeReportModel = makeReportModel
+        self.now = now
+    }
+}
+
+/// The grader the app uses until item M1 decides the runtime. PLACEHOLDER: it grades nothing, so every answer is
+/// pending ("checked when you sync", the server grades on submit) exactly like Android with no grader loaded.
+public enum PlaceholderGraderSource {
+    public static var grader: Grader? { nil }
+    public static var gradingOnDevice: Bool { false }
+}
+
+public enum LessonPhase: Equatable {
+    /// Answering exercises (the review panel shows between an answer and Continue).
+    case active
+    /// Finished; submitting the sessions.
+    case saving
+    case ended(LessonEndKind)
+}
+
+/// One lesson being played: the engine, what is typed or picked, the verdict under review, the keyboard,
+/// and the hand-off of the finished sessions. Port of the Session state in Android LessonScreen plus
+/// LessonViewModel's submit/continue/restart.
+/// Not annotated `@MainActor` so view closures can call it freely on any SDK; every call comes from the main thread (views, and the finish task, which hops back to it).
+public final class LessonSession: ObservableObject {
+    public let setup: LessonSetup
+    private let deps: LessonDependencies
+
+    @Published public private(set) var engine: LessonEngine
+    @Published public private(set) var review: FeedbackReview?
+    @Published public private(set) var phase: LessonPhase = .active
+    @Published public private(set) var stats: LessonResultsStats?
+    @Published public private(set) var prefs: LocalPrefs
+    @Published public private(set) var serverPrefs: LessonServerPrefs
+    @Published public private(set) var keyboard: KeyboardState?
+    /// The typing field's text and the caret in it (a Unicode-scalar offset).
+    @Published public private(set) var typed: String = ""
+    @Published public private(set) var caret: Int = 0
+    /// Word bank / match: the built answer, or nil until every tile is placed.
+    @Published public private(set) var tileAnswer: String?
+    @Published public private(set) var usedHint = false
+    /// A bumped value re-creates the exercise views, so a retry of the same exercise starts fresh.
+    @Published public private(set) var exerciseRound = 0
+    @Published public var showingSettings = false
+    @Published public var confirmingLeave = false
+
+    private var keyboardMethod: InputMethod?
+    private var shownAt: Date
+    private var finishing = false
+
+    public init(setup: LessonSetup, prefs: LocalPrefs = LocalPrefs(), serverPrefs: LessonServerPrefs = LessonServerPrefs(), dependencies: LessonDependencies) {
+        self.setup = setup
+        self.deps = dependencies
+        self.prefs = prefs
+        self.serverPrefs = serverPrefs
+        self.engine = LessonEngine(
+            state: LessonState(queue: setup.instances, practice: setup.practice),
+            courseCode: setup.courseCode,
+            grader: dependencies.grader,
+            gradingOnDevice: dependencies.gradingOnDevice
+        )
+        self.shownAt = dependencies.now()
+        rebuildKeyboard()
+    }
+
+    // MARK: Derived
+
+    public var state: LessonState { engine.state }
+    /// The exercise on screen: the one under review, else the next.
+    public var instance: ExerciseInstance? { review?.instance ?? engine.state.current }
+    public var courseCode: String { setup.courseCode }
+    public var isTypeIn: Bool {
+        guard let renderType = instance?.renderType else { return false }
+        return LessonScreenLogic.isTypeIn(renderType)
+    }
+    public var inAppKeyboard: Bool { LessonScreenLogic.usesInAppKeyboard(method: keyboardMethod, prefs: prefs) && keyboard != nil }
+    /// `keyboardPending` is the in-app keyboard's uncommitted letters (the view observes the keyboard, so it passes them in).
+    public func canCheck(keyboardPending: String?) -> Bool {
+        LessonScreenLogic.canCheck(typeIn: isTypeIn, typed: typed, keyboardPending: inAppKeyboard ? keyboardPending : nil, tileAnswer: tileAnswer)
+    }
+    public var showsSyncNote: Bool { !engine.gradingOnDevice && !setup.isCheckpoint }
+    public var hasVoice: Bool {
+        guard let speech = deps.speech, let info = Languages.languageInfo(setup.courseCode) else { return false }
+        return speech.hasVoice(info.speechTag)
+    }
+    public var textLook: LessonTextLook {
+        LessonScreenLogic.textLook(prefs: prefs, serverPrefs: serverPrefs, courseCode: setup.courseCode, hints: deps.courseHints)
+    }
+    public var canPlayAnswer: Bool { review != nil && deps.speech != nil }
+    /// The report form for the answer under review; nil when there is nothing to report on or no report channel is wired.
+    public var reportModelFactory: (() -> ReportIssueModel)? {
+        guard let make = deps.makeReportModel, let shown = review else { return nil }
+        return { make(shown) }
+    }
+
+    // MARK: Answering
+
+    public func setTileAnswer(_ answer: String?) {
+        tileAnswer = answer
+        deps.onFeedback(.tilePlaced)
+    }
+
+    public func markHintUsed() { usedHint = true }
+
+    /// The in-app keyboard (or the phone's, through the field's binding) changed the text.
+    public func setTyped(_ text: String) {
+        typed = text
+        caret = text.unicodeScalars.count
+    }
+
+    public func applyEdit(_ edit: Edit) {
+        let result = edit.applyAt(typed, caret: caret)
+        typed = result.text
+        caret = result.caret
+    }
+
+    /// Commits a half-typed letter where it was typed (web: finalize before a caret move or a tap).
+    public func commitPending() {
+        guard let board = keyboard else { return }
+        applyEdit(board.finalize())
+    }
+
+    /// A tap in the answer at `to`, an index into the text as it was shown.
+    public func tapCaret(to: Int) {
+        let oldCaret = caret
+        let oldLength = typed.unicodeScalars.count
+        commitPending()
+        caret = LessonScreenLogic.caretAfterTap(to: to, oldCaret: oldCaret, oldLength: oldLength, newLength: typed.unicodeScalars.count)
+    }
+
+    /// Commits a half-typed letter, then grades what is in the box or the built tile order. Nothing happens without an answer.
+    public func check() {
+        if review != nil || phase != .active { return }
+        guard let current = engine.state.current else { return }
+        if isTypeIn { commitPending() }
+        guard let text = LessonScreenLogic.submittableText(typeIn: isTypeIn, typed: typed, tileAnswer: tileAnswer) else { return }
+        let latency = max(0, Int(deps.now().timeIntervalSince(shownAt) * 1000))
+        guard let outcome = engine.submit(text, usedHint: usedHint, latencyMs: latency) else { return }
+        let shown = FeedbackReview(feedback: outcome.feedback, instance: current, submittedText: text, xp: outcome.xpGained)
+        review = shown
+        switch outcome.feedback.verdict {
+        case .correct, .acceptedWithCorrection: deps.onFeedback(.correct)
+        case .incorrect: deps.onFeedback(.incorrect)
+        case .pending: break
+        }
+        if prefs.speakAnswers { playAnswer() }
+    }
+
+    /// Leaves the verdict panel: on to the next exercise, or the end of the lesson.
+    public func continueOn() {
+        guard review != nil else { return }
+        review = nil
+        resetAnswer()
+        if engine.state.finished {
+            finish()
+        } else {
+            rebuildKeyboard()
+            exerciseShown()
+        }
+    }
+
+    private func resetAnswer() {
+        typed = ""
+        caret = 0
+        tileAnswer = nil
+        usedHint = false
+        exerciseRound += 1
+        shownAt = deps.now()
+    }
+
+    /// Autoplay of the prompt, once per exercise shown (Android LaunchedEffect on instance.key).
+    public func exerciseShown() {
+        guard serverPrefs.autoplayAudio, let current = engine.state.current, review == nil else { return }
+        if Languages.isNativeText(setup.courseCode, current.exercise.prompt) { playPrompt(slow: false) }
+    }
+
+    // MARK: Finish
+
+    private func finish() {
+        if finishing { return }
+        finishing = true
+        phase = .saving
+        deps.onFeedback(.lessonComplete)
+        let completion = engine.completion(
+            courseCode: setup.courseCode,
+            courseVersion: setup.courseVersion,
+            occurredAt: deps.now(),
+            exerciseCountBySkill: setup.exerciseCountBySkill
+        )
+        let state = engine.state
+        let sessions = completion?.sessions ?? []
+        let locally = completion?.locallyCompleted
+        let practice = state.practice
+        let submit = deps.submit
+        let loadExtras = deps.loadExtras
+        Task { @MainActor [weak self] in
+            var results: [LessonSubmitResult] = []
+            var failed = false
+            for session in sessions {
+                do {
+                    results.append(try await submit(session))
+                } catch {
+                    failed = true
+                    results.append(.rejected(reason: "Couldn't save this lesson on your phone. Try again."))
+                }
+            }
+            let end = LessonScreenLogic.endKind(results: results, locallyCompleted: locally, practice: practice)
+            let extras = (failed || practice) ? LessonResultsExtras.none : await loadExtras()
+            guard let self = self else { return }
+            self.stats = LessonResultsStats(
+                correct: state.firstTryCorrect, total: state.totalCount, score: state.score, xp: state.xp,
+                streakDays: extras.streakDays, goalXpToday: extras.goalXpToday, goalXp: extras.goalXp
+            )
+            self.phase = .ended(end)
+            self.finishing = false
+        }
+    }
+
+    /// The same lesson again from the top, counting this time ("Try again" after a miss).
+    public func tryAgain() { restart(practice: false) }
+
+    /// The same lesson again as practice: nothing is submitted ("Practice again").
+    public func practiceAgain() { restart(practice: true) }
+
+    private func restart(practice: Bool) {
+        engine.restart(setup.instances, practice: practice)
+        review = nil
+        stats = nil
+        phase = .active
+        resetAnswer()
+        rebuildKeyboard()
+        exerciseShown()
+    }
+
+    // MARK: Prefs
+
+    public func updatePrefs(_ change: (inout LocalPrefs) -> Void) {
+        commitPending()
+        var next = prefs
+        change(&next)
+        if next == prefs { return }
+        prefs = next
+        deps.savePrefs(next)
+        rebuildKeyboard()
+    }
+
+    public func setScriptMode(_ mode: ScriptMode) {
+        if serverPrefs.scriptMode == mode { return }
+        serverPrefs.scriptMode = mode
+        deps.saveScriptMode(mode)
+    }
+
+    public func setKeyboardMode(_ mode: KeyboardMode) {
+        if serverPrefs.keyboardMode == mode { return }
+        serverPrefs.keyboardMode = mode
+        rebuildKeyboard()
+    }
+
+    /// (Re)creates the in-app keyboard for the exercise on screen; kept when the method is unchanged so half-typed state survives.
+    private func rebuildKeyboard() {
+        guard let current = instance, LessonScreenLogic.isTypeIn(current.renderType) else {
+            keyboard = nil
+            keyboardMethod = nil
+            return
+        }
+        let method = TypeInModel.inputMethod(
+            courseCode: setup.courseCode,
+            scriptMode: current.exercise.scriptMode,
+            prefs: prefs,
+            keyboardMode: serverPrefs.keyboardMode.rawValue
+        )
+        if method == keyboardMethod && (keyboard != nil) == (method != nil) { return }
+        keyboardMethod = method
+        if let method = method {
+            keyboard = KeyboardState(method: method)
+        } else {
+            keyboard = nil
+        }
+    }
+
+    // MARK: Audio
+
+    public func playPrompt(slow: Bool) {
+        guard let current = instance else { return }
+        speak(current.exercise.prompt, slow: slow)
+    }
+
+    public func playAnswer() {
+        guard let shown = review else { return }
+        let lines = revealedAnswerLines(shown.instance.exercise, submittedText: shown.submittedText)
+        guard let line = lines.first else { return }
+        speak(line, slow: false)
+    }
+
+    public func speakTile(_ tile: String) {
+        if prefs.speakWordBankTiles && Languages.isNativeText(setup.courseCode, tile) { speak(tile, slow: false) }
+    }
+
+    private func speak(_ text: String, slow: Bool) {
+        guard let speech = deps.speech, let tag = LessonScreenLogic.speechTag(courseCode: setup.courseCode, text: text) else { return }
+        _ = speech.speak(text, languageTag: tag, rate: slow ? SpeechService.slowRate : 1)
+    }
+
+    public func installVoice() { deps.onInstallVoice() }
+}
