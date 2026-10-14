@@ -61,7 +61,15 @@ private final class EnvStubProtocol: URLProtocol {
 
 private let course = CourseRef(code: "fa", version: 3, manifestSha256: "abc")
 
-private final class Flag: @unchecked Sendable {
+private final class EnvStopSpy: VoicePreviewing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var stops: Int { lock.lock(); defer { lock.unlock() }; return count }
+    func preview(text: String, languageTag: String) -> Bool { true }
+    func stop() { lock.lock(); count += 1; lock.unlock() }
+}
+
+private final class EnvSubmitFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false
     func set() { lock.lock(); value = true; lock.unlock() }
@@ -162,7 +170,7 @@ final class AppEnvironmentTests: XCTestCase {
 
     func testFlashcardSubmitPostsThenRefreshes() async throws {
         EnvStubProtocol.install { _ in EnvStub(200, #"{"alreadyProcessed":false,"xp":10}"#) }
-        let flag = Flag()
+        let flag = EnvSubmitFlag()
         let env = makeEnv(after: { flag.set() })
         let request = SubmitFlashcardsRequest(
             submissionId: "s", courseCode: "fa", occurredAt: Date(timeIntervalSince1970: 0), inRemix: false,
@@ -225,6 +233,68 @@ final class AppEnvironmentTests: XCTestCase {
     func testGlossaryIsTheBundledOne() {
         EnvStubProtocol.install { _ in EnvStub(200) }
         XCTAssertEqual(makeEnv().glossary, loadGlossary())
+    }
+
+    func testSettingsVoicesCarrySamples() throws {
+        let store = try seededStore()
+        try put(store, "course/fa/v3/manifest.json", CourseManifest(
+            courseCode: "fa", version: 3, units: [ManifestRef(id: "u1", path: "units/u1.json")],
+            lexemeIndexPath: "lexemes.json", themeIndexPath: "themes.json", audioIndexPath: "audio.json"))
+        try put(store, "course/fa/v3/audio.json", AudioIndexArtifact(voices: [
+            AudioVoiceEntry(id: "setareh", name: "Setareh", recordings: 4),
+            AudioVoiceEntry(id: "hooman", name: "Hooman", recordings: 0),
+        ]))
+        try put(store, "course/fa/v3/lexemes.json", [
+            "salaam": LexemeIndexEntry(gloss: "hello", romanizationIsAuthored: false, audio: ["setareh": ["audio/a.mp3"]]),
+        ])
+        let voices = try CourseContentReader(store: store).settingsVoices(course)
+        XCTAssertEqual(voices.map { $0.id }, ["setareh", "hooman"])
+        XCTAssertEqual(voices[0].label, "Setareh (default)")
+        XCTAssertEqual(voices[0].sampleText, "salaam")
+        XCTAssertEqual(voices[0].sampleLanguage, Languages.languageInfo("fa")?.speechTag)
+        XCTAssertTrue(voices[0].canPreview)
+        XCTAssertEqual(voices[1].label, "Hooman \u{2014} no recordings yet")
+        XCTAssertFalse(voices[1].canPreview)
+    }
+
+    private func makeLive(previewer: VoicePreviewing?, sessions: InMemorySessionStore) -> AppEnvironment {
+        let client = ApiClient(
+            baseURL: URL(string: "https://api.test")!, clientHeader: "ios/test",
+            session: EnvStubProtocol.makeSession(), store: sessions)
+        return AppEnvironment.live(client: client, sessions: sessions, contentStore: InMemoryContentStore(), previewer: previewer)
+    }
+
+    func testSignOutStopsPreviewCallsLogoutAndClearsSession() async throws {
+        EnvStubProtocol.install { _ in EnvStub(204, "") }
+        let sessions = makeSessions()
+        let previewer = EnvStopSpy()
+        await makeLive(previewer: previewer, sessions: sessions).signOut()
+        XCTAssertEqual(previewer.stops, 1)
+        XCTAssertEqual(lastRequest()?.url?.path, "/v1/auth/logout")
+        let remaining = await sessions.load()
+        XCTAssertNil(remaining)
+    }
+
+    func testSignOutClearsSessionEvenWhenServerFails() async throws {
+        EnvStubProtocol.install { _ in EnvStub(500, "{}") }
+        let sessions = makeSessions()
+        await makeLive(previewer: nil, sessions: sessions).signOut()
+        let remaining = await sessions.load()
+        XCTAssertNil(remaining)
+    }
+
+    @MainActor
+    func testStopVoicePreviewAndSettingsModelHasAccount() {
+        EnvStubProtocol.install { _ in EnvStub(200) }
+        let previewer = EnvStopSpy()
+        let env = makeLive(previewer: previewer, sessions: makeSessions())
+        env.stopVoicePreview()
+        XCTAssertEqual(previewer.stops, 1)
+        let suite = UserDefaults(suiteName: "AppEnvironmentTests.settings")!
+        suite.removePersistentDomain(forName: "AppEnvironmentTests.settings")
+        let model = env.makeSettingsModel(userId: "u1", course: course, accountName: "Ali", localStore: LocalPrefsStore(defaults: suite))
+        XCTAssertTrue(model.canSignOut)
+        XCTAssertEqual(model.accountName, "Ali")
     }
 
     func testContentKeyResolvesDotDot() {

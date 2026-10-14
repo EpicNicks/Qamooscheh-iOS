@@ -62,6 +62,26 @@ public struct CourseContentReader: Sendable {
         return VocabContent(courseCode: course.code, units: buildCourseVocabulary(units: units, skills: skills), lexemes: lexemes)
     }
 
+    /// The course's voices (audio.json), default first, each with a word it recorded for the Play button.
+    /// Like Android, a voice with no recordings is labelled so and has no sample, which hides Play.
+    /// iOS speaks the sample word with the device voice for the course language.
+    public func settingsVoices(_ course: CourseRef) throws -> [SettingsVoice] {
+        guard let manifest = try manifest(course), let path = manifest.audioIndexPath,
+              let index = try decode(AudioIndexArtifact.self, course: course, path: path) else { return [] }
+        let lexemes = try decode([String: LexemeIndexEntry].self, course: course, path: manifest.lexemeIndexPath) ?? [:]
+        let tags = lexemes.keys.sorted()
+        let language = Languages.languageInfo(course.code)?.speechTag
+        return index.voices.enumerated().map { offset, voice in
+            let defaultMark = offset == 0 ? " (default)" : ""
+            let emptyMark = voice.recordings > 0 ? "" : " \u{2014} no recordings yet"
+            let sampleTag = tags.first { lexemes[$0]?.audio?[voice.id]?.first != nil }
+            let text = sampleTag.map { parseLexemeTag($0).surface }
+            return SettingsVoice(
+                id: voice.id, label: voice.name + defaultMark + emptyMark,
+                sampleText: text, sampleLanguage: text == nil ? nil : language)
+        }
+    }
+
     /// themes.json and each lesson's title and category; nil when the course has no themes.
     public func themeLibrary(_ course: CourseRef) throws -> ThemeLibraryData? {
         guard let manifest = try manifest(course), let path = manifest.themeIndexPath,
