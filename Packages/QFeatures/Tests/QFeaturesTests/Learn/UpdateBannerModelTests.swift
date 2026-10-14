@@ -22,25 +22,25 @@ private final class Calls: @unchecked Sendable {
     }
 }
 
+private func makePreview() -> RollForwardPreviewResponse {
+    RollForwardPreviewResponse(
+        courseCode: "fa", fromVersion: 3, toVersion: 4, manifestSha256: "b",
+        from: RollForwardPositionRef(unitKey: "u1", skillKey: "s1", unitIndex: 0, lessonIndex: 0),
+        to: RollForwardPositionRef(unitKey: "u1", skillKey: "s1", unitIndex: 0, lessonIndex: 0),
+        clamped: false, unitClamped: false, lessonClamped: false)
+}
+
 @MainActor
 final class UpdateBannerModelTests: XCTestCase {
     private let eligible = ContentUpdateOffer(version: 4, manifestSha256: "b", eligible: true)
     private let ineligible = ContentUpdateOffer(version: 4, manifestSha256: "b", eligible: false)
-
-    private func preview() -> RollForwardPreviewResponse {
-        RollForwardPreviewResponse(
-            courseCode: "fa", fromVersion: 3, toVersion: 4, manifestSha256: "b",
-            from: RollForwardPositionRef(unitKey: "u1", skillKey: "s1", unitIndex: 0, lessonIndex: 0),
-            to: RollForwardPositionRef(unitKey: "u1", skillKey: "s1", unitIndex: 0, lessonIndex: 0),
-            clamped: false, unitClamped: false, lessonClamped: false)
-    }
 
     func testRequestUpdateOpensConfirmationFromPreview() async {
         let model = UpdateBannerModel(offer: eligible)
         let calls = Calls()
         await model.requestUpdate(courseCode: "fa") { _, version in
             calls.record(version)
-            return self.preview()
+            return makePreview()
         }
         XCTAssertEqual(calls.all, [4])
         guard case .ready(let confirmation)? = model.dialog else { return XCTFail("expected ready") }
@@ -54,7 +54,7 @@ final class UpdateBannerModelTests: XCTestCase {
         let calls = Calls()
         await model.requestUpdate(courseCode: "fa") { _, version in
             calls.record(version)
-            return self.preview()
+            return makePreview()
         }
         XCTAssertEqual(calls.all, [])
         XCTAssertNil(model.dialog)
@@ -68,7 +68,7 @@ final class UpdateBannerModelTests: XCTestCase {
 
     func testCancelClosesDialogWithoutApplying() async {
         let model = UpdateBannerModel(offer: eligible)
-        await model.requestUpdate(courseCode: "fa") { _, _ in self.preview() }
+        await model.requestUpdate(courseCode: "fa") { _, _ in makePreview() }
         model.cancelConfirmation()
         XCTAssertNil(model.dialog)
         XCTAssertEqual(model.state, .idle)
