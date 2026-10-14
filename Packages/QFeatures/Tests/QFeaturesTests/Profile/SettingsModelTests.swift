@@ -157,6 +157,40 @@ final class SettingsModelTests: XCTestCase {
         }
         XCTAssertEqual(model.form?.dailyGoalXp, 1500)
     }
+
+    func testReminderPrefsPersistAndLoad() async {
+        let suite = UserDefaults(suiteName: "settings.tests." + UUID().uuidString)!
+        let api = FakeAPI()
+        func build(_ scheduler: FakeScheduler) -> SettingsModel {
+            SettingsModel(
+                userId: "u1", courseCode: "fa",
+                sync: PrefsSync(userId: "u1", courseCode: "fa", api: api, defaults: suite),
+                localStore: LocalPrefsStore(defaults: suite), scheduler: scheduler)
+        }
+        let first = build(FakeScheduler())
+        await first.setRemindersEnabled(true)
+        first.updateReminders { $0.hour = 8; $0.minute = 15 }
+        let scheduler = FakeScheduler()
+        let second = build(scheduler)
+        XCTAssertTrue(second.reminders.enabled)
+        XCTAssertEqual(second.reminders.hour, 8)
+        XCTAssertEqual(second.reminders.minute, 15)
+        XCTAssertEqual(scheduler.settings.hour, 8)
+    }
+
+    func testUnsyncedFlagFollowsPendingEdit() async {
+        let api = FakeAPI()
+        let model = makeModel(api: api)
+        await model.load()
+        XCTAssertFalse(model.hasUnsyncedEdit)
+        api.failure = URLError(.notConnectedToInternet)
+        model.edit { $0.dailyGoalXp = 700 }
+        await model.save()
+        XCTAssertTrue(model.hasUnsyncedEdit)
+        api.failure = nil
+        await model.load()
+        XCTAssertFalse(model.hasUnsyncedEdit)
+    }
 }
 
 private final class StubPreviewer: VoicePreviewing {
