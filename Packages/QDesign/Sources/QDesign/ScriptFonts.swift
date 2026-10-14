@@ -28,15 +28,24 @@ public enum ScriptTextStyle: CaseIterable, Equatable, Sendable {
         case .display: return 34
         }
     }
+
+    /// The Dynamic Type style this role scales with.
+    public var textStyle: Font.TextStyle {
+        switch self {
+        case .caption: return .caption
+        case .body: return .body
+        case .prompt: return .title3
+        case .display: return .largeTitle
+        }
+    }
 }
 
 /// Font names and registration, the SwiftUI side of Android ScriptFonts.kt.
-/// Vazirmatn (OFL) is the bundled Persian default; "Noto Naskh Arabic" is an optional Persian
-/// choice used only when installed; Japanese and Latin use the system face (Android uses the
-/// system Noto Sans CJK). Anything not installed falls back to the system face.
+/// Vazirmatn (OFL, variable wght axis) is the only bundled face and the Persian face; Japanese and
+/// Latin use the system face (Android uses the system Noto Sans CJK). Anything not installed falls
+/// back to the system face.
 public struct ScriptFonts {
     public static let vazirmatnFamily = "Vazirmatn"
-    public static let notoNaskhFamily = "Noto Naskh Arabic"
 
     /// Font file names looked up in the bundle, without directory.
     public static let bundledFileNames: [String] = ["Vazirmatn[wght].ttf", "Vazirmatn-VariableFont_wght.ttf", "Vazirmatn.ttf"]
@@ -62,19 +71,27 @@ public struct ScriptFonts {
         case .japanese, .latin:
             return nil
         case .persian:
-            return persianFamily == ScriptFonts.notoNaskhFamily ? ScriptFonts.notoNaskhFamily : ScriptFonts.vazirmatnFamily
+            return ScriptFonts.vazirmatnFamily
         }
     }
 
-    public func font(_ script: ScriptKind, size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    /// `size` scaled by the learner's per-script percentage (clamped to a positive value).
+    public static func scaledSize(_ size: CGFloat, sizePct: Int) -> CGFloat {
+        return size * CGFloat(max(sizePct, 1)) / 100
+    }
+
+    /// Script font at `size` points scaled by `sizePct`; the custom face also tracks Dynamic Type
+    /// relative to `relativeTo`. `weight` drives the variable wght axis (default regular).
+    public func font(_ script: ScriptKind, size: CGFloat, weight: Font.Weight = .regular, sizePct: Int = 100, relativeTo textStyle: Font.TextStyle = .body) -> Font {
+        let points = ScriptFonts.scaledSize(size, sizePct: sizePct)
         if let family = resolvedFamily(for: script) {
-            return Font.custom(family, size: size).weight(weight)
+            return Font.custom(family, size: points, relativeTo: textStyle).weight(weight)
         }
-        return Font.system(size: size, weight: weight)
+        return Font.system(size: points, weight: weight)
     }
 
-    public func font(_ script: ScriptKind, style: ScriptTextStyle, weight: Font.Weight = .regular) -> Font {
-        return font(script, size: style.size, weight: weight)
+    public func font(_ script: ScriptKind, style: ScriptTextStyle, weight: Font.Weight = .regular, sizePct: Int = 100) -> Font {
+        return font(script, size: style.size, weight: weight, sizePct: sizePct, relativeTo: style.textStyle)
     }
 
     /// Whether a font family is installed (registered or built in).

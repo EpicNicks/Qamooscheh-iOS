@@ -47,4 +47,8 @@ final class SettingsLogicTests: XCTestCase {
         XCTAssertEqual(streakDayString(date ?? Date()), "2026-10-12")
         XCTAssertNil(streakDayDate("nope"))
     }
+
+    func testPersianFontChoicesOmitNaskh() {
+        XCTAssertEqual(persianFontChoices.map { $0.family }, [nil, "Vazirmatn"])
+    }
 }

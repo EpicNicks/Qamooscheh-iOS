@@ -62,11 +62,10 @@ public struct FontChoice: Equatable, Sendable {
     public let family: String?
 }
 
-/// Persian face choices. Android's PersianFace list is not ported yet.
+/// Persian face choices. Vazirmatn is the only bundled face; a stored Noto Naskh pref falls back to it.
 public let persianFontChoices: [FontChoice] = [
     FontChoice(label: "Default", family: nil),
     FontChoice(label: "Vazirmatn", family: "Vazirmatn"),
-    FontChoice(label: "Noto Naskh", family: "Noto Naskh Arabic"),
 ]
 
 public let persianFlagChoices: [FontChoice] = [
