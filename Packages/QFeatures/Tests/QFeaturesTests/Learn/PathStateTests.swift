@@ -111,6 +111,13 @@ final class PathStateTests: XCTestCase {
         XCTAssertNil(readyState(position: nil).currentNodeY(config: config))
     }
 
+    func testCurrentNodeYCountsOneRowPerPositionWhenCollapsed() {
+        let config = RoadLayoutConfig(rowHeight: 100, branchSpread: 60, logicalWidth: 300, nodeHalfWidth: 20)
+        let state = readyState(position: PositionRef(unitKey: "u1", skillKey: "c"))
+        XCTAssertEqual(state.currentNodeY(config: config), 250)
+        XCTAssertEqual(state.currentNodeY(config: config, collapseForks: false), 250)
+    }
+
     func testSkillActionsOnlyOfferSkipOnTheCurrentLesson() {
         let state = readyState()
         let current = state.units[0].standardPositions[1].skills[0]
@@ -231,6 +238,29 @@ final class PathStateTests: XCTestCase {
         XCTAssertNil(state.jumpDirection)
     }
 
+    func testScrollIsRememberedAndJumpFollowsTheCurrentNode() {
+        var state = readyState()
+        state.setScroll(.visible(nodeCentre: 400, viewportStart: 0, viewportEnd: 800))
+        XCTAssertNil(state.jumpDirection)
+        state.setScroll(.offscreenBelow)
+        XCTAssertEqual(state.jumpDirection, .down)
+        state.setBootstrap(bootstrap(position: nil))
+        XCTAssertNil(state.jumpDirection)
+        state.setBootstrap(bootstrap(position: PositionRef(unitKey: "u1", skillKey: "c")))
+        XCTAssertEqual(state.jumpDirection, .down)
+    }
+
+    func testFailedClearsOldUnits() {
+        var state = readyState()
+        state.openPopover("u1/a")
+        state.setFailed("boom")
+        XCTAssertEqual(state.status, .failed("boom"))
+        XCTAssertTrue(state.units.isEmpty)
+        XCTAssertNil(state.content)
+        XCTAssertNil(state.openPopoverId)
+        XCTAssertNil(state.currentNode)
+    }
+
     // MARK: no course
 
     func testNoCourse() {
@@ -286,6 +316,19 @@ final class PathModelTests: XCTestCase {
         let model = makeModel(repo)
         await model.refresh(bootstrap: bootstrap())
         XCTAssertNil(model.state.dailyGoal)
+    }
+
+    func testDailyGoalReadsItsOwnSource() async {
+        let repo = FakeRepo()
+        let goalRepo = FakeRepo()
+        goalRepo.prefsResult = .success(makePrefs(goal: 80))
+        goalRepo.activityResult = .success(ActivityResponse(courseCode: "ja", days: [ActivityDay(localDay: "2025-10-12", reviews: 1, xp: 40)]))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = Date(timeIntervalSince1970: 1_760_270_400)
+        let model = PathModel(repository: repo, dailyGoalSource: goalRepo, now: { now }, calendar: calendar)
+        await model.refresh(bootstrap: bootstrap())
+        XCTAssertEqual(model.state.dailyGoal, DailyGoalProgress(xp: 40, goal: 80))
     }
 
     func testNoCourseSkipsLoading() async {

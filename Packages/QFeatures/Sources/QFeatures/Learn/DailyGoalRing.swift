@@ -12,6 +12,7 @@ public struct DailyGoalRingView: View {
     private let palette: AppPalette?
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(xp: Int, goal: Int, celebrating: Bool = false, palette: AppPalette? = nil) {
         self.xp = xp
@@ -24,7 +25,9 @@ public struct DailyGoalRingView: View {
         let p = palette ?? (colorScheme == .dark ? AppPalette.dark : AppPalette.light)
         let reached = xp >= goal
         let fraction = dailyGoalRingFraction(xp: xp, goal: goal)
-        let stroke: CGFloat = 22.0 * 5.0 / 48.0
+        let size = CGFloat(dailyGoalRingSize)
+        let stroke: CGFloat = size * 5.0 / 48.0
+        let animates = goalCelebrationAnimates(celebrating: celebrating, reduceMotion: reduceMotion)
         HStack(spacing: Spacing.standard.s1) {
             ZStack {
                 Circle()
@@ -37,10 +40,10 @@ public struct DailyGoalRingView: View {
                     )
                     .rotationEffect(.degrees(-90))
             }
-            .padding(22.0 * 4.0 / 48.0)
-            .frame(width: 22, height: 22)
+            .padding(size * 4.0 / 48.0)
+            .frame(width: size, height: size)
             Text(dailyGoalRingLabel(xp: xp, goal: goal))
-                .font(.system(size: 14, weight: .bold))
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(Color(argb: p.text))
                 .lineLimit(1)
         }
@@ -52,8 +55,8 @@ public struct DailyGoalRingView: View {
         .overlay(
             Capsule().stroke(Color(argb: p.success).opacity(celebrating ? 0.45 : 0), lineWidth: 3)
         )
-        .scaleEffect(celebrating ? 1.08 : 1)
-        .animation(.easeInOut(duration: 0.3), value: fraction)
+        .scaleEffect(animates ? 1.08 : 1)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: fraction)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(dailyGoalAccessibilityLabel(xp: xp, goal: goal))
     }

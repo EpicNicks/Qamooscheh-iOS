@@ -14,19 +14,32 @@ public final class SettingsModel: ObservableObject {
     @Published public private(set) var reminders: ReminderSettings
     @Published public private(set) var loadError: String?
     @Published public private(set) var saving = false
+    /// True while an edit has not reached the server (shown as a badge).
+    @Published public private(set) var hasUnsyncedEdit = false
     @Published public private(set) var notice: SettingsNotice?
-    @Published public private(set) var streak: StreakResponse?
-    @Published public private(set) var pauseBusy = false
-    @Published public private(set) var pauseError: String?
+    /// The Streak section's state; its changes republish through this model.
+    public let streakPause: StreakPauseModel
+    public var streak: StreakResponse? { streakPause.streak }
+    public var pauseBusy: Bool { streakPause.busy }
+    public var pauseError: String? { streakPause.error }
+    @Published public private(set) var signingOut = false
+    @Published public private(set) var signOutError: String?
+    @Published public private(set) var previewNotice: String?
 
     public let courseCode: String
     public let voices: [SettingsVoice]
+    /// The signed-in name or email for the Account section; nil hides the line.
+    public let accountName: String?
+    /// Whether the Account section (Sign out) is shown.
+    public var canSignOut: Bool { signOutAction != nil }
 
     private let userId: String
     private let sync: PrefsSync
     private let localStore: LocalPrefsStore
     private let scheduler: ReminderScheduling
-    private let streakService: StreakService?
+    private var pauseObserver: AnyCancellable?
+    private let signOutAction: (() async throws -> Void)?
+    private let previewer: VoicePreviewing?
     private var dirty = false
 
     public init(
@@ -36,17 +49,30 @@ public final class SettingsModel: ObservableObject {
         localStore: LocalPrefsStore,
         scheduler: ReminderScheduling = StubReminderScheduler(),
         streakService: StreakService? = nil,
-        voices: [SettingsVoice] = []
+        voices: [SettingsVoice] = [],
+        accountName: String? = nil,
+        signOut: (() async throws -> Void)? = nil,
+        previewer: VoicePreviewing? = nil
     ) {
         self.userId = userId
         self.courseCode = courseCode
         self.sync = sync
         self.localStore = localStore
         self.scheduler = scheduler
-        self.streakService = streakService
+        self.streakPause = StreakPauseModel(service: streakService)
         self.voices = voices
-        self.local = localStore.current(userId: userId)
-        self.reminders = scheduler.current()
+        self.accountName = accountName
+        self.signOutAction = signOut
+        self.previewer = previewer
+        let stored = localStore.current(userId: userId)
+        self.local = stored
+        var r = scheduler.current()
+        r.enabled = stored.reminderEnabled
+        r.hour = stored.reminderHour
+        r.minute = stored.reminderMinute
+        self.reminders = r
+        scheduler.apply(r)
+        self.pauseObserver = streakPause.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     /// Loads cached prefs at once, then syncs with the server.
@@ -73,9 +99,8 @@ public final class SettingsModel: ObservableObject {
         if form == nil {
             loadError = "Couldn't load your settings. Check your connection and try again."
         }
-        if let service = streakService {
-            streak = try? await service.fetch()
-        }
+        hasUnsyncedEdit = await sync.hasPendingEdit
+        await streakPause.load()
     }
 
     public func edit(_ change: (inout UpdatePrefsRequest) -> Void) {
@@ -116,6 +141,7 @@ public final class SettingsModel: ObservableObject {
             dirty = true
             notice = .failed("Couldn't reach the server just now. Your changes are kept and will sync later.")
         }
+        hasUnsyncedEdit = await sync.hasPendingEdit
         saving = false
     }
 
@@ -136,48 +162,60 @@ public final class SettingsModel: ObservableObject {
         change(&next)
         reminders = next
         scheduler.apply(next)
+        local = localStore.update(userId: userId) {
+            $0.reminderEnabled = next.enabled
+            $0.reminderHour = next.hour
+            $0.reminderMinute = next.minute
+        }
+    }
+
+    /// Signs out through the injected closure (the app wires AuthApi.logout plus the session clear).
+    public func signOut() async {
+        guard let action = signOutAction, !signingOut else { return }
+        signingOut = true
+        signOutError = nil
+        do {
+            try await action()
+        } catch {
+            signOutError = "Couldn't sign out. Try again."
+        }
+        signingOut = false
+    }
+
+    /// Plays a voice's sample so the learner can hear it before choosing it (Android previewVoice).
+    public func previewVoice(_ voice: SettingsVoice) {
+        guard let previewer = previewer, let text = voice.sampleText, let language = voice.sampleLanguage, voice.canPreview else { return }
+        previewNotice = nil
+        if !previewer.preview(text: text, languageTag: language) {
+            previewNotice = "This device has no voice installed for that language, so the sample can't play."
+        }
     }
 
     /// Books a pause of `days` days starting `startDay` ("yyyy-MM-dd").
     public func pauseStreak(startDay: String, days: Int) async {
-        guard let service = streakService, !pauseBusy, days >= 1 else { return }
-        pauseBusy = true
-        pauseError = nil
-        do {
-            try await service.pause(StreakPauseRequest(startDay: startDay, endDay: addDays(startDay, days - 1)))
-            streak = try? await service.fetch()
-        } catch {
-            pauseError = "Couldn't pause your streak. Try again."
-        }
-        pauseBusy = false
+        await streakPause.book(startDay: startDay, days: days)
     }
 
     public func cancelStreakPause() async {
-        guard let service = streakService, !pauseBusy else { return }
-        pauseBusy = true
-        pauseError = nil
-        do {
-            try await service.cancelPause()
-            streak = try? await service.fetch()
-        } catch {
-            pauseError = "Couldn't change your pause. Try again."
-        }
-        pauseBusy = false
+        await streakPause.cancel()
     }
 
     /// Seeds a loaded screen without any network (snapshot showcases).
-    public static func preview(form: UpdatePrefsRequest, local: LocalPrefs, reminders: ReminderSettings, streak: StreakResponse?, courseCode: String, voices: [SettingsVoice]) -> SettingsModel {
+    public static func preview(form: UpdatePrefsRequest, local: LocalPrefs, reminders: ReminderSettings, streak: StreakResponse?, courseCode: String, voices: [SettingsVoice], accountName: String? = nil, canSignOut: Bool = false) -> SettingsModel {
         let suite = UserDefaults(suiteName: "qamooscheh.settings.preview") ?? .standard
         let store = LocalPrefsStore(defaults: suite)
         store.update(userId: "preview") { $0 = local }
         let scheduler = StubReminderScheduler()
         scheduler.apply(reminders)
+        var signOutStub: (() async throws -> Void)?
+        if canSignOut { signOutStub = { } }
         let model = SettingsModel(
             userId: "preview", courseCode: courseCode,
             sync: PrefsSync(userId: "preview", courseCode: courseCode, api: OfflinePrefsAPI(), defaults: suite),
-            localStore: store, scheduler: scheduler, streakService: nil, voices: voices)
+            localStore: store, scheduler: scheduler, streakService: nil, voices: voices,
+            accountName: accountName, signOut: signOutStub, previewer: nil)
         model.form = form
-        model.streak = streak
+        model.streakPause.seed(streak)
         return model
     }
 }
