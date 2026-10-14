@@ -125,8 +125,6 @@ private struct TermTable: View {
     @ScaledMetric(relativeTo: .body) private var termSize: CGFloat = 18
     @State private var tableWidth: CGFloat = 0
     private let columnSpacing: CGFloat = 12
-    @State private var tableWidth: CGFloat = 0
-    private let columnSpacing: CGFloat = 12
 
     var body: some View {
         let stacked = typeSize.isAccessibilitySize
