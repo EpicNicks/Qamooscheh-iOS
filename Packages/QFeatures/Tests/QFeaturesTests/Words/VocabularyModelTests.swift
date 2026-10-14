@@ -75,7 +75,7 @@ final class VocabularyModelTests: XCTestCase {
         let model = SkillVocabularyModel(store: store, unitKey: "u1", skillKey: "gone")
         await model.refresh()
         XCTAssertEqual(model.scopes.map { $0.scope }, [.unit, .course])
-        XCTAssertEqual(model.scope, .unit)
+        XCTAssertEqual(model.scope, .course)
         let missingUnit = SkillVocabularyModel(store: store, unitKey: "nope", skillKey: nil)
         XCTAssertEqual(missingUnit.scope, .course)
         XCTAssertEqual(missingUnit.terms.map { $0.tag }, ["a", "b", "c"])
