@@ -9,7 +9,7 @@ final class ShellTests: XCTestCase {
 
     func testEachTabOffersItsRoutes() {
         XCTAssertEqual(AppRoute.libraryEntries.map { $0.title }, ["Themes", "Glossary"])
-        XCTAssertEqual(AppRoute.reviewEntries.map { $0.title }, ["Flashcards", "Vocabulary"])
+        XCTAssertEqual(AppRoute.reviewEntries.map { $0.title }, ["Flashcards", "Vocabulary", "Practice saved words"])
         XCTAssertEqual(
             AppRoute.profileLinks.map { $0.title },
             ["Settings", "Friends", "Help & FAQ", "About", "Share your streak"])
