@@ -103,6 +103,12 @@ public final class LibraryModel: ObservableObject {
         self.onUnauthorized = onUnauthorized
     }
 
+    /// A course switch: drop the previous course's topics so a failed reload can't show them.
+    public func resetForCourseSwitch() {
+        generation += 1
+        state = .loading
+    }
+
     /// Safe on every appearance: loaded topics stay up while reloading, and only the newest call lands.
     public func refresh() async {
         guard let source = source else { return }

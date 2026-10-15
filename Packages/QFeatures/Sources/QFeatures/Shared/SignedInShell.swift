@@ -127,7 +127,7 @@ public final class SignedInShell: ObservableObject {
             totalXp = nil
             goal = nil
         }
-        if days != nil || sameCourse { goal = makeGoal(days: days, goalXp: goalXp) }
+        if days != nil || sameCourse { goal = makeGoal(days: days, goalXp: goalXp, fallback: sameCourse ? goal : nil) }
         let keepContext = sameCourse
         profile.context = ProfileContext(
             courseCode: course?.code,
@@ -141,8 +141,9 @@ public final class SignedInShell: ObservableObject {
         }
     }
 
-    private func makeGoal(days: [ActivityDay]?, goalXp: Int?) -> DailyGoalProgress? {
-        guard let days = days, let goalXp = goalXp, goalXp > 0 else { return goal }
+    /// `fallback` is what stands when the goal can't be computed: the last goal on the same course, nil after a switch.
+    func makeGoal(days: [ActivityDay]?, goalXp: Int?, fallback: DailyGoalProgress?) -> DailyGoalProgress? {
+        guard let days = days, let goalXp = goalXp, goalXp > 0 else { return fallback }
         let today: String
         if let streak = streak {
             today = currentStreakDay(streak, now: Date())
@@ -160,6 +161,8 @@ public final class SignedInShell: ObservableObject {
 
     /// Reloads the screens that read the active course from disk, so none keeps the previous course's content.
     private func reloadCourseModels() async {
+        library.resetForCourseSwitch()
+        vocabulary.resetForCourseSwitch()
         await library.refresh()
         await vocabulary.refresh()
     }

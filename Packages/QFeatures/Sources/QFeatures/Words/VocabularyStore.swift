@@ -78,6 +78,14 @@ public final class VocabularyStore: ObservableObject {
         return tags
     }
 
+    /// A course switch: drop the previous course's words and cards so a failed reload can't show them.
+    public func resetForCourseSwitch() {
+        generation += 1
+        content = nil
+        cards = [:]
+        status = .loading
+    }
+
     /// Safe on every appearance: loaded content, cards and stars stay up while reloading, and only the newest call lands.
     public func refresh() async {
         guard let source = source else { return }

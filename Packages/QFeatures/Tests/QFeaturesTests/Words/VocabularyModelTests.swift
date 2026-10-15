@@ -41,6 +41,20 @@ final class VocabularyModelTests: XCTestCase {
         return VocabularyStore(source: source, onUnauthorized: unauthorized)
     }
 
+    func testCourseSwitchResetThenFailedReloadDoesNotKeepOldWords() async {
+        let source = FakeVocabSource()
+        source.cards = ["a": CardState(lexemeTag: "a", stability: 1, difficulty: 1, reviewCount: 1, lapseCount: 0)]
+        let store = makeStore(source)
+        await store.refresh()
+        XCTAssertEqual(store.status, .ready)
+        store.resetForCourseSwitch()
+        source.cards = [:]
+        source.loadHandler = { throw ApiError(status: 500, body: nil) }
+        await store.refresh()
+        XCTAssertNil(store.content)
+        XCTAssertNotEqual(store.status, .ready)
+    }
+
     func testRefreshLoadsContentCardsAndStars() async {
         let source = FakeVocabSource()
         source.cards = ["a": CardState(lexemeTag: "a", stability: 1, difficulty: 1, reviewCount: 1, lapseCount: 0)]

@@ -73,6 +73,18 @@ final class ThemesModelTests: XCTestCase {
         XCTAssertEqual(ready.topics.count, 2)
     }
 
+    func testCourseSwitchResetThenFailedReloadDoesNotKeepOldTopics() async {
+        let source = FakeSource()
+        source.data = sampleData()
+        let model = LibraryModel(source: source)
+        await model.refresh()
+        guard case .ready = model.state else { return XCTFail("not ready") }
+        model.resetForCourseSwitch()
+        source.error = ApiError(status: 500, body: nil)
+        await model.refresh()
+        if case .ready = model.state { XCTFail("previous course's topics still shown") }
+    }
+
     func testLibraryNoCourse() async {
         let model = LibraryModel(source: FakeSource())
         await model.refresh()
