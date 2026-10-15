@@ -150,6 +150,8 @@ struct AppRouteDestination: View {
             FlashcardsScreen(model: shell.flashcards, onBack: { if !path.isEmpty { path.removeLast() } })
         case .vocabulary:
             VocabularyDestination(shell: shell)
+        case .savedPractice:
+            SavedPracticeDestination(shell: shell, onBack: { if !path.isEmpty { path.removeLast() } })
         case .settings:
             SettingsDestination(shell: shell, onOpenHelp: { path.append(.help) })
         case .friends:
@@ -205,6 +207,23 @@ struct VocabularyDestination: View {
 
     var body: some View {
         SkillVocabularyScreen(model: model)
+    }
+}
+
+/// Saved-words practice. The lesson screen can't yet play a hand-picked exercise list, so finishing the cards returns to Review.
+struct SavedPracticeDestination: View {
+    @StateObject private var model: SavedPracticeModel
+    let onBack: () -> Void
+
+    init(shell: SignedInShell, onBack: @escaping () -> Void) {
+        self.onBack = onBack
+        _model = StateObject(wrappedValue: SavedPracticeModel(
+            store: shell.vocabulary, source: shell.app?.savedPractice, submitter: shell.app?.flashcards,
+            onUnauthorized: shell.unauthorizedHandler))
+    }
+
+    var body: some View {
+        SavedPracticeScreen(model: model, onBack: onBack, onExercises: { _ in onBack() })
     }
 }
 

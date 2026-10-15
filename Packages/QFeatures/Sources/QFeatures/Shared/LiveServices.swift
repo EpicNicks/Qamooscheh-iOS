@@ -37,6 +37,19 @@ public struct LiveFlashcardSubmitter: FlashcardSubmitter {
     }
 }
 
+/// Saved-words practice over GET /v1/vocab/starred/practice.
+public struct LiveSavedPracticeSource: SavedPracticeSource {
+    private let repository: VocabRepository
+
+    public init(repository: VocabRepository) {
+        self.repository = repository
+    }
+
+    public func practice(count: Int) async throws -> StarredPracticeResponse {
+        try await repository.practice(words: count)
+    }
+}
+
 /// The vocabulary screens' source: the pinned course on disk, the user's card mirror, the starred endpoints.
 public struct LiveVocabularySource: VocabularySource {
     private let repository: VocabRepository

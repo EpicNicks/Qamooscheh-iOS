@@ -7,6 +7,7 @@ public enum AppRoute: Hashable, Sendable {
     case glossary
     case flashcards
     case vocabulary
+    case savedPractice
     case settings
     case friends
     case help
@@ -20,6 +21,7 @@ public enum AppRoute: Hashable, Sendable {
         case .glossary: return "Glossary"
         case .flashcards: return "Flashcards"
         case .vocabulary: return "Vocabulary"
+        case .savedPractice: return "Practice saved words"
         case .settings: return "Settings"
         case .friends: return "Friends"
         case .help: return "Help & FAQ"
@@ -31,7 +33,7 @@ public enum AppRoute: Hashable, Sendable {
     /// The Library tab's entries.
     public static let libraryEntries: [AppRoute] = [.themes, .glossary]
     /// The Review tab's entries.
-    public static let reviewEntries: [AppRoute] = [.flashcards, .vocabulary]
+    public static let reviewEntries: [AppRoute] = [.flashcards, .vocabulary, .savedPractice]
     /// The Profile tab's links.
     public static let profileLinks: [AppRoute] = [.settings, .friends, .help, .about, .shareStreak]
 }

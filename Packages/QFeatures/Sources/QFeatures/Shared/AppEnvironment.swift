@@ -16,6 +16,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let leagues: LeagueService
     public let vocabulary: VocabularySource
     public let flashcards: FlashcardSubmitter
+    /// The saved-words remix source; nil in tests.
+    public let savedPractice: SavedPracticeSource?
     public let themes: ThemeLibrarySource
     /// The bundled glossary (QDomain); filter it with `Glossary.forCourse`.
     public let glossary: Glossary
@@ -54,8 +56,10 @@ public struct AppEnvironment: @unchecked Sendable {
         settingsVoices: @escaping @Sendable (CourseRef) -> [SettingsVoice] = { _ in [] },
         signOut: @escaping @Sendable () async -> Void = {},
         forgetUser: @escaping @Sendable (String) async -> Void = { _ in },
-        previewer: VoicePreviewing? = nil
+        previewer: VoicePreviewing? = nil,
+        savedPractice: SavedPracticeSource? = nil
     ) {
+        self.savedPractice = savedPractice
         self.profile = profile
         self.streak = streak
         self.friends = friends
@@ -163,6 +167,7 @@ public struct AppEnvironment: @unchecked Sendable {
                 repository: vocab, cards: cardStore,
                 reader: reader, course: pinned, userId: userId),
             flashcards: LiveFlashcardSubmitter(repository: vocab, afterSubmit: afterFlashcardSubmit),
+            savedPractice: LiveSavedPracticeSource(repository: vocab),
             themes: LiveThemeLibrarySource(reader: reader, course: pinned),
             glossary: loadGlossary(),
             currentUserId: userId,

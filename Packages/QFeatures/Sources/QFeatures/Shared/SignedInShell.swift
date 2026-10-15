@@ -27,6 +27,8 @@ public final class SignedInShell: ObservableObject {
     public let vocabulary: VocabularyStore
     public let flashcards: FlashcardsModel
 
+    /// Called when a request answers 401; models built later (saved practice) report it here.
+    public let unauthorizedHandler: @Sendable () -> Void
     private let onSignedOut: @MainActor @Sendable () -> Void
 
     /// Holds the signed-in user's id for the leagues model, which reads it on every refresh.
@@ -65,6 +67,7 @@ public final class SignedInShell: ObservableObject {
                 await MainActor.run { onSignedOut() }
             }
         }
+        self.unauthorizedHandler = unauthorized
         self.profile = ProfileModel(
             service: app?.profile, streakService: app?.streak, signOut: signOut, onUnauthorized: unauthorized)
         self.library = LibraryModel(source: app?.themes, onUnauthorized: unauthorized)

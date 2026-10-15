@@ -34,6 +34,20 @@ final class VocabDataTests: XCTestCase {
         }
     }
 
+    func testPracticeGetsWordsQuery() async throws {
+        StubURLProtocol.install { _ in
+            StubResponse(200, #"{"courseVersion":3,"words":[{"tag":"a","exercises":[{"unitKey":"u1","skillKey":"s1","ordinal":2}]}]}"#)
+        }
+        let response = try await makeRepo().practice(words: 10)
+        XCTAssertEqual(response.courseVersion, 3)
+        XCTAssertEqual(response.words.first?.tag, "a")
+        XCTAssertEqual(response.words.first?.exercises.first?.ordinal, 2)
+        let request = StubURLProtocol.requests.first
+        XCTAssertEqual(request?.httpMethod, "GET")
+        XCTAssertEqual(request?.url?.path, "/v1/vocab/starred/practice")
+        XCTAssertEqual(request?.url?.query, "words=10")
+    }
+
     func testSubmitFlashcardsPosts() async throws {
         StubURLProtocol.install { _ in StubResponse(200, #"{"alreadyProcessed":false,"xp":10}"#) }
         let request = SubmitFlashcardsRequest(
