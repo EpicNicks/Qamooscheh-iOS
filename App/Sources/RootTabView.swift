@@ -32,35 +32,53 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// An intentionally empty tab body; real screens arrive in later milestones.
-struct EmptyTabView: View {
-    let tab: AppTab
-
-    var body: some View {
-        NavigationStack {
-            Color(argb: AppPalette.light.bg)
-                .padding(Spacing.standard.s3)
-                .navigationTitle(tab.title)
-        }
-    }
-}
-
 struct RootTabView: View {
     private let lessons: LessonEnvironment?
+    @StateObject private var shell: SignedInShell
+    @State private var selection: AppTab
     @State private var lessonRoute: LessonRoute?
+    @Environment(\.scenePhase) private var scenePhase
 
-    init(lessons: LessonEnvironment? = nil) {
+    /// - Parameters:
+    ///   - app: the production services; nil renders every tab's empty state (previews, snapshot tests).
+    ///   - onboarding: the service behind the Learn tab's course switcher.
+    ///   - onSignedOut: called after sign-out or an expired session, so the app can show login again.
+    init(
+        lessons: LessonEnvironment? = nil,
+        app: AppEnvironment? = nil,
+        onboarding: OnboardingService? = nil,
+        onSignedOut: @escaping @MainActor @Sendable () -> Void = {},
+        initialTab: AppTab = .learn
+    ) {
         self.lessons = lessons
+        _shell = StateObject(wrappedValue: SignedInShell(app: app, onboarding: onboarding, onSignedOut: onSignedOut))
+        _selection = State(initialValue: initialTab)
+    }
+
+    @ViewBuilder
+    private func content(for tab: AppTab) -> some View {
+        switch tab {
+        case .learn: LearnTab(shell: shell)
+        case .library: LibraryTab(shell: shell)
+        case .review: ReviewTab(shell: shell)
+        case .leagues: LeaguesTab(shell: shell)
+        case .profile: ProfileTab(shell: shell)
+        }
     }
 
     private var tabs: some View {
-        TabView {
+        TabView(selection: $selection) {
             ForEach(AppTab.allCases) { tab in
-                EmptyTabView(tab: tab)
+                content(for: tab)
                     .tabItem { Label(tab.title, systemImage: tab.systemImage) }
+                    .tag(tab)
             }
         }
         .environment(\.startLesson, { lessonRoute = $0 })
+        .task { await shell.refresh() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await shell.refresh() } }
+        }
     }
 
     var body: some View {
