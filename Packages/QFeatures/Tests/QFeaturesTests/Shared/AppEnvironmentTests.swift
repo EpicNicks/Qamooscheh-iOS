@@ -316,7 +316,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(left.isEmpty)
     }
 
-    func testSignOutClearsPrefsAndForgetUserClearsCardMirror() async throws {
+    func testForgetUserClearsCardMirrorAndPrefsSync() async throws {
         EnvStubProtocol.install { _ in EnvStub(204, "") }
         let sessions = makeSessions()
         let store = InMemoryContentStore()
@@ -326,7 +326,9 @@ final class AppEnvironmentTests: XCTestCase {
             baseURL: URL(string: "https://api.test")!, clientHeader: "ios/test",
             session: EnvStubProtocol.makeSession(), store: sessions)
         let env = AppEnvironment.live(client: client, sessions: sessions, contentStore: store)
+        let before = env.makePrefsSync("u1", "fa")
         await env.forgetUser("u1")
+        XCTAssertFalse(before === env.makePrefsSync("u1", "fa"))
         let left = await CardStateStore(store: store).all(userId: "u1")
         XCTAssertTrue(left.isEmpty)
     }
