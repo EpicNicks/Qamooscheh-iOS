@@ -32,6 +32,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let settingsVoices: @Sendable (_ course: CourseRef) -> [SettingsVoice]
     /// Stops any voice sample, then AuthApi.logout (best-effort server revoke; always clears the local session).
     public let signOut: @Sendable () async -> Void
+    /// Forgets a user's prefs and card mirror on this device. Sign-out and an expired session both call it.
+    public let forgetUser: @Sendable (_ userId: String) async -> Void
     /// The voice sample player; nil in tests.
     public let previewer: VoicePreviewing?
 
@@ -51,6 +53,7 @@ public struct AppEnvironment: @unchecked Sendable {
         activity: @escaping @Sendable (String) async throws -> [ActivityDay] = { _ in [] },
         settingsVoices: @escaping @Sendable (CourseRef) -> [SettingsVoice] = { _ in [] },
         signOut: @escaping @Sendable () async -> Void = {},
+        forgetUser: @escaping @Sendable (String) async -> Void = { _ in },
         previewer: VoicePreviewing? = nil
     ) {
         self.profile = profile
@@ -68,6 +71,7 @@ public struct AppEnvironment: @unchecked Sendable {
         self.activity = activity
         self.settingsVoices = settingsVoices
         self.signOut = signOut
+        self.forgetUser = forgetUser
         self.previewer = previewer
     }
 
@@ -145,6 +149,11 @@ public struct AppEnvironment: @unchecked Sendable {
         }
         let cardStore = CardStateStore(store: contentStore)
         let prefsProvider = PrefsSyncProvider(api: PrefsRepository(client: client))
+        let forget: @Sendable (String) async -> Void = { uid in
+            guard !uid.isEmpty else { return }
+            await prefsProvider.clear(userId: uid)
+            try? await cardStore.clear(userId: uid)
+        }
         return AppEnvironment(
             profile: LiveProfileService(client: client),
             streak: StreakRepository(client: client),
@@ -172,11 +181,9 @@ public struct AppEnvironment: @unchecked Sendable {
                 let uid = await userId()
                 await auth.logout()
                 // Forget the signed-out user's prefs and card mirror so the next account starts clean.
-                if let uid, !uid.isEmpty {
-                    await prefsProvider.clear(userId: uid)
-                    try? await cardStore.clear(userId: uid)
-                }
+                if let uid { await forget(uid) }
             },
+            forgetUser: forget,
             previewer: previewer)
     }
 }

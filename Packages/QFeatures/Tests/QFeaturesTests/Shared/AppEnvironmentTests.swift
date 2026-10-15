@@ -316,6 +316,111 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(left.isEmpty)
     }
 
+    func testSignOutClearsPrefsAndForgetUserClearsCardMirror() async throws {
+        EnvStubProtocol.install { _ in EnvStub(204, "") }
+        let sessions = makeSessions()
+        let store = InMemoryContentStore()
+        let card = CardState(lexemeTag: "salaam", stability: 1, difficulty: 2, reviewCount: 1, lapseCount: 0)
+        try await CardStateStore(store: store).merge(userId: "u1", cards: [card])
+        let client = ApiClient(
+            baseURL: URL(string: "https://api.test")!, clientHeader: "ios/test",
+            session: EnvStubProtocol.makeSession(), store: sessions)
+        let env = AppEnvironment.live(client: client, sessions: sessions, contentStore: store)
+        await env.forgetUser("u1")
+        let left = await CardStateStore(store: store).all(userId: "u1")
+        XCTAssertTrue(left.isEmpty)
+    }
+
+    private func makeShell(
+        store: ContentFileStore, signedOut: @escaping @MainActor @Sendable () -> Void = {}
+    ) -> SignedInShell {
+        let sessions = makeSessions()
+        let client = ApiClient(
+            baseURL: URL(string: "https://api.test")!, clientHeader: "ios/test",
+            session: EnvStubProtocol.makeSession(), store: sessions)
+        let env = AppEnvironment.live(client: client, sessions: sessions, contentStore: store)
+        return SignedInShell(app: env, onSignedOut: signedOut)
+    }
+
+    private func bootstrapJSON(_ code: String) -> String {
+        #"{"course":{"code":"\#(code)","version":3,"manifestSha256":"abc"},"graders":[],"enrolledCourseCodes":["fa","de"],"onboardingComplete":true}"#
+    }
+
+    @MainActor
+    func testCourseSwitchWithFailedActivityClearsXpGoalAndProfileActivity() async throws {
+        let store = try seededStore()
+        let shell = makeShell(store: store)
+        var active = "fa"
+        EnvStubProtocol.install { request in
+            let path = request.url?.path ?? ""
+            if path == "/v1/bootstrap" { return EnvStub(200, self.bootstrapJSON(active)) }
+            if path == "/v1/activity/fa" { return EnvStub(200, #"{"days":[{"localDay":"2026-01-01","reviews":2,"xp":40}]}"#) }
+            return EnvStub(500, #"{"error":"down"}"#)
+        }
+        await shell.refresh()
+        XCTAssertEqual(shell.totalXp, 40)
+        XCTAssertEqual(shell.profile.context.activity.count, 1)
+        active = "de"
+        await shell.refresh()
+        XCTAssertEqual(shell.course?.code, "de")
+        XCTAssertNil(shell.totalXp)
+        XCTAssertNil(shell.goal)
+        XCTAssertTrue(shell.profile.context.activity.isEmpty)
+        XCTAssertNil(shell.profile.context.dailyGoalXp)
+    }
+
+    @MainActor
+    func testFailedActivityOnSameCourseKeepsLastValues() async throws {
+        let shell = makeShell(store: try seededStore())
+        var fail = false
+        EnvStubProtocol.install { request in
+            let path = request.url?.path ?? ""
+            if path == "/v1/bootstrap" { return EnvStub(200, self.bootstrapJSON("fa")) }
+            if path == "/v1/activity/fa" && !fail { return EnvStub(200, #"{"days":[{"localDay":"2026-01-01","reviews":2,"xp":40}]}"#) }
+            return EnvStub(500, #"{"error":"down"}"#)
+        }
+        await shell.refresh()
+        fail = true
+        await shell.refresh()
+        XCTAssertEqual(shell.totalXp, 40)
+        XCTAssertEqual(shell.profile.context.activity.count, 1)
+    }
+
+    @MainActor
+    func testCourseSwitchReloadsLibraryAndVocabulary() async throws {
+        let store = try seededStore()
+        let shell = makeShell(store: store)
+        var active = "fa"
+        EnvStubProtocol.install { request in
+            let path = request.url?.path ?? ""
+            if path == "/v1/bootstrap" { return EnvStub(200, self.bootstrapJSON(active)) }
+            return EnvStub(500, #"{"error":"down"}"#)
+        }
+        await shell.refresh()
+        await shell.library.refresh()
+        await shell.vocabulary.refresh()
+        guard case .ready = shell.library.state else { return XCTFail("expected ready library") }
+        XCTAssertEqual(shell.vocabulary.status, .ready)
+        active = "de"
+        await shell.refresh()
+        if case .ready = shell.library.state { XCTFail("library still shows the previous course") }
+        XCTAssertNotEqual(shell.vocabulary.status, .ready)
+    }
+
+    @MainActor
+    func testExpiredSessionClearsCardMirrorAndSignsOut() async throws {
+        let store = InMemoryContentStore()
+        let card = CardState(lexemeTag: "salaam", stability: 1, difficulty: 2, reviewCount: 1, lapseCount: 0)
+        try await CardStateStore(store: store).merge(userId: "u1", cards: [card])
+        let signedOut = EnvSubmitFlag()
+        let shell = makeShell(store: store, signedOut: { signedOut.set() })
+        EnvStubProtocol.install { _ in EnvStub(401, #"{"error":"unauthorized"}"#) }
+        await shell.refresh()
+        XCTAssertTrue(signedOut.isSet)
+        let left = await CardStateStore(store: store).all(userId: "u1")
+        XCTAssertTrue(left.isEmpty)
+    }
+
     func testSignOutClearsSessionEvenWhenServerFails() async throws {
         EnvStubProtocol.install { _ in EnvStub(500, "{}") }
         let sessions = makeSessions()

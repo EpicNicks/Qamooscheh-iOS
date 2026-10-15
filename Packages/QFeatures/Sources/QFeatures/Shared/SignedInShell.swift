@@ -36,6 +36,10 @@ public final class SignedInShell: ObservableObject {
     }
 
     private let viewer: ViewerBox
+    /// The course whose activity `totalXp` and `goal` describe.
+    private var activityCourse: String?
+    /// The course the course-bound models last loaded for.
+    private var modelsCourse: String??
 
     public init(
         app: AppEnvironment?,
@@ -47,7 +51,13 @@ public final class SignedInShell: ObservableObject {
         self.app = app
         self.onboarding = onboarding
         self.onSignedOut = onSignedOut
-        let unauthorized: @Sendable () -> Void = { Task { @MainActor in onSignedOut() } }
+        // An expired session forgets the user's local prefs and card mirror, like an explicit sign-out.
+        let unauthorized: @Sendable () -> Void = {
+            Task { @MainActor in
+                if let env = app, let id = box.id { await env.forgetUser(id) }
+                onSignedOut()
+            }
+        }
         var signOut: (@Sendable () async throws -> Void)?
         if let env = app {
             signOut = { @Sendable () async throws -> Void in
@@ -82,7 +92,7 @@ public final class SignedInShell: ObservableObject {
         do {
             apply(try await app.bootstrap())
         } catch {
-            noteFailure(error)
+            await noteFailure(error)
             // Offline: the last pin this user saw, so the header and screens still know the course.
             if course == nil, let cached = try? await app.pinnedCourse() { course = cached }
         }
@@ -92,7 +102,7 @@ public final class SignedInShell: ObservableObject {
         do {
             streak = try await app.streak.fetch()
         } catch {
-            noteFailure(error)
+            await noteFailure(error)
         }
         var days: [ActivityDay]?
         var goalXp: Int?
@@ -100,7 +110,7 @@ public final class SignedInShell: ObservableObject {
             do {
                 days = try await app.activity(active.code)
             } catch {
-                noteFailure(error)
+                await noteFailure(error)
             }
             if let user = uid {
                 let sync = app.makePrefsSync(user, active.code)
@@ -108,13 +118,27 @@ public final class SignedInShell: ObservableObject {
                 goalXp = await sync.prefs?.dailyGoalXp
             }
         }
-        if let loaded = days { totalXp = QDomain.totalXp(loaded) }
-        goal = makeGoal(days: days, goalXp: goalXp)
+        // A failed fetch keeps the last values only for the same course; after a switch they show as unknown.
+        let sameCourse = course?.code == activityCourse
+        if let loaded = days {
+            totalXp = QDomain.totalXp(loaded)
+            activityCourse = course?.code
+        } else if !sameCourse {
+            totalXp = nil
+            goal = nil
+        }
+        if days != nil || sameCourse { goal = makeGoal(days: days, goalXp: goalXp) }
+        let keepContext = sameCourse
         profile.context = ProfileContext(
             courseCode: course?.code,
             enrolledCount: bootstrap?.enrolledCourseCodes.count ?? 0,
-            activity: days ?? profile.context.activity,
-            dailyGoalXp: goalXp ?? profile.context.dailyGoalXp)
+            activity: days ?? (keepContext ? profile.context.activity : []),
+            dailyGoalXp: goalXp ?? (keepContext ? profile.context.dailyGoalXp : nil))
+        if modelsCourse == nil || modelsCourse! != course?.code {
+            let switched = modelsCourse != nil
+            modelsCourse = .some(course?.code)
+            if switched { await reloadCourseModels() }
+        }
     }
 
     private func makeGoal(days: [ActivityDay]?, goalXp: Int?) -> DailyGoalProgress? {
@@ -128,8 +152,16 @@ public final class SignedInShell: ObservableObject {
         return DailyGoalProgress(xp: xpToday(days, today: today), goal: goalXp)
     }
 
-    private func noteFailure(_ error: Error) {
-        if isUnauthorizedError(error) { onSignedOut() }
+    private func noteFailure(_ error: Error) async {
+        guard isUnauthorizedError(error) else { return }
+        if let id = viewer.id { await app?.forgetUser(id) }
+        onSignedOut()
+    }
+
+    /// Reloads the screens that read the active course from disk, so none keeps the previous course's content.
+    private func reloadCourseModels() async {
+        await library.refresh()
+        await vocabulary.refresh()
     }
 
     /// Takes a bootstrap from the server or the course switcher.
