@@ -355,7 +355,7 @@ final class AppEnvironmentTests: XCTestCase {
         EnvStubProtocol.install { request in
             let path = request.url?.path ?? ""
             if path == "/v1/bootstrap" { return EnvStub(200, self.bootstrapJSON(active)) }
-            if path == "/v1/activity/fa" { return EnvStub(200, #"{"days":[{"localDay":"2026-01-01","reviews":2,"xp":40}]}"#) }
+            if path == "/v1/activity/fa" { return EnvStub(200, #"{"courseCode":"fa","days":[{"localDay":"2026-01-01","reviews":2,"xp":40}]}"#) }
             return EnvStub(500, #"{"error":"down"}"#)
         }
         await shell.refresh()
@@ -377,7 +377,7 @@ final class AppEnvironmentTests: XCTestCase {
         EnvStubProtocol.install { request in
             let path = request.url?.path ?? ""
             if path == "/v1/bootstrap" { return EnvStub(200, self.bootstrapJSON("fa")) }
-            if path == "/v1/activity/fa" && !fail { return EnvStub(200, #"{"days":[{"localDay":"2026-01-01","reviews":2,"xp":40}]}"#) }
+            if path == "/v1/activity/fa" && !fail { return EnvStub(200, #"{"courseCode":"fa","days":[{"localDay":"2026-01-01","reviews":2,"xp":40}]}"#) }
             return EnvStub(500, #"{"error":"down"}"#)
         }
         await shell.refresh()
