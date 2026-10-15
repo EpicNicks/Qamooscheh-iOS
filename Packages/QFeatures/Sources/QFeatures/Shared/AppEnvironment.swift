@@ -3,6 +3,9 @@ import QModel
 import QDomain
 import QNetwork
 import QData
+#if canImport(AVFoundation)
+import AVFoundation
+#endif
 
 /// The production services behind the signed-in screens, all built on one ApiClient and one content store.
 /// UI wiring reads these; nothing here touches SwiftUI.
@@ -19,12 +22,18 @@ public struct AppEnvironment: @unchecked Sendable {
     public let currentUserId: @Sendable () async -> String?
     /// The pinned course from GET /v1/bootstrap; nil with no active course.
     public let pinnedCourse: @Sendable () async throws -> CourseRef?
+    /// GET /v1/bootstrap (the course switcher and the Path header read it); throws offline.
+    public let bootstrap: @Sendable () async throws -> BootstrapResponse
+    /// The course's activity days (GET /v1/activity/{code}); Profile and the Path header's Total XP sum them.
+    public let activity: @Sendable (_ courseCode: String) async throws -> [ActivityDay]
     /// One PrefsSync per (user, course); keep and reuse the one for the active pair.
     public let makePrefsSync: @Sendable (_ userId: String, _ courseCode: String) -> PrefsSync
     /// The pinned course's voices for the Settings picker, with samples; empty when none.
     public let settingsVoices: @Sendable (_ course: CourseRef) -> [SettingsVoice]
     /// Stops any voice sample, then AuthApi.logout (best-effort server revoke; always clears the local session).
     public let signOut: @Sendable () async -> Void
+    /// Forgets a user's prefs and card mirror on this device. Sign-out and an expired session both call it.
+    public let forgetUser: @Sendable (_ userId: String) async -> Void
     /// The voice sample player; nil in tests.
     public let previewer: VoicePreviewing?
 
@@ -40,8 +49,11 @@ public struct AppEnvironment: @unchecked Sendable {
         currentUserId: @escaping @Sendable () async -> String?,
         pinnedCourse: @escaping @Sendable () async throws -> CourseRef?,
         makePrefsSync: @escaping @Sendable (String, String) -> PrefsSync,
+        bootstrap: @escaping @Sendable () async throws -> BootstrapResponse = { throw URLError(.notConnectedToInternet) },
+        activity: @escaping @Sendable (String) async throws -> [ActivityDay] = { _ in [] },
         settingsVoices: @escaping @Sendable (CourseRef) -> [SettingsVoice] = { _ in [] },
         signOut: @escaping @Sendable () async -> Void = {},
+        forgetUser: @escaping @Sendable (String) async -> Void = { _ in },
         previewer: VoicePreviewing? = nil
     ) {
         self.profile = profile
@@ -55,8 +67,11 @@ public struct AppEnvironment: @unchecked Sendable {
         self.currentUserId = currentUserId
         self.pinnedCourse = pinnedCourse
         self.makePrefsSync = makePrefsSync
+        self.bootstrap = bootstrap
+        self.activity = activity
         self.settingsVoices = settingsVoices
         self.signOut = signOut
+        self.forgetUser = forgetUser
         self.previewer = previewer
     }
 
@@ -73,7 +88,8 @@ public struct AppEnvironment: @unchecked Sendable {
         course: CourseRef,
         accountName: String?,
         localStore: LocalPrefsStore = LocalPrefsStore(),
-        scheduler: ReminderScheduling = StubReminderScheduler()
+        scheduler: ReminderScheduling = StubReminderScheduler(),
+        afterSignOut: (@Sendable () async -> Void)? = nil
     ) -> SettingsModel {
         let signOutAction = signOut
         return SettingsModel(
@@ -81,8 +97,26 @@ public struct AppEnvironment: @unchecked Sendable {
             sync: makePrefsSync(userId, course.code), localStore: localStore,
             scheduler: scheduler, streakService: streak,
             voices: settingsVoices(course), accountName: accountName,
-            signOut: { await signOutAction() },
+            signOut: {
+                await signOutAction()
+                await afterSignOut?()
+            },
             previewer: previewer)
+    }
+
+    /// The app's environment: one ApiClient on `sessions`, course files and the card mirror under Application Support/content
+    /// (where the lesson pipeline keeps them), and a voice previewer when the platform has speech.
+    public static func live(baseURL: URL, clientHeader: String, sessions: SessionStore) -> AppEnvironment {
+        let client = ApiClient(baseURL: baseURL, clientHeader: clientHeader, store: sessions)
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let store = FileContentStore(root: support.appendingPathComponent("content", isDirectory: true))
+        #if canImport(AVFoundation)
+        let previewer: VoicePreviewing? = SpeechVoicePreviewer(speech: SpeechService(synthesizer: AVSpeechSynthesizerAdapter()))
+        #else
+        let previewer: VoicePreviewing? = nil
+        #endif
+        return live(client: client, sessions: sessions, contentStore: store, previewer: previewer)
     }
 
     /// Builds the environment on `client`, reading course files and the card mirror from `contentStore`.
@@ -97,17 +131,28 @@ public struct AppEnvironment: @unchecked Sendable {
         let reader = CourseContentReader(store: contentStore)
         let vocab = VocabRepository(client: client)
         let userId: @Sendable () async -> String? = { await sessions.load()?.userId }
+        let fetchBootstrap: @Sendable () async throws -> BootstrapResponse = {
+            let uid = await userId()
+            let response: BootstrapResponse = try await client.send(.get, "/v1/bootstrap")
+            PinCache.save(response.course, userId: uid, store: contentStore)
+            return response
+        }
         let pinned: @Sendable () async throws -> CourseRef? = {
             let uid = await userId()
             do {
-                let response: BootstrapResponse = try await client.send(.get, "/v1/bootstrap")
-                PinCache.save(response.course, userId: uid, store: contentStore)
-                return response.course
+                return try await fetchBootstrap().course
             } catch {
                 // Offline (or server down): fall back to the last pin this user saw, like Android.
                 if let cached = PinCache.load(userId: uid, store: contentStore) { return cached }
                 throw error
             }
+        }
+        let cardStore = CardStateStore(store: contentStore)
+        let prefsProvider = PrefsSyncProvider(api: PrefsRepository(client: client))
+        let forget: @Sendable (String) async -> Void = { uid in
+            guard !uid.isEmpty else { return }
+            await prefsProvider.clear(userId: uid)
+            try? await cardStore.clear(userId: uid)
         }
         return AppEnvironment(
             profile: LiveProfileService(client: client),
@@ -115,21 +160,30 @@ public struct AppEnvironment: @unchecked Sendable {
             friends: FriendsRepository(client: client),
             leagues: LeagueRepository(client: client),
             vocabulary: LiveVocabularySource(
-                repository: vocab, cards: CardStateStore(store: contentStore),
+                repository: vocab, cards: cardStore,
                 reader: reader, course: pinned, userId: userId),
             flashcards: LiveFlashcardSubmitter(repository: vocab, afterSubmit: afterFlashcardSubmit),
             themes: LiveThemeLibrarySource(reader: reader, course: pinned),
             glossary: loadGlossary(),
             currentUserId: userId,
             pinnedCourse: pinned,
-            makePrefsSync: { user, course in
-                PrefsSync(userId: user, courseCode: course, api: PrefsRepository(client: client))
+            makePrefsSync: { user, course in prefsProvider.sync(userId: user, courseCode: course) },
+            bootstrap: fetchBootstrap,
+            activity: { code in
+                let allowed = code.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+                guard allowed, !code.isEmpty else { return [] }
+                let response: ActivityResponse = try await client.send(.get, "/v1/activity/\(code)")
+                return response.days
             },
             settingsVoices: { pinned in (try? reader.settingsVoices(pinned)) ?? [] },
             signOut: {
                 await MainActor.run { previewer?.stop() }
+                let uid = await userId()
                 await auth.logout()
+                // Forget the signed-out user's prefs and card mirror so the next account starts clean.
+                if let uid { await forget(uid) }
             },
+            forgetUser: forget,
             previewer: previewer)
     }
 }

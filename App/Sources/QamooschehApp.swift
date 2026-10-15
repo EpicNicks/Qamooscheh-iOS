@@ -10,6 +10,11 @@ struct QamooschehApp: App {
 
     private let lessons: LessonEnvironment
 
+    private let appEnvironment: AppEnvironment
+
+    /// Bumped on sign-out or an expired session; recreates the gates so they read the cleared session and show login.
+    @State private var sessionEpoch = 0
+
     init() {
         ScriptFonts.registerBundledFonts()
         let baseURL = URL(string: "https://api.parsling.com")!
@@ -20,15 +25,19 @@ struct QamooschehApp: App {
         // The lesson's setup loader is the unwired placeholder until the path screen host reads course content; the grader is the
         // placeholder (nothing graded on device) until M1 picks the runtime. Submit goes through the real offline queue.
         self.lessons = LessonEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, store: auth.store)
+        self.appEnvironment = AppEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, sessions: auth.store)
     }
 
     var body: some Scene {
         WindowGroup {
             AuthGate(environment: auth) {
                 OnboardingGate(environment: onboarding) {
-                    RootTabView(lessons: lessons)
+                    RootTabView(
+                        lessons: lessons, app: appEnvironment, onboarding: onboarding.service,
+                        onSignedOut: { sessionEpoch += 1 })
                 }
             }
+            .id(sessionEpoch)
         }
     }
 }
