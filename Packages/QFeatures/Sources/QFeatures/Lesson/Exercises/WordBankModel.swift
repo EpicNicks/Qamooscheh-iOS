@@ -115,6 +115,51 @@ public enum TileLook: Equatable, Sendable {
     }
 }
 
+extension TileLook {
+    /// A symbol drawn on the tile so its state never rests on color alone; nil for a plain tile.
+    public var cueSymbol: String? {
+        switch self {
+        case .right: return "checkmark"
+        case .swapped: return "arrow.left.arrow.right"
+        case .wrong: return "xmark"
+        case .missing: return "plus"
+        case .plain: return nil
+        }
+    }
+
+    /// The state spoken by VoiceOver after the tile text; nil for a plain tile.
+    public var reviewDescription: String? {
+        switch self {
+        case .right: return "Correct"
+        case .swapped: return "Right word, wrong place"
+        case .wrong: return "Incorrect"
+        case .missing: return "Needed in the answer"
+        case .plain: return nil
+        }
+    }
+}
+
+/// What VoiceOver hears for one tile.
+public struct TileAccessibility: Equatable, Sendable {
+    public var label: String
+    public var value: String
+    public var hint: String
+    /// True for a tile placed in the answer (adds the selected trait).
+    public var isSelected: Bool
+
+    public static func make(text: String, placed: Bool, position: Int?, look: TileLook, reviewing: Bool) -> TileAccessibility {
+        var parts: [String] = []
+        if placed {
+            if let position = position { parts.append("In answer, position \(position + 1)") } else { parts.append("In answer") }
+        } else {
+            parts.append("In word bank")
+        }
+        if let state = look.reviewDescription { parts.append(state) }
+        let hint = reviewing ? "" : (placed ? "Double tap to put it back in the word bank" : "Double tap to add it to your answer")
+        return TileAccessibility(label: text, value: parts.joined(separator: ", "), hint: hint, isSelected: placed)
+    }
+}
+
 /// Whether the word bank flows right to left: a right-to-left course with any tile in its own script.
 public func wordBankIsRtl(courseCode: String, tiles: [String]) -> Bool {
     return Languages.writingDirection(courseCode) == .rtl && tiles.contains { Languages.isNativeText(courseCode, $0) }

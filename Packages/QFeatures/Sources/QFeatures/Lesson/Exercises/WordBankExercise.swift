@@ -43,6 +43,8 @@ struct ExerciseTile: View {
     let text: String
     let exercise: ExerciseArtifact
     let look: TileLook
+    var placed: Bool = false
+    var position: Int? = nil
     let enabled: Bool
     let action: () -> Void
 
@@ -61,16 +63,29 @@ struct ExerciseTile: View {
 
     var body: some View {
         let c = colors
+        let a11y = TileAccessibility.make(text: text, placed: placed, position: position, look: look, reviewing: !enabled)
         Button(action: action) {
             AnnotatedText(text, scriptMode: exercise.scriptMode, tags: exercise.tags, fontSize: 18)
                 .fixedSize()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(RoundedCornerBox(fill: c.fill, edge: c.edge, radius: Radii.standard.sm, lineWidth: 2))
+                .overlay(alignment: .topTrailing) {
+                    if let symbol = look.cueSymbol {
+                        Image(systemName: symbol)
+                            .font(.system(size: 10, weight: .heavy))
+                            .foregroundColor(Color(argb: c.edge))
+                            .padding(3)
+                            .accessibilityHidden(true)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .accessibilityLabel(text)
+        .accessibilityLabel(a11y.label)
+        .accessibilityValue(a11y.value)
+        .accessibilityHint(a11y.hint)
+        .accessibilityAddTraits(a11y.isSelected ? [.isSelected] : [])
     }
 }
 
@@ -118,6 +133,7 @@ public struct WordBankExercise: View {
                     ExerciseTile(
                         text: tiles[index], exercise: exercise,
                         look: TileLook.of(mark: markAt(review, position), missing: false),
+                        placed: true, position: position,
                         enabled: reviewed == nil
                     ) { tap(index) }
                 }
