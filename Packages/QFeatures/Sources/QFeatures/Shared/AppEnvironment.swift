@@ -1,0 +1,158 @@
+import Foundation
+import QModel
+import QDomain
+import QNetwork
+import QData
+
+/// The production services behind the signed-in screens, all built on one ApiClient and one content store.
+/// UI wiring reads these; nothing here touches SwiftUI.
+public struct AppEnvironment: @unchecked Sendable {
+    public let profile: ProfileService
+    public let streak: StreakService
+    public let friends: FriendsService
+    public let leagues: LeagueService
+    public let vocabulary: VocabularySource
+    public let flashcards: FlashcardSubmitter
+    public let themes: ThemeLibrarySource
+    /// The bundled glossary (QDomain); filter it with `Glossary.forCourse`.
+    public let glossary: Glossary
+    public let currentUserId: @Sendable () async -> String?
+    /// The pinned course from GET /v1/bootstrap; nil with no active course.
+    public let pinnedCourse: @Sendable () async throws -> CourseRef?
+    /// One PrefsSync per (user, course); keep and reuse the one for the active pair.
+    public let makePrefsSync: @Sendable (_ userId: String, _ courseCode: String) -> PrefsSync
+    /// The pinned course's voices for the Settings picker, with samples; empty when none.
+    public let settingsVoices: @Sendable (_ course: CourseRef) -> [SettingsVoice]
+    /// Stops any voice sample, then AuthApi.logout (best-effort server revoke; always clears the local session).
+    public let signOut: @Sendable () async -> Void
+    /// The voice sample player; nil in tests.
+    public let previewer: VoicePreviewing?
+
+    public init(
+        profile: ProfileService,
+        streak: StreakService,
+        friends: FriendsService,
+        leagues: LeagueService,
+        vocabulary: VocabularySource,
+        flashcards: FlashcardSubmitter,
+        themes: ThemeLibrarySource,
+        glossary: Glossary,
+        currentUserId: @escaping @Sendable () async -> String?,
+        pinnedCourse: @escaping @Sendable () async throws -> CourseRef?,
+        makePrefsSync: @escaping @Sendable (String, String) -> PrefsSync,
+        settingsVoices: @escaping @Sendable (CourseRef) -> [SettingsVoice] = { _ in [] },
+        signOut: @escaping @Sendable () async -> Void = {},
+        previewer: VoicePreviewing? = nil
+    ) {
+        self.profile = profile
+        self.streak = streak
+        self.friends = friends
+        self.leagues = leagues
+        self.vocabulary = vocabulary
+        self.flashcards = flashcards
+        self.themes = themes
+        self.glossary = glossary
+        self.currentUserId = currentUserId
+        self.pinnedCourse = pinnedCourse
+        self.makePrefsSync = makePrefsSync
+        self.settingsVoices = settingsVoices
+        self.signOut = signOut
+        self.previewer = previewer
+    }
+
+    /// Stops a playing voice sample. Call when Settings is left; sign-out calls it too.
+    @MainActor
+    public func stopVoicePreview() {
+        previewer?.stop()
+    }
+
+    /// A Settings model wired for production: sign-out (so the Account section shows) and the voice previewer.
+    @MainActor
+    public func makeSettingsModel(
+        userId: String,
+        course: CourseRef,
+        accountName: String?,
+        localStore: LocalPrefsStore = LocalPrefsStore(),
+        scheduler: ReminderScheduling = StubReminderScheduler()
+    ) -> SettingsModel {
+        let signOutAction = signOut
+        return SettingsModel(
+            userId: userId, courseCode: course.code,
+            sync: makePrefsSync(userId, course.code), localStore: localStore,
+            scheduler: scheduler, streakService: streak,
+            voices: settingsVoices(course), accountName: accountName,
+            signOut: { await signOutAction() },
+            previewer: previewer)
+    }
+
+    /// Builds the environment on `client`, reading course files and the card mirror from `contentStore`.
+    public static func live(
+        client: ApiClient,
+        sessions: SessionStore,
+        contentStore: ContentFileStore,
+        afterFlashcardSubmit: (@Sendable () async -> Void)? = nil,
+        previewer: VoicePreviewing? = nil
+    ) -> AppEnvironment {
+        let auth = AuthApi(client: client, store: sessions)
+        let reader = CourseContentReader(store: contentStore)
+        let vocab = VocabRepository(client: client)
+        let userId: @Sendable () async -> String? = { await sessions.load()?.userId }
+        let pinned: @Sendable () async throws -> CourseRef? = {
+            let uid = await userId()
+            do {
+                let response: BootstrapResponse = try await client.send(.get, "/v1/bootstrap")
+                PinCache.save(response.course, userId: uid, store: contentStore)
+                return response.course
+            } catch {
+                // Offline (or server down): fall back to the last pin this user saw, like Android.
+                if let cached = PinCache.load(userId: uid, store: contentStore) { return cached }
+                throw error
+            }
+        }
+        return AppEnvironment(
+            profile: LiveProfileService(client: client),
+            streak: StreakRepository(client: client),
+            friends: FriendsRepository(client: client),
+            leagues: LeagueRepository(client: client),
+            vocabulary: LiveVocabularySource(
+                repository: vocab, cards: CardStateStore(store: contentStore),
+                reader: reader, course: pinned, userId: userId),
+            flashcards: LiveFlashcardSubmitter(repository: vocab, afterSubmit: afterFlashcardSubmit),
+            themes: LiveThemeLibrarySource(reader: reader, course: pinned),
+            glossary: loadGlossary(),
+            currentUserId: userId,
+            pinnedCourse: pinned,
+            makePrefsSync: { user, course in
+                PrefsSync(userId: user, courseCode: course, api: PrefsRepository(client: client))
+            },
+            settingsVoices: { pinned in (try? reader.settingsVoices(pinned)) ?? [] },
+            signOut: {
+                await MainActor.run { previewer?.stop() }
+                await auth.logout()
+            },
+            previewer: previewer)
+    }
+}
+
+/// The last pinned course seen from /v1/bootstrap, per user, so offline loads still find the downloaded course.
+enum PinCache {
+    static func key(userId: String?) -> String? {
+        guard let userId, !userId.isEmpty,
+              userId.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return nil }
+        return "pin/\(userId).json"
+    }
+
+    static func save(_ course: CourseRef?, userId: String?, store: ContentFileStore) {
+        guard let key = key(userId: userId) else { return }
+        if let course, let data = try? QJSON.makeEncoder().encode(course) {
+            try? store.write(data, to: key)
+        } else if course == nil {
+            try? store.remove(key)
+        }
+    }
+
+    static func load(userId: String?, store: ContentFileStore) -> CourseRef? {
+        guard let key = key(userId: userId), let data = try? store.read(key) else { return nil }
+        return try? QJSON.makeDecoder().decode(CourseRef.self, from: data)
+    }
+}
