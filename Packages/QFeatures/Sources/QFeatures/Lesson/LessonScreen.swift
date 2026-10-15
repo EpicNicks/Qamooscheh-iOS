@@ -149,6 +149,9 @@ public struct LessonScreen: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(Color(argb: p.textMuted))
                         }
+                        if let chapter = session.setup.story {
+                            StoryTranscriptView(chapter: chapter, upTo: instance.ordinal, results: session.storyResults)
+                        }
                         ExercisePrompt(
                             exercise: instance.exercise,
                             courseCode: session.courseCode,

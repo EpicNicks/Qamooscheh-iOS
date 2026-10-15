@@ -23,8 +23,10 @@ public struct LessonSetup: Equatable, Sendable {
     public var checkpointSummary: String?
     /// Non-nil for a real checkpoint: answers are not marked, and everything is sent once at the end.
     public var checkpoint: CheckpointPlanInfo?
+    /// Non-nil makes this a story chapter: read once through, with the transcript of earlier lines above the current one.
+    public var story: StoryChapter?
 
-    public init(courseCode: String, courseVersion: Int, instances: [ExerciseInstance], exerciseCountBySkill: [String: Int] = [:], practice: Bool = false, checkpointSummary: String? = nil, checkpoint: CheckpointPlanInfo? = nil) {
+    public init(courseCode: String, courseVersion: Int, instances: [ExerciseInstance], exerciseCountBySkill: [String: Int] = [:], practice: Bool = false, checkpointSummary: String? = nil, checkpoint: CheckpointPlanInfo? = nil, story: StoryChapter? = nil) {
         self.courseCode = courseCode
         self.courseVersion = courseVersion
         self.instances = instances
@@ -32,6 +34,7 @@ public struct LessonSetup: Equatable, Sendable {
         self.practice = practice
         self.checkpointSummary = checkpointSummary
         self.checkpoint = checkpoint
+        self.story = story
     }
 
     public var isCheckpoint: Bool { checkpointSummary != nil || checkpoint != nil }
