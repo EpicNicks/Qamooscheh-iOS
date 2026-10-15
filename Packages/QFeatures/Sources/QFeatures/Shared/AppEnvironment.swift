@@ -167,7 +167,6 @@ public struct AppEnvironment: @unchecked Sendable {
                 repository: vocab, cards: cardStore,
                 reader: reader, course: pinned, userId: userId),
             flashcards: LiveFlashcardSubmitter(repository: vocab, afterSubmit: afterFlashcardSubmit),
-            savedPractice: LiveSavedPracticeSource(repository: vocab),
             themes: LiveThemeLibrarySource(reader: reader, course: pinned),
             glossary: loadGlossary(),
             currentUserId: userId,
@@ -189,7 +188,8 @@ public struct AppEnvironment: @unchecked Sendable {
                 if let uid { await forget(uid) }
             },
             forgetUser: forget,
-            previewer: previewer)
+            previewer: previewer,
+            savedPractice: LiveSavedPracticeSource(repository: vocab))
     }
 }
 
