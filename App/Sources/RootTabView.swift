@@ -76,6 +76,9 @@ struct RootTabView: View {
         }
         .environment(\.startLesson, { lessonRoute = $0 })
         .task { await shell.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: CheckpointRefresh.notification)) { _ in
+            Task { await shell.refresh() }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await shell.refresh() } }
         }

@@ -18,14 +18,22 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var checkpointSummary: String?
     /// A test-out to this skill: the loader plans it (`CheckpointRepository.plan`, then `CheckpointLogic.setup`) instead of the cursor's lesson.
     public var checkpoint: Bool
+    /// Non-nil for a remix: the topics to blend (the loader picks the lessons).
+    public var remixThemeIds: [String]?
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
         self.practice = practice
         self.checkpointSummary = checkpointSummary
         self.checkpoint = checkpoint
+        self.remixThemeIds = remixThemeIds
+    }
+
+    /// The route the Library's remix picker leads to.
+    public static func forRemix(themeIds: [String]) -> LessonRoute {
+        return LessonRoute(skillKey: "remix", remixThemeIds: themeIds)
     }
 
     /// The route a path node's "Test out" leads to: `unitKey`/`skillKey` name the position to jump to.

@@ -22,10 +22,15 @@ struct QamooschehApp: App {
         let auth = AuthEnvironment.live(baseURL: baseURL, clientHeader: clientHeader)
         self.auth = auth
         self.onboarding = OnboardingEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, store: auth.store)
-        // The lesson's setup loader is the unwired placeholder until the path screen host reads course content; the grader is the
-        // placeholder (nothing graded on device) until M1 picks the runtime. Submit goes through the real offline queue.
-        self.lessons = LessonEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, store: auth.store)
-        self.appEnvironment = AppEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, sessions: auth.store)
+        let appEnvironment = AppEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, sessions: auth.store)
+        self.appEnvironment = appEnvironment
+        // The loader plans checkpoints, stories and remixes; other routes still reach the unwired placeholder until standard lessons
+        // are wired. The grader is the placeholder (nothing graded on device) until M1 picks the runtime. Submit goes through the real offline queue.
+        let loader = LiveLessonSetupLoader.live(
+            baseURL: baseURL, clientHeader: clientHeader, store: auth.store, pinnedCourse: appEnvironment.pinnedCourse)
+        self.lessons = LessonEnvironment.live(
+            baseURL: baseURL, clientHeader: clientHeader, store: auth.store, loader: loader,
+            onCheckpointSubmitted: { response in CheckpointRefresh.announce(response) })
     }
 
     var body: some Scene {

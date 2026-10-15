@@ -134,12 +134,14 @@ struct AppRouteDestination: View {
     let route: AppRoute
     @ObservedObject var shell: SignedInShell
     @Binding var path: [AppRoute]
+    @Environment(\.startLesson) private var startLesson
 
     var body: some View {
         switch route {
         case .themes:
-            // Remix has no lesson route yet; the picker closes and nothing starts.
-            LibraryView(model: shell.library, onOpenTopic: { path.append(.topic($0)) }, onRemix: { _ in })
+            LibraryView(
+                model: shell.library, onOpenTopic: { path.append(.topic($0)) },
+                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0)) })
         case .topic(let id):
             TopicDestination(themeId: id, shell: shell)
         case .glossary:
