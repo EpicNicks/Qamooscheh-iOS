@@ -331,6 +331,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(left.isEmpty)
     }
 
+    @MainActor
     private func makeShell(
         store: ContentFileStore, signedOut: @escaping @MainActor @Sendable () -> Void = {}
     ) -> SignedInShell {
