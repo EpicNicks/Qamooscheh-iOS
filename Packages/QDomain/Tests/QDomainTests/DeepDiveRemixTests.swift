@@ -3,7 +3,7 @@ import QModel
 @testable import QDomain
 
 /// Deterministic generator (SplitMix64) so sampling tests are reproducible.
-private struct SeededGenerator: RandomNumberGenerator {
+private struct RemixSeededGenerator: RandomNumberGenerator {
     var state: UInt64
     init(seed: UInt64) { state = seed }
     mutating func next() -> UInt64 {
@@ -70,7 +70,7 @@ final class DeepDiveRemixTests: XCTestCase {
 
     func testSelectionTakesDistinctLessonsUpToTheCount() {
         let candidates = (1...10).map { lesson("l\($0)", $0 * 10) }
-        var generator = SeededGenerator(seed: 7)
+        var generator = RemixSeededGenerator(seed: 7)
         let picked = selectRemixLessons(candidates: candidates, masteryScore: 0.5, count: 4, using: &generator)
         XCTAssertEqual(picked.count, 4)
         XCTAssertEqual(Set(picked.map { $0.id }).count, 4)
@@ -89,7 +89,7 @@ final class DeepDiveRemixTests: XCTestCase {
         let rare = lesson("rare", 0)
         var commonPicks = 0
         for seed in 0..<200 {
-            var generator = SeededGenerator(seed: UInt64(seed))
+            var generator = RemixSeededGenerator(seed: UInt64(seed))
             if selectRemixLessons(candidates: [common, rare], masteryScore: 0, count: 1, using: &generator).first == common {
                 commonPicks += 1
             }
@@ -102,7 +102,7 @@ final class DeepDiveRemixTests: XCTestCase {
         let rare = lesson("rare", 0)
         var rarePicks = 0
         for seed in 0..<200 {
-            var generator = SeededGenerator(seed: UInt64(seed))
+            var generator = RemixSeededGenerator(seed: UInt64(seed))
             if selectRemixLessons(candidates: [common, rare], masteryScore: 1, count: 1, using: &generator).first == rare {
                 rarePicks += 1
             }
