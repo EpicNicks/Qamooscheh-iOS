@@ -13,14 +13,17 @@ private actor FakeOnboardingService: OnboardingService {
     var enrollResult: Result<Void, Error> = .success(())
     var completeResult: Result<Bool, Error> = .success(true)
     var delayNanos: UInt64 = 0
+    var gate: SubmitGate?
 
     func setCatalog(_ r: Result<[CourseCatalogEntry], Error>) { catalogResult = r }
     func setName(_ r: Result<Void, Error>) { nameResult = r }
     func setEnroll(_ r: Result<Void, Error>) { enrollResult = r }
     func setComplete(_ r: Result<Bool, Error>) { completeResult = r }
     func setDelay(_ nanos: UInt64) { delayNanos = nanos }
+    func setGate(_ g: SubmitGate) { gate = g }
 
     private func pause() async throws {
+        if let gate { await gate.pass() }
         if delayNanos > 0 { try await Task.sleep(nanoseconds: delayNanos) }
     }
 
@@ -175,13 +178,15 @@ final class OnboardingViewModelTests: XCTestCase {
 
     func testSubmittingIsObservableAndBlocksSubmit() async {
         let fake = FakeOnboardingService()
-        await fake.setDelay(100_000_000)
+        let gate = SubmitGate()
+        await fake.setGate(gate)
         let vm = make(fake)
         vm.displayName = "Sara"
         let task = Task { await vm.submitName() }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        await gate.waitUntilEntered()
         XCTAssertTrue(vm.isSubmitting)
         XCTAssertFalse(vm.canSubmitName)
+        await gate.release()
         await task.value
         XCTAssertFalse(vm.isSubmitting)
     }
@@ -373,14 +378,16 @@ final class OnboardingViewModelTests: XCTestCase {
         let fake = FakeOnboardingService()
         let vm = make(fake)
         await toLanguages(vm)
-        await fake.setDelay(600_000_000)
+        let gate = SubmitGate()
+        await fake.setGate(gate)
         await fake.setEnroll(.failure(ApiError(status: 400, body: ApiErrorBody(error: "Bad course."))))
         await fake.setCatalog(.failure(ApiError(status: 500, body: nil)))
         let task = Task { await vm.startLearning(courseCodes: ["fa"]) }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        await gate.waitUntilEntered()
         await vm.loadCatalog()
         XCTAssertTrue(vm.isSubmitting)
         XCTAssertNil(vm.error)
+        await gate.release()
         await task.value
         XCTAssertEqual(vm.error, "Bad course.")
         XCTAssertEqual(vm.catalogError, OnboardingRules.catalogFallback)

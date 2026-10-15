@@ -9,15 +9,18 @@ private actor FakeAuthService: AuthService {
     var registrationResult: Result<Bool, Error> = .success(true)
     var signInResult: Result<Void, Error> = .success(())
     var delayNanos: UInt64 = 0
+    var gate: SubmitGate?
 
     func setSignIn(_ result: Result<Void, Error>) { signInResult = result }
     func setRegistration(_ result: Result<Bool, Error>) { registrationResult = result }
     func setDelay(_ nanos: UInt64) { delayNanos = nanos }
+    func setGate(_ g: SubmitGate) { gate = g }
 
     private static let session = StoredSession(
         userId: "u1", accessToken: "a", accessTokenExpiresAt: Date(timeIntervalSince1970: 0), refreshToken: "r")
 
     private func finish() async throws -> StoredSession {
+        if let gate { await gate.pass() }
         if delayNanos > 0 { try await Task.sleep(nanoseconds: delayNanos) }
         try signInResult.get()
         return FakeAuthService.session
@@ -140,14 +143,16 @@ final class LoginViewModelTests: XCTestCase {
 
     func testSubmittingStateIsObservable() async {
         let fake = FakeAuthService()
-        await fake.setDelay(100_000_000)
+        let gate = SubmitGate()
+        await fake.setGate(gate)
         let vm = LoginViewModel(service: fake)
         vm.email = "a@b.co"
         vm.password = "x"
         let task = Task { await vm.submit() }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        await gate.waitUntilEntered()
         XCTAssertEqual(vm.state, .submitting)
         XCTAssertFalse(vm.canSubmit)
+        await gate.release()
         await task.value
         XCTAssertEqual(vm.state, .success)
     }
@@ -206,15 +211,17 @@ final class LoginViewModelTests: XCTestCase {
 
     func testGoogleErrorDuringSubmitStaysSubmitting() async {
         let fake = FakeAuthService()
-        await fake.setDelay(100_000_000)
+        let gate = SubmitGate()
+        await fake.setGate(gate)
         let vm = LoginViewModel(service: fake)
         vm.email = "a@b.co"
         vm.password = "x"
         let task = Task { await vm.submit() }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        await gate.waitUntilEntered()
         XCTAssertEqual(vm.state, .submitting)
         vm.reportGoogleError("Cancelled.")
         XCTAssertEqual(vm.state, .submitting)
+        await gate.release()
         await task.value
         XCTAssertEqual(vm.state, .success)
     }
@@ -360,13 +367,15 @@ final class RegisterViewModelTests: XCTestCase {
 
     func testGoogleErrorDuringSubmitStaysSubmitting() async {
         let fake = FakeAuthService()
-        await fake.setDelay(100_000_000)
+        let gate = SubmitGate()
+        await fake.setGate(gate)
         let vm = filled(fake)
         let task = Task { await vm.submit() }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+        await gate.waitUntilEntered()
         XCTAssertEqual(vm.state, .submitting)
         vm.reportGoogleError("Cancelled.")
         XCTAssertEqual(vm.state, .submitting)
+        await gate.release()
         await task.value
         XCTAssertEqual(vm.state, .success)
     }
