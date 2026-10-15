@@ -300,6 +300,22 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertNil(remaining)
     }
 
+    func testSignOutClearsCardMirrorAndMakePrefsSyncIsShared() async throws {
+        EnvStubProtocol.install { _ in EnvStub(204, "") }
+        let sessions = makeSessions()
+        let store = InMemoryContentStore()
+        let card = CardState(lexemeTag: "salaam", stability: 1, difficulty: 2, reviewCount: 1, lapseCount: 0)
+        try await CardStateStore(store: store).merge(userId: "u1", cards: [card])
+        let client = ApiClient(
+            baseURL: URL(string: "https://api.test")!, clientHeader: "ios/test",
+            session: EnvStubProtocol.makeSession(), store: sessions)
+        let env = AppEnvironment.live(client: client, sessions: sessions, contentStore: store)
+        XCTAssertTrue(env.makePrefsSync("u1", "fa") === env.makePrefsSync("u1", "fa"))
+        await env.signOut()
+        let left = await CardStateStore(store: store).all(userId: "u1")
+        XCTAssertTrue(left.isEmpty)
+    }
+
     func testSignOutClearsSessionEvenWhenServerFails() async throws {
         EnvStubProtocol.install { _ in EnvStub(500, "{}") }
         let sessions = makeSessions()
