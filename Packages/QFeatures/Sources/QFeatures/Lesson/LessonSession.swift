@@ -189,10 +189,25 @@ public final class LessonSession: ObservableObject {
         )
         self.shownAt = dependencies.now()
         rebuildKeyboard()
+        // A resumed story: the lines already answered show their marks again.
+        if setup.story != nil {
+            storyResults = LessonSession.storyResults(from: initial, setup: setup, engine: engine)
+        }
         // A draft saved at the very end (killed while saving): deliver it again; the queue dedupes by submission id.
         if setup.checkpoint == nil && engine.state.finished && !engine.state.items.isEmpty { finish(resumed: true) }
         // A checkpoint with nothing to ask is still submitted, to move the learner on.
         if setup.checkpoint != nil && engine.state.finished { phase = .checkpointReady }
+    }
+
+    /// The marks of a resumed story: each line's first recorded answer, graded again the way it was (an unchecked answer counts as right).
+    static func storyResults(from state: LessonState, setup: LessonSetup, engine: LessonEngine) -> [Int: Bool] {
+        var results: [Int: Bool] = [:]
+        for recorded in state.items where recorded.item.attempt == 1 {
+            guard let instance = setup.instances.first(where: { $0.ordinal == recorded.item.exerciseOrdinal && $0.skillKey == recorded.skillKey }) else { continue }
+            let verdict = engine.grade(instance, text: recorded.item.submittedText).verdict
+            results = StoryTranscript.recording(results, ordinal: instance.ordinal, verdict: verdict)
+        }
+        return results
     }
 
     /// A saved lesson belongs to this setup when it was cut from the same exercises.

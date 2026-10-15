@@ -45,6 +45,19 @@ public struct CourseContentReader: Sendable {
         try decode(CourseManifest.self, course: course, path: "manifest.json")
     }
 
+    /// The skill `skillKey` of unit `unitKey`, or nil when the manifest, the unit or the skill is not on disk.
+    public func skill(_ course: CourseRef, unitKey: String, skillKey: String) throws -> SkillArtifact? {
+        guard let manifest = try manifest(course), let unitRef = manifest.units.first(where: { $0.id == unitKey }),
+              let unit = try decode(UnitArtifact.self, course: course, path: unitRef.path),
+              let skillRef = unit.positions.flatMap({ $0.skills }).first(where: { $0.id == skillKey }) else { return nil }
+        return try decode(SkillArtifact.self, course: course, path: skillRef.path)
+    }
+
+    /// A skill file by its path under the version root (a theme lesson's `path`).
+    public func skill(_ course: CourseRef, path: String) throws -> SkillArtifact? {
+        return try decode(SkillArtifact.self, course: course, path: path)
+    }
+
     /// Units, skills and the lexeme index, or nil when the manifest, a unit or the lexeme index is missing.
     public func vocabContent(_ course: CourseRef) throws -> VocabContent? {
         guard let manifest = try manifest(course) else { return nil }
