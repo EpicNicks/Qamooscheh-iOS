@@ -16,13 +16,21 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var practice: Bool
     /// A test-out of the skills before this one (Android checkpoint), with the "Skipping 3 lessons" line.
     public var checkpointSummary: String?
+    /// A test-out to this skill: the loader plans it (`CheckpointRepository.plan`, then `CheckpointLogic.setup`) instead of the cursor's lesson.
+    public var checkpoint: Bool
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
         self.practice = practice
         self.checkpointSummary = checkpointSummary
+        self.checkpoint = checkpoint
+    }
+
+    /// The route a path node's "Test out" leads to: `unitKey`/`skillKey` name the position to jump to.
+    public static func forCheckpoint(unitKey: String, skillKey: String) -> LessonRoute {
+        return LessonRoute(unitKey: unitKey, skillKey: skillKey, checkpoint: true)
     }
 
     /// The route a path node's "Start" or "Practice" leads to.
@@ -56,6 +64,7 @@ public struct UnwiredLessonSetupLoader: LessonSetupLoading {
 /// Submit and write-ahead functions that take the user the lesson was started for (resolved once, before the lesson begins).
 public typealias LessonUserSubmitFunction = @Sendable (String, SubmittedSession) async throws -> LessonSubmitResult
 public typealias LessonUserEnqueueFunction = @Sendable (String, SubmittedSession) async throws -> Void
+public typealias CheckpointUserSubmitFunction = @Sendable (String, SubmitCheckpointRequest) async throws -> CheckpointSubmitResponse
 
 public struct LessonEnvironment {
     public var loader: LessonSetupLoading
@@ -63,6 +72,8 @@ public struct LessonEnvironment {
     public var prefsStore: LocalPrefsStore
     public var submit: LessonUserSubmitFunction
     public var enqueue: LessonUserEnqueueFunction
+    /// Sends a checkpoint for the user it was started for; nil leaves checkpoints unable to submit.
+    public var submitCheckpoint: CheckpointUserSubmitFunction?
     /// Where in-progress lessons are kept; nil keeps none.
     public var draftDirectory: URL?
     public var loadExtras: @Sendable () async -> LessonResultsExtras
@@ -81,6 +92,7 @@ public struct LessonEnvironment {
         prefsStore: LocalPrefsStore = LocalPrefsStore(),
         submit: @escaping LessonUserSubmitFunction,
         enqueue: @escaping LessonUserEnqueueFunction = { _, _ in },
+        submitCheckpoint: CheckpointUserSubmitFunction? = nil,
         draftDirectory: URL? = nil,
         loadExtras: @escaping @Sendable () async -> LessonResultsExtras = { LessonResultsExtras.none },
         grader: Grader? = PlaceholderGraderSource.grader,
@@ -96,6 +108,7 @@ public struct LessonEnvironment {
         self.prefsStore = prefsStore
         self.submit = submit
         self.enqueue = enqueue
+        self.submitCheckpoint = submitCheckpoint
         self.draftDirectory = draftDirectory
         self.loadExtras = loadExtras
         self.grader = grader
@@ -115,7 +128,8 @@ public struct LessonEnvironment {
         loader: LessonSetupLoading = UnwiredLessonSetupLoader(),
         speech: SpeechService? = nil,
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
-        onInstallVoice: @escaping () -> Void = {}
+        onInstallVoice: @escaping () -> Void = {},
+        onCheckpointSubmitted: @escaping @Sendable (CheckpointSubmitResponse) async -> Void = { _ in }
     ) -> LessonEnvironment {
         let client = ApiClient(baseURL: baseURL, clientHeader: clientHeader, store: store)
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -126,6 +140,7 @@ public struct LessonEnvironment {
             _ = try? await cards.merge(userId: userId, cards: results.flatMap { $0.cards })
         })
         let submitter = LessonSubmitter(queue: queue, flusher: flusher)
+        let checkpoints = CheckpointRepository(client: client)
         return LessonEnvironment(
             loader: loader,
             userId: { await store.load()?.userId },
@@ -134,6 +149,13 @@ public struct LessonEnvironment {
             },
             enqueue: { userId, session in
                 _ = try await queue.enqueue(userId: userId, session: session)
+            },
+            submitCheckpoint: { userId, request in
+                let response = try await checkpoints.submit(request)
+                // The server moved the learner's cards; a pass also moves the cursor (the caller refreshes the bootstrap).
+                _ = try? await cards.merge(userId: userId, cards: response.cards)
+                await onCheckpointSubmitted(response)
+                return response
             },
             draftDirectory: support.appendingPathComponent("lesson-drafts", isDirectory: true),
             speech: speech,
@@ -146,7 +168,9 @@ public struct LessonEnvironment {
     public func makeSession(for route: LessonRoute) async throws -> LessonSession? {
         // The queue is per user: with nobody signed in the lesson must not start, because its answers would have nowhere to be saved.
         guard let id = await userId(), !id.isEmpty else { throw LessonEnvironmentError.signedOut }
-        guard var setup = try await loader.setup(for: route), !setup.instances.isEmpty else { return nil }
+        guard var setup = try await loader.setup(for: route) else { return nil }
+        // A checkpoint with nothing left to test is still submitted, to move the learner on.
+        if setup.instances.isEmpty && setup.checkpoint?.requiresTest != false { return nil }
         if route.practice { setup.practice = true }
         if route.checkpointSummary != nil { setup.checkpointSummary = route.checkpointSummary }
         let prefs = prefsStore.current(userId: id)
@@ -155,6 +179,10 @@ public struct LessonEnvironment {
         let loader = self.loader
         let submit = self.submit
         let enqueue = self.enqueue
+        var checkpointSend: CheckpointSubmitFunction?
+        if let send = self.submitCheckpoint {
+            checkpointSend = { request in try await send(id, request) }
+        }
         var draft = LessonDraftStore.none
         var practiceDraft: LessonDraftStore?
         if let directory = draftDirectory {
@@ -186,7 +214,8 @@ public struct LessonEnvironment {
             courseHints: courseHints,
             onFeedback: onFeedback,
             onInstallVoice: onInstallVoice,
-            makeReportModel: makeReportModel
+            makeReportModel: makeReportModel,
+            submitCheckpoint: checkpointSend
         )
         return LessonSession(setup: setup, prefs: prefs, serverPrefs: server, dependencies: deps)
     }

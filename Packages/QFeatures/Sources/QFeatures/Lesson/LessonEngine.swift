@@ -271,6 +271,11 @@ public struct LessonEngine {
         state.queue.removeAll { $0.key == key }
     }
 
+    /// A checkpoint takes its answers without marking them: the current exercise leaves the queue, nothing is graded or recorded.
+    public mutating func advancePastCurrent() {
+        if !state.queue.isEmpty { state.queue.removeFirst() }
+    }
+
     public mutating func restart(_ instances: [ExerciseInstance], practice: Bool) {
         var next = state.restart(instances, practice: practice || sessionPractice)
         next.sessionPractice = sessionPractice
