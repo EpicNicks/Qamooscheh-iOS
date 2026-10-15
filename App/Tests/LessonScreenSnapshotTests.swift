@@ -71,6 +71,38 @@ extension ShellSnapshotTests {
         try renderLessonScreen(.settingsJapanese, name: "lessonscreen-settings-ja-dark", dark: true)
     }
 
+    func testLessonScreenCheckpointReadyLight() throws {
+        try renderLessonScreen(.checkpointReady, name: "lessonscreen-checkpoint-ready-light", dark: false)
+    }
+
+    func testLessonScreenCheckpointReadyDark() throws {
+        try renderLessonScreen(.checkpointReady, name: "lessonscreen-checkpoint-ready-dark", dark: true)
+    }
+
+    func testLessonScreenCheckpointNoTestLight() throws {
+        try renderLessonScreen(.checkpointNoTest, name: "lessonscreen-checkpoint-notest-light", dark: false)
+    }
+
+    func testLessonScreenCheckpointNoTestDark() throws {
+        try renderLessonScreen(.checkpointNoTest, name: "lessonscreen-checkpoint-notest-dark", dark: true)
+    }
+
+    func testLessonScreenCheckpointPassedLight() throws {
+        try renderLessonScreen(.checkpointPassed, name: "lessonscreen-checkpoint-passed-light", dark: false)
+    }
+
+    func testLessonScreenCheckpointPassedDark() throws {
+        try renderLessonScreen(.checkpointPassed, name: "lessonscreen-checkpoint-passed-dark", dark: true)
+    }
+
+    func testLessonScreenCheckpointFailedLight() throws {
+        try renderLessonScreen(.checkpointFailedNotApplied, name: "lessonscreen-checkpoint-failed-light", dark: false)
+    }
+
+    func testLessonScreenCheckpointFailedDark() throws {
+        try renderLessonScreen(.checkpointFailedNotApplied, name: "lessonscreen-checkpoint-failed-dark", dark: true)
+    }
+
     private func renderLessonScreen(_ scenario: LessonScreenScenario, name: String, dark: Bool) throws {
         let size = CGSize(width: 390, height: 780)
         let controller = UIHostingController(rootView: LessonScreenShowcase(scenario))

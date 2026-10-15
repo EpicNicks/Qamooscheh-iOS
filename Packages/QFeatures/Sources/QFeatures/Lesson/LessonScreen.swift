@@ -35,7 +35,7 @@ public struct LessonScreen: View {
 
     public var body: some View {
         let p = screenPalette(colorScheme)
-        let leaving = session.confirmingLeave && session.phase == .active
+        let leaving = session.confirmingLeave && (session.phase == .active || session.phase == .checkpointReady)
         let exit: () -> Void = { session.leave(); onExit() }
         ZStack {
             Color(argb: p.bg).ignoresSafeArea()
@@ -51,6 +51,17 @@ public struct LessonScreen: View {
                     )
                 case .saveFailed:
                     saveFailedView(p, onBack: exit)
+                case .checkpointReady, .checkpointSubmitting:
+                    CheckpointReadyView(
+                        noTest: session.checkpointNeedsNoTest,
+                        summary: session.setup.checkpointSummary,
+                        error: session.checkpointError,
+                        submitting: session.phase == .checkpointSubmitting,
+                        onSubmit: { session.submitCheckpoint() },
+                        onExit: { session.confirmingLeave = true }
+                    )
+                case .checkpointDone(let outcome):
+                    CheckpointResultView(outcome: outcome, onBack: exit)
                 case .ended(let end):
                     LessonResultsView(
                         end: end,

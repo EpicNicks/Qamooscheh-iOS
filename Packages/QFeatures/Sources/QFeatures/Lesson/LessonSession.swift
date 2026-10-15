@@ -10,6 +10,9 @@ public typealias LessonSubmitFunction = @Sendable (SubmittedSession) async throw
 /// Writes one finished session to the offline queue before anything else happens to it (write-ahead).
 public typealias LessonEnqueueFunction = @Sendable (SubmittedSession) async throws -> Void
 
+/// Sends a finished checkpoint (all its answers at once) and returns the server's verdict. Online only: there is no queue.
+public typealias CheckpointSubmitFunction = @Sendable (SubmitCheckpointRequest) async throws -> CheckpointSubmitResponse
+
 /// What the lesson screen needs from the outside, as plain closures so tests and snapshots inject fakes.
 public struct LessonDependencies {
     /// Grades answers on the device. nil (with `gradingOnDevice == false`) makes every answer "checked when you sync".
@@ -40,6 +43,10 @@ public struct LessonDependencies {
     public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
     /// The clock (latency, session timestamps).
     public var now: () -> Date
+    /// Sends a checkpoint; nil (or a throw) leaves the answers in place with a retry.
+    public var submitCheckpoint: CheckpointSubmitFunction?
+    /// Mints a checkpoint's submission id (once per attempt; a retry after a failed send reuses it).
+    public var newSubmissionId: () -> String
 
     public init(
         grader: Grader? = nil,
@@ -57,7 +64,9 @@ public struct LessonDependencies {
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
         onInstallVoice: @escaping () -> Void = {},
         makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
-        now: @escaping () -> Date = { Date() }
+        now: @escaping () -> Date = { Date() },
+        submitCheckpoint: CheckpointSubmitFunction? = nil,
+        newSubmissionId: @escaping () -> String = { UUID().uuidString.lowercased() }
     ) {
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
@@ -75,6 +84,8 @@ public struct LessonDependencies {
         self.onInstallVoice = onInstallVoice
         self.makeReportModel = makeReportModel
         self.now = now
+        self.submitCheckpoint = submitCheckpoint
+        self.newSubmissionId = newSubmissionId
     }
 }
 
@@ -93,6 +104,12 @@ public enum LessonPhase: Equatable {
     /// The finished lesson could not be written to the phone's queue; the draft is kept and "Try again" saves it again.
     case saveFailed
     case ended(LessonEndKind)
+    /// A checkpoint with every question answered (or none to answer): "Ready to submit" / "No test needed".
+    case checkpointReady
+    /// The checkpoint's answers are being sent.
+    case checkpointSubmitting
+    /// The server's verdict on the checkpoint.
+    case checkpointDone(CheckpointOutcome)
 }
 
 /// One lesson being played: the engine, what is typed or picked, the verdict under review, the keyboard,
@@ -122,12 +139,17 @@ public final class LessonSession: ObservableObject {
     @Published public private(set) var storyResults: [Int: Bool] = [:]
     @Published public var showingSettings = false
     @Published public var confirmingLeave = false
+    /// Why the last checkpoint submit failed; the answers are kept and the learner can try again.
+    @Published public private(set) var checkpointError: String?
 
     private var keyboardMethod: InputMethod?
     private var shownAt: Date
     private var finishing = false
     private var pending: PendingDelivery?
     private var deliveryTask: Task<Void, Never>?
+    /// A checkpoint's answers by instance key. Not marked and not saved to disk: all sent at the end, or lost on leaving.
+    private var checkpointAnswers: [String: String] = [:]
+    private let checkpointSubmissionId: String
 
     /// What `finish` hands to the delivery step, kept so a failed save can be retried.
     private struct PendingDelivery {
@@ -147,8 +169,11 @@ public final class LessonSession: ObservableObject {
         self.deps = dependencies
         self.prefs = prefs
         self.serverPrefs = serverPrefs
+        self.checkpointSubmissionId = dependencies.newSubmissionId()
         var initial = LessonState(queue: setup.instances, practice: setup.practice)
-        if let saved = dependencies.draft.load() {
+        // A checkpoint keeps no draft: nothing is marked, and leaving drops the answers.
+        let savedDraft = setup.checkpoint == nil ? dependencies.draft.load() : nil
+        if let saved = savedDraft {
             // A finished draft is self-contained and may be the only copy of the answers: deliver it, whatever the setup is now.
             if saved.finished || LessonSession.isRestorable(saved, for: setup) {
                 initial = saved
@@ -165,7 +190,9 @@ public final class LessonSession: ObservableObject {
         self.shownAt = dependencies.now()
         rebuildKeyboard()
         // A draft saved at the very end (killed while saving): deliver it again; the queue dedupes by submission id.
-        if engine.state.finished && !engine.state.items.isEmpty { finish(resumed: true) }
+        if setup.checkpoint == nil && engine.state.finished && !engine.state.items.isEmpty { finish(resumed: true) }
+        // A checkpoint with nothing to ask is still submitted, to move the learner on.
+        if setup.checkpoint != nil && engine.state.finished { phase = .checkpointReady }
     }
 
     /// A saved lesson belongs to this setup when it was cut from the same exercises.
@@ -252,6 +279,10 @@ public final class LessonSession: ObservableObject {
         guard let current = engine.state.current else { return }
         if isTypeIn { commitPending() }
         guard let text = LessonScreenLogic.submittableText(typeIn: isTypeIn, typed: typed, tileAnswer: tileAnswer) else { return }
+        if setup.checkpoint != nil {
+            recordCheckpointAnswer(current, text)
+            return
+        }
         let latency = max(0, Int(deps.now().timeIntervalSince(shownAt) * 1000))
         guard let outcome = engine.submit(text, usedHint: usedHint, latencyMs: latency) else { return }
         if setup.story != nil {
@@ -267,6 +298,47 @@ public final class LessonSession: ObservableObject {
         case .pending: break
         }
         if prefs.speakAnswers { playAnswer() }
+    }
+
+    /// No marking mid-checkpoint (Android submit): record the answer and move straight on.
+    private func recordCheckpointAnswer(_ current: ExerciseInstance, _ text: String) {
+        checkpointAnswers[current.key] = text
+        engine.advancePastCurrent()
+        resetAnswer()
+        if engine.state.finished {
+            phase = .checkpointReady
+        } else {
+            rebuildKeyboard()
+            exerciseShown()
+        }
+    }
+
+    /// True when the checkpoint has nothing to ask (the plan needs no test), so the ready screen says "No test needed".
+    public var checkpointNeedsNoTest: Bool { setup.checkpoint != nil && setup.instances.isEmpty }
+
+    /// Sends every checkpoint answer at once; the server grades them and moves the cursor on a pass.
+    public func submitCheckpoint() {
+        guard phase == .checkpointReady, let info = setup.checkpoint else { return }
+        phase = .checkpointSubmitting
+        checkpointError = nil
+        let request = CheckpointLogic.request(
+            info: info, instances: setup.instances, answers: checkpointAnswers,
+            submissionId: checkpointSubmissionId, occurredAt: deps.now()
+        )
+        let send = deps.submitCheckpoint
+        deliveryTask = Task { @MainActor [weak self] in
+            do {
+                guard let send = send else { throw URLError(.notConnectedToInternet) }
+                let response = try await send(request)
+                guard let self = self else { return }
+                let outcome = CheckpointOutcome(response)
+                if outcome.passed { self.deps.onFeedback(.lessonComplete) }
+                self.phase = .checkpointDone(outcome)
+            } catch {
+                self?.checkpointError = CheckpointLogic.submitFailure
+                self?.phase = .checkpointReady
+            }
+        }
     }
 
     /// Leaves the verdict panel: on to the next exercise, or the end of the lesson.
