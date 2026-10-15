@@ -118,6 +118,8 @@ public final class LessonSession: ObservableObject {
     @Published public private(set) var usedHint = false
     /// A bumped value re-creates the exercise views, so a retry of the same exercise starts fresh.
     @Published public private(set) var exerciseRound = 0
+    /// Each story line's first answer, right or not, by ordinal: the transcript's marks.
+    @Published public private(set) var storyResults: [Int: Bool] = [:]
     @Published public var showingSettings = false
     @Published public var confirmingLeave = false
 
@@ -252,6 +254,11 @@ public final class LessonSession: ObservableObject {
         guard let text = LessonScreenLogic.submittableText(typeIn: isTypeIn, typed: typed, tileAnswer: tileAnswer) else { return }
         let latency = max(0, Int(deps.now().timeIntervalSince(shownAt) * 1000))
         guard let outcome = engine.submit(text, usedHint: usedHint, latencyMs: latency) else { return }
+        if setup.story != nil {
+            storyResults = StoryTranscript.recording(storyResults, ordinal: current.ordinal, verdict: outcome.feedback.verdict)
+            // A story is read once through: a missed line is not asked again.
+            engine.dropFromQueue(key: current.key)
+        }
         let shown = FeedbackReview(feedback: outcome.feedback, instance: current, submittedText: text, xp: outcome.xpGained)
         review = shown
         switch outcome.feedback.verdict {
