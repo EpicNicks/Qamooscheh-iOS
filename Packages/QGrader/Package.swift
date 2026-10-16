@@ -12,8 +12,12 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "QGraderWebKit",
+            linkerSettings: [.linkedFramework("WebKit")]
+        ),
+        .target(
             name: "QGrader",
-            dependencies: ["QModel"],
+            dependencies: ["QModel", "QGraderWebKit"],
             resources: [
                 .copy("Resources/grader"),
                 .copy("Resources/grader-host.js"),
