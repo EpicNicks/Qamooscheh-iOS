@@ -168,7 +168,7 @@ public final class JSCoreGrader: Grader, @unchecked Sendable {
             if ok {
                 self?.finish(.success(()))
             } else {
-                self?.finish(.failure(.startupFailed(message)))
+                self?.finish(.failure(.startupFailed(message + " | log: " + (self?.errors.log.suffix(20).joined(separator: " ; ") ?? ""))))
             }
         }
         ctx.setObject(unsafeBitCast(readText, to: AnyObject.self), forKeyedSubscript: "__qmReadTextSync" as NSString)
@@ -203,7 +203,7 @@ public final class JSCoreGrader: Grader, @unchecked Sendable {
         }
         ctx.evaluateScript("""
         __qmGraderReady.then(function () { __qmSignal(true, ""); },
-                             function (e) { __qmSignal(false, String((e && e.stack) || e)); });
+                             function (e) { __qmSignal(false, String(e && e.name) + ": " + String(e && e.message) + " | " + String(e && e.stack) + " | typeof=" + typeof e + " json=" + (function () { try { return JSON.stringify(e); } catch (x) { return "?"; } })()); });
         """)
         if let e = errors.last {
             finish(.failure(.startupFailed("ready hook: \(e)")))
