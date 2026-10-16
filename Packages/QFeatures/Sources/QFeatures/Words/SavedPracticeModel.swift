@@ -21,6 +21,17 @@ public struct SavedPracticeExercises: Equatable, Sendable {
         self.exercises = exercises
         self.count = count
     }
+
+    /// `exercises` parsed back into references; malformed entries are skipped.
+    public var refs: [StarredPracticeExercise] {
+        var result: [StarredPracticeExercise] = []
+        for part in exercises.split(separator: ",") {
+            let pieces = part.split(separator: "/", omittingEmptySubsequences: false)
+            guard pieces.count == 3, !pieces[0].isEmpty, !pieces[1].isEmpty, let ordinal = Int(pieces[2]) else { continue }
+            result.append(StarredPracticeExercise(unitKey: String(pieces[0]), skillKey: String(pieces[1]), ordinal: ordinal))
+        }
+        return result
+    }
 }
 
 public enum SavedPracticeState: Equatable, Sendable {

@@ -20,8 +20,10 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var checkpoint: Bool
     /// Non-nil for a remix: the topics to blend (the loader picks the lessons).
     public var remixThemeIds: [String]?
+    /// Non-nil for saved-words practice: the exact exercises to play, in order (the server picked them).
+    public var exerciseRefs: [StarredPracticeExercise]?
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -29,6 +31,12 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
         self.checkpointSummary = checkpointSummary
         self.checkpoint = checkpoint
         self.remixThemeIds = remixThemeIds
+        self.exerciseRefs = exerciseRefs
+    }
+
+    /// The route the saved-words practice's "Continue" leads to.
+    public static func forSavedPractice(_ picked: SavedPracticeExercises) -> LessonRoute {
+        return LessonRoute(skillKey: "saved-practice", exerciseRefs: picked.refs)
     }
 
     /// The route the Library's remix picker leads to.

@@ -194,3 +194,33 @@ final class StoryResumeTests: XCTestCase {
         XCTAssertEqual(session.storyResults, [0: true, 1: false])
     }
 }
+
+final class SavedPracticeRouteTests: XCTestCase {
+    func testExercisesStringParsesBackToRefsAndSkipsMalformedEntries() {
+        let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/2,bad,u2/b/0,u3//1,u4/c/x", count: 2)
+        XCTAssertEqual(picked.refs, [
+            StarredPracticeExercise(unitKey: "u1", skillKey: "a", ordinal: 2),
+            StarredPracticeExercise(unitKey: "u2", skillKey: "b", ordinal: 0),
+        ])
+        XCTAssertEqual(LessonRoute.forSavedPractice(picked).exerciseRefs, picked.refs)
+    }
+
+    func testSavedPracticePlaysOnlyThePickedExercisesInOrderWithoutDuplicates() async throws {
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0"), bank("a1"), bank("a2")])
+        let b = SkillArtifact(id: "b", title: "B", exercises: [bank("b0"), bank("b1")])
+        let loader = makeLoader(skills: ["u1/a": a, "u2/b": b])
+        let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u2/b/1,u1/a/2,u2/b/1,u9/gone/0,u1/a/7", count: 2)
+        let setup = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["u2/b/1", "u1/a/2"])
+        XCTAssertEqual(setup?.exerciseCountBySkill, ["a": 3, "b": 2])
+        XCTAssertEqual(setup?.courseCode, "fa")
+        XCTAssertNil(setup?.story)
+    }
+
+    func testSavedPracticeWithNothingFoundIsNil() async throws {
+        let loader = makeLoader()
+        let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/0", count: 1)
+        let setup = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
+        XCTAssertNil(setup)
+    }
+}

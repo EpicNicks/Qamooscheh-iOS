@@ -99,6 +99,7 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
     public func setup(for route: LessonRoute) async throws -> LessonSetup? {
         if route.checkpoint { return try await checkpointSetup(route) }
         if let themeIds = route.remixThemeIds { return try await remixSetup(themeIds) }
+        if let refs = route.exerciseRefs { return try await exercisesSetup(refs) }
         if let unitKey = route.unitKey, let found = try await course() {
             if let skill = try content.skill(found, unitKey, route.skillKey), skill.category == .story {
                 return await storySetup(course: found, unitKey: unitKey, skillKey: route.skillKey, skill: skill)
@@ -139,6 +140,28 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             exerciseCountBySkill: [skillKey: skill.exercises.count],
             story: StoryChapter(title: skill.title, exercises: skill.exercises)
         )
+    }
+
+    /// Saved-words practice: just the exercises the server picked, in its order; ones whose skill file or ordinal is gone are skipped.
+    private func exercisesSetup(_ refs: [StarredPracticeExercise]) async throws -> LessonSetup? {
+        guard let found = try await course() else { throw LessonLoadError.noCourse }
+        let held = await cardsForUser()
+        var built: [String: [ExerciseInstance]] = [:]
+        var counts: [String: Int] = [:]
+        var instances: [ExerciseInstance] = []
+        var seen = Set<String>()
+        for ref in refs {
+            let skillId = ref.unitKey + "/" + ref.skillKey
+            if built[skillId] == nil {
+                guard let skill = try content.skill(found, ref.unitKey, ref.skillKey) else { continue }
+                built[skillId] = buildInstances(skills: [(ref: SkillRef(unitKey: ref.unitKey, skillKey: ref.skillKey), skill: skill)], cards: held)
+                counts[ref.skillKey] = skill.exercises.count
+            }
+            guard let instance = built[skillId]?.first(where: { $0.ordinal == ref.ordinal }) else { continue }
+            if seen.insert(instance.key).inserted { instances.append(instance) }
+        }
+        if instances.isEmpty { return nil }
+        return LessonSetup(courseCode: found.code, courseVersion: found.version, instances: instances, exerciseCountBySkill: counts)
     }
 
     private func remixSetup(_ themeIds: [String]) async throws -> LessonSetup? {
