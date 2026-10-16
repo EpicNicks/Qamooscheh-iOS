@@ -71,7 +71,7 @@ private struct AbjadLetterSearch: View {
                     get: { model.pending },
                     set: { model.onSearchInput($0) }
                 ))
-                .textInputAutocapitalization(.never)
+                .modifier(NoAutocapitalization())
                 .autocorrectionDisabled(true)
                 .padding(10)
                 .background(Color(argb: p.bg))
@@ -287,5 +287,16 @@ private struct AbjadFlashcardDeck: View {
                 .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// iOS-only keyboard behaviour, a no-op on macOS where the package tests also build.
+private struct NoAutocapitalization: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content.textInputAutocapitalization(.never)
+        #else
+        content
+        #endif
     }
 }
