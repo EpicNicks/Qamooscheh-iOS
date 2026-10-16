@@ -212,7 +212,7 @@ final class SavedPracticeRouteTests: XCTestCase {
         let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u2/b/1,u1/a/2,u2/b/1,u9/gone/0,u1/a/7", count: 2)
         let setup = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
         XCTAssertEqual(setup?.instances.map { $0.key }, ["u2/b/1", "u1/a/2"])
-        XCTAssertEqual(setup?.exerciseCountBySkill, ["a": 3, "b": 2])
+        XCTAssertEqual(setup?.exerciseCountBySkill, ["u1/a": 3, "u2/b": 2])
         XCTAssertEqual(setup?.courseCode, "fa")
         XCTAssertNil(setup?.story)
     }
@@ -222,5 +222,34 @@ final class SavedPracticeRouteTests: XCTestCase {
         let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/0", count: 1)
         let setup = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
         XCTAssertNil(setup)
+    }
+
+    func testSavedPracticePickedForAnotherCourseVersionFailsInsteadOfPlaying() async {
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0")])
+        let loader = makeLoader(skills: ["u1/a": a])
+        let picked = SavedPracticeExercises(courseVersion: 3, exercises: "u1/a/0", count: 1)
+        do {
+            _ = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
+            XCTFail("expected a version mismatch")
+        } catch {
+            XCTAssertEqual(error as? LessonLoadError, .courseVersionMismatch)
+        }
+    }
+
+    func testSameSkillKeyInTwoUnitsKeepsSeparateCounts() async throws {
+        let one = SkillArtifact(id: "a", title: "A", exercises: [bank("x"), bank("y")])
+        let two = SkillArtifact(id: "a", title: "A", exercises: [bank("p"), bank("q"), bank("r")])
+        let loader = makeLoader(skills: ["u1/a": one, "u2/a": two])
+        let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/0,u2/a/1", count: 2)
+        let setup = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
+        XCTAssertEqual(setup?.exerciseCountBySkill, ["u1/a": 2, "u2/a": 3])
+    }
+
+    func testDraftKeyDiffersForADifferentPickedSetAndIsStableForTheSame() {
+        let first = LessonRoute.forSavedPractice(SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/0,u1/a/1", count: 2))
+        let again = LessonRoute.forSavedPractice(SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/0,u1/a/1", count: 2))
+        let other = LessonRoute.forSavedPractice(SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/2,u1/a/3", count: 2))
+        XCTAssertEqual(first.skillKey, again.skillKey)
+        XCTAssertNotEqual(first.skillKey, other.skillKey)
     }
 }
