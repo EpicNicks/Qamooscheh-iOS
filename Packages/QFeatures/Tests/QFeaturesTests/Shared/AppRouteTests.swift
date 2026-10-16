@@ -8,6 +8,7 @@ final class AppRouteTests: XCTestCase {
         XCTAssertEqual(AppRoute.glossary.title, "Glossary")
         XCTAssertEqual(AppRoute.flashcards.title, "Flashcards")
         XCTAssertEqual(AppRoute.vocabulary.title, "Vocabulary")
+        XCTAssertEqual(AppRoute.savedPractice.title, "Practice saved words")
         XCTAssertEqual(AppRoute.settings.title, "Settings")
         XCTAssertEqual(AppRoute.friends.title, "Friends")
         XCTAssertEqual(AppRoute.help.title, "Help & FAQ")
@@ -17,7 +18,7 @@ final class AppRouteTests: XCTestCase {
 
     func testTabEntries() {
         XCTAssertEqual(AppRoute.libraryEntries, [.themes, .glossary])
-        XCTAssertEqual(AppRoute.reviewEntries, [.flashcards, .vocabulary])
+        XCTAssertEqual(AppRoute.reviewEntries, [.flashcards, .vocabulary, .savedPractice])
         XCTAssertEqual(AppRoute.profileLinks, [.settings, .friends, .help, .about, .shareStreak])
     }
 

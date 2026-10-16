@@ -21,6 +21,11 @@ public struct VocabRepository: Sendable {
         try await client.send(.put, "/v1/vocab/starred", body: SetStarredRequest(tag: tag, starred: starred))
     }
 
+    /// GET /v1/vocab/starred/practice?words=N: the saved-words remix for the active course (words 1...30; 409 without a course).
+    public func practice(words: Int) async throws -> StarredPracticeResponse {
+        try await client.send(.get, "/v1/vocab/starred/practice?words=\(words)")
+    }
+
     /// POST /v1/flashcards/submit. The request's submissionId makes a retry answer with the first award.
     public func submitFlashcards(_ request: SubmitFlashcardsRequest) async throws -> SubmitFlashcardsResponse {
         try await client.send(.post, "/v1/flashcards/submit", body: request)
