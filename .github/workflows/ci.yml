@@ -128,3 +128,24 @@ jobs:
         with:
           name: snapshots-xcresult
           path: build/*.xcresult
+
+  # M1 spike: the same QGrader fixture suite on an iOS simulator (JavaScriptCore and WKWebView
+  # in an iOS process), so the recorded timings are not macOS-host-only.
+  grader-sim:
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_${{ needs.config.outputs.xcode }}.app
+      - name: pick simulator
+        run: |
+          SDKVER=$(xcodebuild -showsdks | grep -Eo 'iphonesimulator[0-9]+(\.[0-9]+)?' | head -n 1 | sed 's/iphonesimulator//')
+          UDID=$(xcrun simctl list devices available | awk -v ver="$SDKVER" '/^-- /{insec = ($0 == "-- iOS " ver " --")} insec && /iPhone/' | grep -Eo '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -n 1)
+          if [ -z "$UDID" ]; then echo "no available iPhone simulator for iOS $SDKVER"; exit 1; fi
+          echo "DEST=platform=iOS Simulator,id=$UDID" >> "$GITHUB_ENV"
+      - name: QGrader tests on simulator
+        working-directory: Packages/QGrader
+        run: |
+          set -o pipefail
+          xcodebuild test -scheme QGrader -destination "$DEST" CODE_SIGNING_ALLOWED=NO | tee ../../grader-sim.log | grep -E "QGRADER-SPIKE|error:|Test Case|Executed|TEST (SUCCEEDED|FAILED)"

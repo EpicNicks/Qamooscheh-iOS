@@ -11,7 +11,18 @@ let package = Package(
         .package(path: "../QModel"),
     ],
     targets: [
-        .target(name: "QGrader", dependencies: ["QModel"]),
-        .testTarget(name: "QGraderTests", dependencies: ["QGrader"]),
+        .target(
+            name: "QGrader",
+            dependencies: ["QModel"],
+            resources: [
+                .copy("Resources/grader"),
+                .copy("Resources/grader-host.js"),
+            ]
+        ),
+        .testTarget(
+            name: "QGraderTests",
+            dependencies: ["QGrader"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )
