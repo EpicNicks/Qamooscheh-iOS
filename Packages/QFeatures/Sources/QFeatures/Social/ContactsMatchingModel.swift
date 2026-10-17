@@ -110,6 +110,7 @@ public final class ContactsMatchingModel: ObservableObject {
         working = true
         message = nil
         defer { working = false }
+        var found: [String: ContactMatchResponse] = [:]
         do {
             guard try await reader.requestAccess() else {
                 message = "Allow Contacts access in Settings to find friends."
@@ -123,25 +124,31 @@ public final class ContactsMatchingModel: ObservableObject {
                 message = "No email addresses found in your contacts."
                 return
             }
-            var found: [String: ContactMatchResponse] = [:]
             var index = 0
             let size = ContactsRepository.maxHashesPerCall
             while index < prepared.hashes.count {
                 let chunk = Array(prepared.hashes[index ..< min(index + size, prepared.hashes.count)])
-                for match in try await service.match(chunk) { found[match.userId] = match }
+                do {
+                    for match in try await service.match(chunk) { found[match.userId] = match }
+                } catch {
+                    // Earlier calls already spent allowance on the server; keep what they found.
+                    if !found.isEmpty { matches = Self.sorted(Array(found.values)) }
+                    throw error
+                }
                 index += size
             }
             matches = Self.sorted(Array(found.values))
         } catch {
-            message = failureMessage(error, fallback: "Couldn't check your contacts right now.")
+            let base = failureMessage(error, fallback: "Couldn't check your contacts right now.")
+            message = (matches?.isEmpty == false) ? "\(base) Showing the matches found so far." : base
         }
     }
 
-    /// Display name then user id, as the server sorts, so the order never reflects the contacts' order.
+    /// Display name (ignoring case) then user id, as the server sorts, so the order never reflects the contacts' order.
     static func sorted(_ list: [ContactMatchResponse]) -> [ContactMatchResponse] {
         list.sorted { a, b in
-            let an = a.displayName ?? ""
-            let bn = b.displayName ?? ""
+            let an = (a.displayName ?? "").lowercased()
+            let bn = (b.displayName ?? "").lowercased()
             if an != bn { return an < bn }
             return a.userId < b.userId
         }

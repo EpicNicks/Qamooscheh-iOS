@@ -8,6 +8,7 @@ private final class FakeContacts: ContactsService, @unchecked Sendable {
     var state = ContactsFindableResponse(findable: false, canBeFound: true)
     var matchesByCall: [[ContactMatchResponse]] = []
     var matchError: Error?
+    var failFromCall: Int?
     var setError: Error?
     var sentBatches: [[String]] = []
     var setCalls: [Bool] = []
@@ -23,6 +24,7 @@ private final class FakeContacts: ContactsService, @unchecked Sendable {
 
     func match(_ hashes: [String]) async throws -> [ContactMatchResponse] {
         sentBatches.append(hashes)
+        if let from = failFromCall, sentBatches.count >= from { throw ApiError(status: 429, body: nil) }
         if let e = matchError { throw e }
         return matchesByCall.isEmpty ? [] : matchesByCall.removeFirst()
     }
@@ -153,5 +155,41 @@ final class ContactsMatchingModelTests: XCTestCase {
         XCTAssertEqual(contactAction(match, sent: ["u1": .pending]), .requestSent)
         XCTAssertEqual(contactAction(ContactMatchResponse(userId: "u2", relationship: .friends), sent: [:]), .friends)
         XCTAssertEqual(contactAction(ContactMatchResponse(userId: "u3", relationship: .requestReceived), sent: [:]), .nothing)
+    }
+
+    func testContactActionUsesFriendsListAfterAccepting() {
+        let match = ContactMatchResponse(userId: "u3", relationship: .requestReceived)
+        XCTAssertEqual(contactAction(match, sent: [:], friendIds: ["u3"]), .friends)
+        XCTAssertEqual(contactAction(match, sent: [:], friendIds: []), .nothing)
+    }
+
+    func testLaterCallFailureKeepsEarlierMatchesAndShowsError() async {
+        let service = FakeContacts()
+        service.state.findable = true
+        service.failFromCall = 2
+        service.matchesByCall = [[ContactMatchResponse(userId: "u1", displayName: "Ann", relationship: .none)]]
+        let reader = FakeReader()
+        reader.addresses = (0 ..< 700).map { "c\($0)@x.com" }
+        let model = make(service, reader)
+        await model.load()
+        await model.findFriends()
+        XCTAssertEqual(service.sentBatches.count, 2)
+        XCTAssertEqual(model.matches?.map { $0.userId }, ["u1"])
+        XCTAssertNotNil(model.message)
+    }
+
+    func testMatchesSortIgnoringCase() async {
+        let service = FakeContacts()
+        service.state.findable = true
+        service.matchesByCall = [[
+            ContactMatchResponse(userId: "u1", displayName: "Carl", relationship: .none),
+            ContactMatchResponse(userId: "u2", displayName: "bob", relationship: .none),
+        ]]
+        let reader = FakeReader()
+        reader.addresses = ["a@x.com"]
+        let model = make(service, reader)
+        await model.load()
+        await model.findFriends()
+        XCTAssertEqual(model.matches?.map { $0.displayName }, ["bob", "Carl"])
     }
 }

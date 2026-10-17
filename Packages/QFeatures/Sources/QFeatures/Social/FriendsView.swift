@@ -242,7 +242,7 @@ struct ContactsSection: View {
         return HStack(spacing: 8) {
             Text(name).font(.body.weight(.semibold)).foregroundColor(Color(argb: p.text))
             Spacer(minLength: 8)
-            switch contactAction(match, sent: friends.sent) {
+            switch contactAction(match, sent: friends.sent, friendIds: friends.friendIds) {
             case .friends: Text("Friends").font(.callout).foregroundColor(Color(argb: p.textMuted))
             case .requestSent: Text("Request sent").font(.callout).foregroundColor(Color(argb: p.textMuted))
             case .nothing: Text("Sent you a request").font(.callout).foregroundColor(Color(argb: p.textMuted))
@@ -262,8 +262,9 @@ struct ContactsSection: View {
 }
 
 /// What a contact match's row offers. An add made on this screen wins over the relationship the search returned.
-func contactAction(_ match: ContactMatchResponse, sent: [String: FriendshipStatus]) -> HitAction {
-    if let status = sent[match.userId] { return hitAction(userId: match.userId, sent: [match.userId: status], friendIds: []) }
+func contactAction(_ match: ContactMatchResponse, sent: [String: FriendshipStatus], friendIds: Set<String> = []) -> HitAction {
+    if friendIds.contains(match.userId) { return .friends }
+    if let status = sent[match.userId] { return hitAction(userId: match.userId, sent: [match.userId: status], friendIds: friendIds) }
     switch match.relationship {
     case .friends: return .friends
     case .requestSent: return .requestSent
