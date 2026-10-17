@@ -12,12 +12,16 @@ final class JSCoreGraderTests: XCTestCase {
     }
 
     func testFixturesOnJavaScriptCore() async throws {
-        // The only documented unsupported condition: no wasm SIMD (macOS hosts). Any other
-        // startup or grading failure is a real failure and is not skipped.
+        // Skip only on macOS hosts, where JavaScriptCore has no wasm SIMD. On the iOS simulator
+        // (the gating runtime) a failed SIMD probe is a real failure.
+        #if os(macOS)
         guard Self.supportsWasmSimd() else {
             print("QGRADER-SPIKE runtime=javaScriptCore UNSUPPORTED wasm-simd=false")
-            throw XCTSkip("JavaScriptCore on this host lacks wasm SIMD (documented unsupported)")
+            throw XCTSkip("JavaScriptCore on this macOS host lacks wasm SIMD (documented unsupported)")
         }
+        #else
+        XCTAssertTrue(Self.supportsWasmSimd(), "JavaScriptCore must support wasm SIMD on iOS")
+        #endif
         let grader = JSCoreGrader(bundle: try GraderBundle.bundled(language: "fa"))
         defer { grader.shutdown() }
         let problems = try await runFixtureSuite(grader, label: "fa-v\(try GraderBundle.bundled().version)")

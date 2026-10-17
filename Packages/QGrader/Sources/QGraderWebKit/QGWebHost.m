@@ -13,6 +13,20 @@
 }
 @end
 
+/// Same for the URL scheme handler (WKWebViewConfiguration retains it).
+@interface QGWeakSchemeHandler : NSObject <WKURLSchemeHandler>
+@property (nonatomic, weak) id<WKURLSchemeHandler> target;
+@end
+
+@implementation QGWeakSchemeHandler
+- (void)webView:(WKWebView *)webView startURLSchemeTask:(id<WKURLSchemeTask>)urlSchemeTask {
+    [self.target webView:webView startURLSchemeTask:urlSchemeTask];
+}
+- (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)urlSchemeTask {
+    [self.target webView:webView stopURLSchemeTask:urlSchemeTask];
+}
+@end
+
 @interface QGWebHost () <WKScriptMessageHandler, WKURLSchemeHandler, WKNavigationDelegate>
 @property (nonatomic, copy) NSString *indexHTML;
 @property (nonatomic, copy) QGWebFileProvider provider;
@@ -36,7 +50,9 @@
 
 - (void)start {
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
-    [config setURLSchemeHandler:self forURLScheme:@"qgrader"];
+    QGWeakSchemeHandler *schemeHandler = [[QGWeakSchemeHandler alloc] init];
+    schemeHandler.target = self;
+    [config setURLSchemeHandler:schemeHandler forURLScheme:@"qgrader"];
     QGWeakScriptHandler *handler = [[QGWeakScriptHandler alloc] init];
     handler.target = self;
     [config.userContentController addScriptMessageHandler:handler name:@"qgrader"];
