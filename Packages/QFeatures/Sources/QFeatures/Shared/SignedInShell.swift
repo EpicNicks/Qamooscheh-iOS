@@ -24,6 +24,7 @@ public final class SignedInShell: ObservableObject {
     public let library: LibraryModel
     public let leagues: LeaguesModel
     public let friends: FriendsModel
+    public let contactsMatching: ContactsMatchingModel
     public let vocabulary: VocabularyStore
     public let flashcards: FlashcardsModel
 
@@ -72,6 +73,8 @@ public final class SignedInShell: ObservableObject {
             service: app?.profile, streakService: app?.streak, signOut: signOut, onUnauthorized: unauthorized)
         self.library = LibraryModel(source: app?.themes, onUnauthorized: unauthorized)
         self.friends = FriendsModel(service: app?.friends, onUnauthorized: unauthorized)
+        self.contactsMatching = ContactsMatchingModel(
+            service: app?.contacts, reader: app?.contactEmails, onUnauthorized: unauthorized)
         let store = VocabularyStore(source: app?.vocabulary, onUnauthorized: unauthorized)
         self.vocabulary = store
         self.flashcards = FlashcardsModel(store: store, submitter: app?.flashcards, onUnauthorized: unauthorized)

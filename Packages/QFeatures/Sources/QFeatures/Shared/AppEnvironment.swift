@@ -13,6 +13,10 @@ public struct AppEnvironment: @unchecked Sendable {
     public let profile: ProfileService
     public let streak: StreakService
     public let friends: FriendsService
+    /// The contacts-matching calls; nil in tests.
+    public let contacts: ContactsService?
+    /// The address-book reader; nil in tests.
+    public let contactEmails: ContactEmailReading?
     public let leagues: LeagueService
     public let vocabulary: VocabularySource
     public let flashcards: FlashcardSubmitter
@@ -57,8 +61,12 @@ public struct AppEnvironment: @unchecked Sendable {
         signOut: @escaping @Sendable () async -> Void = {},
         forgetUser: @escaping @Sendable (String) async -> Void = { _ in },
         previewer: VoicePreviewing? = nil,
-        savedPractice: SavedPracticeSource? = nil
+        savedPractice: SavedPracticeSource? = nil,
+        contacts: ContactsService? = nil,
+        contactEmails: ContactEmailReading? = nil
     ) {
+        self.contacts = contacts
+        self.contactEmails = contactEmails
         self.savedPractice = savedPractice
         self.profile = profile
         self.streak = streak
@@ -189,7 +197,9 @@ public struct AppEnvironment: @unchecked Sendable {
             },
             forgetUser: forget,
             previewer: previewer,
-            savedPractice: LiveSavedPracticeSource(repository: vocab))
+            savedPractice: LiveSavedPracticeSource(repository: vocab),
+            contacts: ContactsRepository(client: client),
+            contactEmails: systemContactEmails())
     }
 }
 
@@ -214,4 +224,12 @@ enum PinCache {
         guard let key = key(userId: userId), let data = try? store.read(key) else { return nil }
         return try? QJSON.makeDecoder().decode(CourseRef.self, from: data)
     }
+}
+
+private func systemContactEmails() -> ContactEmailReading? {
+    #if canImport(Contacts)
+    return SystemContactEmails()
+    #else
+    return nil
+    #endif
 }

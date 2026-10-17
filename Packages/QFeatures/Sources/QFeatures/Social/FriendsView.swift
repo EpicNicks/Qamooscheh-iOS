@@ -1,22 +1,30 @@
 import SwiftUI
 import QModel
+import QData
 import QDesign
 
 /// The Friends screen (web FriendsPage, Android FriendsScreen): search and add, answer incoming
 /// requests, and the friends list. Reached from Profile, which supplies the back button.
 public struct FriendsView: View {
     @ObservedObject private var model: FriendsModel
+    private let contacts: ContactsMatchingModel?
 
-    public init(model: FriendsModel) {
+    public init(model: FriendsModel, contacts: ContactsMatchingModel? = nil) {
         self.model = model
+        self.contacts = contacts
     }
 
     public var body: some View {
         ScrollView {
-            FriendsContent(model: model).padding(16)
+            VStack(alignment: .leading, spacing: 8) {
+                FriendsContent(model: model)
+                if let contacts = contacts { ContactsSection(contacts: contacts, friends: model) }
+            }
+            .padding(16)
         }
         .navigationTitle("Friends")
         .task { await model.load() }
+        .task { await contacts?.load() }
     }
 }
 
@@ -180,5 +188,87 @@ public struct FriendsShowcase: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(argb: (colorScheme == .dark ? AppPalette.dark : AppPalette.light).bg))
             .environment(\.dynamicTypeSize, large ? .accessibility2 : .large)
+    }
+}
+
+/// The opt-in switch and the "find friends from contacts" search. Search only appears once opted in.
+struct ContactsSection: View {
+    @ObservedObject var contacts: ContactsMatchingModel
+    @ObservedObject var friends: FriendsModel
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let p = colorScheme == .dark ? AppPalette.dark : AppPalette.light
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Find friends from contacts").font(.title3.weight(.semibold)).foregroundColor(Color(argb: p.text))
+                .padding(.top, 16)
+                .accessibilityAddTraits(.isHeader)
+            Toggle("Let people find me from their contacts", isOn: Binding(
+                get: { contacts.findable },
+                set: { value in Task { await contacts.setFindable(value) } }))
+                .disabled(!contacts.loaded || contacts.working)
+                .frame(minHeight: 44)
+            Text("Off by default. Matching uses your email address only, and only a scrambled (hashed) form of contact emails is sent, never names or numbers.")
+                .font(.callout).foregroundColor(Color(argb: p.textMuted))
+            if !contacts.canBeFound {
+                Text("Accounts that signed in with Google have no email on file, so they can't be found this way.")
+                    .font(.callout).foregroundColor(Color(argb: p.textMuted))
+            }
+            if contacts.findable {
+                Button("Find friends from contacts") { Task { await contacts.findFriends() } }
+                    .buttonStyle(.bordered)
+                    .disabled(contacts.working)
+                    .frame(minHeight: 44)
+            }
+            if contacts.working { ProgressView() }
+            if let message = contacts.message {
+                Text(message).font(.callout).foregroundColor(Color(argb: p.danger))
+            }
+            if contacts.truncated {
+                Text("Only the first \(ContactsRepository.maxHashesPerDay) contact emails were checked.")
+                    .font(.callout).foregroundColor(Color(argb: p.textMuted))
+            }
+            if let matches = contacts.matches {
+                if matches.isEmpty { Text("No contacts are on Qamooscheh yet.").font(.callout).foregroundColor(Color(argb: p.textMuted)) }
+                ForEach(matches, id: \.userId) { match in row(match, p) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ match: ContactMatchResponse, _ p: AppPalette) -> some View {
+        let name = match.displayName ?? friendsUnnamed
+        return HStack(spacing: 8) {
+            Text(name).font(.body.weight(.semibold)).foregroundColor(Color(argb: p.text))
+            Spacer(minLength: 8)
+            switch contactAction(match, sent: friends.sent) {
+            case .friends: Text("Friends").font(.callout).foregroundColor(Color(argb: p.textMuted))
+            case .requestSent: Text("Request sent").font(.callout).foregroundColor(Color(argb: p.textMuted))
+            case .nothing: Text("Sent you a request").font(.callout).foregroundColor(Color(argb: p.textMuted))
+            case .add:
+                Button("Add") { Task { await friends.add(match.userId) } }
+                    .buttonStyle(.bordered)
+                    .disabled(friends.busy.contains(match.userId))
+                    .accessibilityLabel("Add \(name)")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(argb: p.surface))
+        .overlay(RoundedRectangle(cornerRadius: Radii.standard.sm).stroke(Color(argb: p.border), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: Radii.standard.sm))
+    }
+}
+
+/// What a contact match's row offers. An add made on this screen wins over the relationship the search returned.
+func contactAction(_ match: ContactMatchResponse, sent: [String: FriendshipStatus]) -> HitAction {
+    if let status = sent[match.userId] { return hitAction(userId: match.userId, sent: [match.userId: status], friendIds: []) }
+    switch match.relationship {
+    case .friends: return .friends
+    case .requestSent: return .requestSent
+    // Their request is in Pending requests above; accepting happens there.
+    case .requestReceived: return .nothing
+    case .none: return .add
     }
 }

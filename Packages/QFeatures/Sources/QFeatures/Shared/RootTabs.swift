@@ -157,7 +157,7 @@ struct AppRouteDestination: View {
         case .settings:
             SettingsDestination(shell: shell, onOpenHelp: { path.append(.help) })
         case .friends:
-            FriendsView(model: shell.friends)
+            FriendsView(model: shell.friends, contacts: shell.contactsMatching)
         case .help:
             HelpView()
         case .about:
