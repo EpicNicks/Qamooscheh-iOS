@@ -21,6 +21,8 @@ Correctness = 15 `expect` vectors match exactly, 6 more have accept/reject sanit
 | 39008388983 | JavaScriptCore | 12.9 s | 6.1 ms | 64.2 ms | 1527 ms |
 | 39009055469 | WKWebView | 221.5 s | 3.03 ms | 28.1 ms | 341 ms |
 | 39009055469 | JavaScriptCore | 1.3 s | 2.89 ms | 4.84 ms | 7.4 ms |
+| 39041546444 | WKWebView | start timed out at the test's 60 s limit (test failed; the recovery test in the same run started in 7.4 s) | n/a | n/a | n/a |
+| 39041546444 | JavaScriptCore | 1.6 s | 4.30 ms | 121 ms | 572 ms |
 
 ### macOS runner (`swift test`)
 
@@ -33,7 +35,7 @@ Correctness = 15 `expect` vectors match exactly, 6 more have accept/reject sanit
 
 ### What the variance says
 
-- On the simulator the ranking is not stable. WKWebView p95 ranged 3.9 to 28.1 ms and its cold start 8.3 s to 221 s (one run timed out at 120 s); JavaScriptCore p95 ranged 4.8 to 81.6 ms and cold start 1.3 s to 12.9 s. Neither runtime wins consistently, and the best and worst single numbers of each overlap. Shared CI simulators are noisy; treat all of these as order-of-magnitude only.
+- On the simulator the ranking is not stable. WKWebView p95 ranged 3.9 to 28.1 ms and its cold start 8.3 s to 221 s (two runs timed out, at 120 s and at 60 s); JavaScriptCore p95 ranged 4.8 to 81.6 ms and cold start 1.3 s to 12.9 s. Neither runtime wins consistently, and the best and worst single numbers of each overlap. Shared CI simulators are noisy; treat all of these as order-of-magnitude only.
 - WKWebView on the macOS runner was steady (warm-up 2.5-3.1 s, p95 1.9-5.0 ms) but that host is not the iOS simulator and not a device.
 - JavaScriptCore on the macOS runner never starts: the .NET loader asserts "doesn't support WASM SIMD"; `WebAssembly.validate` rejects SIMD there (simd=false; exceptions, bulk-memory, tail-call true). On the simulator the same probe says simd=true. JSC support is host/configuration dependent.
 - JavaScriptCore needs a dedicated thread that pumps its run loop (wasm compile completion); implemented in `JSCoreGrader`.
@@ -41,7 +43,7 @@ Correctness = 15 `expect` vectors match exactly, 6 more have accept/reject sanit
 
 ## Test policy
 
-A runtime test is skipped only for the documented unsupported condition (JavaScriptCore with no wasm SIMD). Startup timeouts and grading failures fail the test. `WebViewGrader` re-launches its web view after a web content process termination (`testRecoversAfterContentProcessTermination` simulates the callback; a real termination needs a device).
+A runtime test is skipped only for the documented unsupported condition (JavaScriptCore with no wasm SIMD). Startup timeouts and grading failures fail the test. The WKWebView fixture test allows 300 s startup because the measured simulator cold start reaches 221 s; a failure at that limit is a real failure and is not skipped. A 60 s limit in run 39041546444 failed on this same instability (not on grading: no vector was graded). `WebViewGrader` re-launches its web view after a web content process termination (`testRecoversAfterContentProcessTermination` simulates the callback; a real termination needs a device).
 
 ## Not verified (CI cannot show these)
 

@@ -47,7 +47,9 @@ final class JSCoreGraderTests: XCTestCase {
 final class WebViewGraderTests: XCTestCase {
     @MainActor
     func testFixturesOnWebView() async throws {
-        let grader = WebViewGrader(bundle: try GraderBundle.bundled(language: "fa"), startupTimeout: 60)
+        // Simulator WKWebView cold start was measured at 8 s to 221 s across CI runs (docs/grader-spike.md),
+        // so the timeout must exceed the documented worst case; a real hang still fails at 300 s.
+        let grader = WebViewGrader(bundle: try GraderBundle.bundled(language: "fa"), startupTimeout: 300)
         defer { grader.shutdown() }
         let problems = try await runFixtureSuite(grader, label: "fa-v\(try GraderBundle.bundled().version)")
         XCTAssertEqual(problems, [])
