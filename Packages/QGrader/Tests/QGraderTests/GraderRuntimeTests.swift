@@ -5,17 +5,23 @@ import XCTest
 import JavaScriptCore
 
 final class JSCoreGraderTests: XCTestCase {
+    /// True when this JSContext accepts wasm SIMD, which the .NET loader requires.
+    private static func supportsWasmSimd() -> Bool {
+        let simd = "0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11"
+        return JSContext()?.evaluateScript("WebAssembly.validate(new Uint8Array([\(simd)]))")?.toBool() ?? false
+    }
+
     func testFixturesOnJavaScriptCore() async throws {
+        // The only documented unsupported condition: no wasm SIMD (macOS hosts). Any other
+        // startup or grading failure is a real failure and is not skipped.
+        guard Self.supportsWasmSimd() else {
+            print("QGRADER-SPIKE runtime=javaScriptCore UNSUPPORTED wasm-simd=false")
+            throw XCTSkip("JavaScriptCore on this host lacks wasm SIMD (documented unsupported)")
+        }
         let grader = JSCoreGrader(bundle: try GraderBundle.bundled(language: "fa"))
         defer { grader.shutdown() }
-        do {
-            let problems = try await runFixtureSuite(grader, label: "fa-v\(try GraderBundle.bundled().version)")
-            XCTAssertEqual(problems, [])
-        } catch let error as GraderError {
-            // A runtime that cannot start this build is a spike result, not a test failure.
-            print("QGRADER-SPIKE runtime=javaScriptCore UNSUPPORTED \(error) diagnostics=\(grader.diagnostics)")
-            throw XCTSkip("JavaScriptCore cannot run this grader build: \(error)")
-        }
+        let problems = try await runFixtureSuite(grader, label: "fa-v\(try GraderBundle.bundled().version)")
+        XCTAssertEqual(problems, [])
     }
 
     /// Which wasm features this JSContext accepts (wasm-feature-detect probe modules).
@@ -43,13 +49,22 @@ final class WebViewGraderTests: XCTestCase {
     func testFixturesOnWebView() async throws {
         let grader = WebViewGrader(bundle: try GraderBundle.bundled(language: "fa"), startupTimeout: 60)
         defer { grader.shutdown() }
-        do {
-            let problems = try await runFixtureSuite(grader, label: "fa-v\(try GraderBundle.bundled().version)")
-            XCTAssertEqual(problems, [])
-        } catch let error as GraderError {
-            print("QGRADER-SPIKE runtime=webView UNSUPPORTED \(error)")
-            throw XCTSkip("WKWebView could not start in this test host: \(error)")
-        }
+        let problems = try await runFixtureSuite(grader, label: "fa-v\(try GraderBundle.bundled().version)")
+        XCTAssertEqual(problems, [])
+    }
+
+    /// The web content process dying after ready must not leave the grader dead: the next grade relaunches.
+    @MainActor
+    func testRecoversAfterContentProcessTermination() async throws {
+        let grader = WebViewGrader(bundle: try GraderBundle.bundled(language: "fa"), startupTimeout: 120)
+        defer { grader.shutdown() }
+        let request = GraderRequest(exerciseType: "TypeIn", scriptMode: "Native", submitted: "a", acceptedAnswers: ["a"])
+        try await grader.warmUp()
+        let before = try await grader.grade(request)
+        grader.handleContentProcessTerminated()
+        let after = try await grader.grade(request)
+        XCTAssertNotNil(before.verdict)
+        XCTAssertEqual(after.verdict, before.verdict)
     }
 }
 #endif

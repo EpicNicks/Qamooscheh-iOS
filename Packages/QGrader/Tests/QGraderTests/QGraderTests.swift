@@ -37,7 +37,7 @@ final class QGraderTests: XCTestCase {
         let bundle = try GraderBundle.bundled(language: "fa")
         let manifestSha = try bundle.verify()
         print("QGRADER-SPIKE bundle language=\(bundle.language) version=\(bundle.version) manifestSha256=\(manifestSha)")
-        XCTAssertEqual(manifestSha.count, 64)
+        XCTAssertEqual(manifestSha, "9615b4d995000200eb326ba62fb00c0a5194099125ebdc7a9960e19d83a48375")
     }
 
     func testFixturesLoad() throws {

@@ -41,6 +41,20 @@ struct XpVector: Decodable {
     let xp: Int
 }
 
+/// The backend ships no recorded expectations for vectors without `expect` (tools/Qamooscheh.GraderBuilder/verify/
+/// vectors.json; Qamooscheh.GraderBuilder.Tests cover manifests and versioning only). These are accept/reject
+/// sanity expectations derived from the vector names, not recorded grader output.
+let sanityAccepted: [String: Bool] = [
+    "typein arabic kaf": true,
+    "typein persian digits": true,
+    "typein nfc decomposed alef maddah": true,
+    "typein best of several accepted": true,
+    "wordbank exact": true,
+    "match exact": true,
+    "typein wrong": false,
+    "wordbank wrong order": false,
+]
+
 enum Fixtures {
     static func load<T: Decodable>(_ file: String, as type: T.Type) throws -> T {
         guard let dir = Bundle.module.url(forResource: "Fixtures", withExtension: nil) else {
@@ -87,6 +101,9 @@ func runFixtureSuite(_ grader: any Grader, label: String, iterations: Int = 200)
             if r.error == nil { problems.append("\(v.name): expected an error, got \(r)") }
         } else if r.error != nil || r.verdict == nil {
             problems.append("\(v.name): not interpreted: \(r)")
+        } else if let want = sanityAccepted[v.name] {
+            let accepted = r.verdict == "Correct" || r.verdict == "AcceptedWithCorrection"
+            if accepted != want { problems.append("\(v.name): accepted=\(accepted) expected \(want): \(r)") }
         }
     }
 

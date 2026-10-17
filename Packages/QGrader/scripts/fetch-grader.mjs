@@ -6,7 +6,7 @@
 //   node scripts/fetch-grader.mjs [--lang fa] --base https://cdn.parsling.com --version N
 // Prints the manifest.json sha256 (the trust anchor bootstrap delivers).
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,13 +40,23 @@ const manifestBytes = await read("manifest.json");
 const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
 if (manifest.language !== lang || manifest.variant !== "browser" || manifest.version !== version) throw new Error("manifest does not match request");
 const dest = join(outRoot, lang, `v${version}`);
-rmSync(join(outRoot, lang), { recursive: true, force: true });
-for (const { path, sha256, size } of manifest.files) {
-  if (path.includes("..") || path.startsWith("/")) throw new Error(`unsafe path ${path}`);
-  const bytes = await read(path);
-  if (sha(bytes) !== sha256.toLowerCase() || bytes.length !== size) throw new Error(`${path}: sha256/size mismatch`);
-  mkdirSync(dirname(join(dest, path)), { recursive: true });
-  writeFileSync(join(dest, path), bytes);
+// Verify the whole new build into a staging directory first; only then replace the old one.
+const staging = join(outRoot, `.staging-${lang}-v${version}`);
+rmSync(staging, { recursive: true, force: true });
+try {
+  for (const { path, sha256, size } of manifest.files) {
+    if (path.includes("..") || path.startsWith("/")) throw new Error(`unsafe path ${path}`);
+    const bytes = await read(path);
+    if (sha(bytes) !== sha256.toLowerCase() || bytes.length !== size) throw new Error(`${path}: sha256/size mismatch`);
+    mkdirSync(dirname(join(staging, path)), { recursive: true });
+    writeFileSync(join(staging, path), bytes);
+  }
+  writeFileSync(join(staging, "manifest.json"), manifestBytes);
+} catch (e) {
+  rmSync(staging, { recursive: true, force: true });
+  throw e;
 }
-writeFileSync(join(dest, "manifest.json"), manifestBytes);
+rmSync(join(outRoot, lang), { recursive: true, force: true });
+mkdirSync(dirname(dest), { recursive: true });
+renameSync(staging, dest);
 console.log(`${lang}: browser v${version}, manifest sha256 ${sha(manifestBytes)} (${manifest.files.length} files verified)`);

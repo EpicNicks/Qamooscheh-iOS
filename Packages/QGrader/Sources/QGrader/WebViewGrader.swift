@@ -17,6 +17,7 @@ public final class WebViewGrader: Grader {
     private var waiters: [CheckedContinuation<Void, Error>] = []
     private var started = false
     private var warmed = false
+    private var generation = 0
 
     public init(bundle: GraderBundle, startupTimeout: TimeInterval = 120) {
         self.bundle = bundle
@@ -63,16 +64,21 @@ public final class WebViewGrader: Grader {
 
     private func start() {
         let bundle = self.bundle
+        generation += 1
+        let gen = generation
         let host = QGWebHost(
             indexHTML: Self.indexHTML,
             provider: { path in try? bundle.readData(path) },
             onMessage: { [weak self] message in
                 // Delivered on the main thread by WebKit.
                 MainActor.assumeIsolated {
+                    guard let self, self.generation == gen else { return }
                     if message == "ready" {
-                        self?.settle(nil)
+                        self.settle(nil)
+                    } else if message == "error: web content process terminated" {
+                        self.handleContentProcessTerminated()
                     } else {
-                        self?.settle(.startupFailed(message))
+                        self.settle(.startupFailed(message))
                     }
                 }
             }
@@ -82,7 +88,23 @@ public final class WebViewGrader: Grader {
         let seconds = timeout
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            self?.settle(.startupFailed("timed out after \(Int(seconds)) s"))
+            guard let self, self.generation == gen else { return }
+            self.settle(.startupFailed("timed out after \(Int(seconds)) s"))
+        }
+    }
+
+    /// WebKit killed the web content process (memory pressure, background). Once the page was ready
+    /// the next grade() launches a fresh web view; during startup it is a startup failure.
+    func handleContentProcessTerminated() {
+        if ready {
+            generation += 1
+            host?.shutdown()
+            host = nil
+            ready = false
+            started = false
+            warmed = false
+        } else {
+            settle(.startupFailed("web content process terminated"))
         }
     }
 

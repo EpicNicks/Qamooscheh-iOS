@@ -1,6 +1,18 @@
 #import "QGWebHost.h"
 #import <WebKit/WebKit.h>
 
+/// Forwards script messages without retaining the host (WKUserContentController retains its handlers).
+@interface QGWeakScriptHandler : NSObject <WKScriptMessageHandler>
+@property (nonatomic, weak) id<WKScriptMessageHandler> target;
+@end
+
+@implementation QGWeakScriptHandler
+- (void)userContentController:(WKUserContentController *)userContentController
+      didReceiveScriptMessage:(WKScriptMessage *)message {
+    [self.target userContentController:userContentController didReceiveScriptMessage:message];
+}
+@end
+
 @interface QGWebHost () <WKScriptMessageHandler, WKURLSchemeHandler, WKNavigationDelegate>
 @property (nonatomic, copy) NSString *indexHTML;
 @property (nonatomic, copy) QGWebFileProvider provider;
@@ -25,7 +37,9 @@
 - (void)start {
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     [config setURLSchemeHandler:self forURLScheme:@"qgrader"];
-    [config.userContentController addScriptMessageHandler:self name:@"qgrader"];
+    QGWeakScriptHandler *handler = [[QGWeakScriptHandler alloc] init];
+    handler.target = self;
+    [config.userContentController addScriptMessageHandler:handler name:@"qgrader"];
     self.webView = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:config];
     self.webView.navigationDelegate = self;
     [self.webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"qgrader://grader/index.html"]]];
