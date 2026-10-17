@@ -151,11 +151,11 @@ jobs:
           xcodebuild test -scheme QGrader -destination "$DEST" CODE_SIGNING_ALLOWED=NO | tee ../../grader-sim.log | grep -E "QGRADER-SPIKE|error:|Test Case|Executed|TEST (SUCCEEDED|FAILED)"
       # Non-gating: WKWebView is only the fallback runtime and its simulator cold start is erratic on CI
       # (see docs/grader-spike.md). Still run so every run records whether it started and its timings.
-      - name: WKWebView fixture suite on simulator (non-gating)
+      - name: WKWebView tests on simulator (non-gating)
         continue-on-error: true
         working-directory: Packages/QGrader
         env:
           TEST_RUNNER_QGRADER_WEBVIEW_FIXTURES: "1"
         run: |
           set -o pipefail
-          xcodebuild test -scheme QGrader -destination "$DEST" CODE_SIGNING_ALLOWED=NO -only-testing:QGraderTests/WebViewGraderTests/testFixturesOnWebView | tee ../../grader-sim-webview.log | grep -E "QGRADER-SPIKE|error:|Test Case|Executed|TEST (SUCCEEDED|FAILED)"
+          xcodebuild test -scheme QGrader -destination "$DEST" CODE_SIGNING_ALLOWED=NO -only-testing:QGraderTests/WebViewGraderTests | tee ../../grader-sim-webview.log | grep -E "QGRADER-SPIKE|error:|Test Case|Executed|TEST (SUCCEEDED|FAILED)"
