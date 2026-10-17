@@ -13,6 +13,8 @@ public enum LessonLoadError: Error, Equatable, Sendable {
     case noCourse
     case noUnit
     case contentMissing
+    /// Saved practice was picked against a different course version than the one on disk, so its ordinals could point at other exercises.
+    case courseVersionMismatch
 }
 
 /// Course files the loader reads, as closures so tests need no disk.
@@ -99,6 +101,7 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
     public func setup(for route: LessonRoute) async throws -> LessonSetup? {
         if route.checkpoint { return try await checkpointSetup(route) }
         if let themeIds = route.remixThemeIds { return try await remixSetup(themeIds) }
+        if let refs = route.exerciseRefs { return try await exercisesSetup(refs, pickedVersion: route.exerciseCourseVersion) }
         if let unitKey = route.unitKey, let found = try await course() {
             if let skill = try content.skill(found, unitKey, route.skillKey), skill.category == .story {
                 return await storySetup(course: found, unitKey: unitKey, skillKey: route.skillKey, skill: skill)
@@ -139,6 +142,30 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             exerciseCountBySkill: [skillKey: skill.exercises.count],
             story: StoryChapter(title: skill.title, exercises: skill.exercises)
         )
+    }
+
+    /// Saved-words practice: just the exercises the server picked, in its order; ones whose skill file or ordinal is gone are skipped.
+    private func exercisesSetup(_ refs: [StarredPracticeExercise], pickedVersion: Int?) async throws -> LessonSetup? {
+        guard let found = try await course() else { throw LessonLoadError.noCourse }
+        // The server picked ordinals against its course version; against another version they could play the wrong exercises.
+        if let pickedVersion, pickedVersion != found.version { throw LessonLoadError.courseVersionMismatch }
+        let held = await cardsForUser()
+        var built: [String: [ExerciseInstance]] = [:]
+        var counts: [String: Int] = [:]
+        var instances: [ExerciseInstance] = []
+        var seen = Set<String>()
+        for ref in refs {
+            let skillId = ref.unitKey + "/" + ref.skillKey
+            if built[skillId] == nil {
+                guard let skill = try content.skill(found, ref.unitKey, ref.skillKey) else { continue }
+                built[skillId] = buildInstances(skills: [(ref: SkillRef(unitKey: ref.unitKey, skillKey: ref.skillKey), skill: skill)], cards: held)
+                counts[skillId] = skill.exercises.count
+            }
+            guard let instance = built[skillId]?.first(where: { $0.ordinal == ref.ordinal }) else { continue }
+            if seen.insert(instance.key).inserted { instances.append(instance) }
+        }
+        if instances.isEmpty { return nil }
+        return LessonSetup(courseCode: found.code, courseVersion: found.version, instances: instances, exerciseCountBySkill: counts)
     }
 
     private func remixSetup(_ themeIds: [String]) async throws -> LessonSetup? {

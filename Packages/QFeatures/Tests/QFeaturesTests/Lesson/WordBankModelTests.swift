@@ -77,4 +77,34 @@ final class WordBankModelTests: XCTestCase {
         let f = TileFlowGeometry.frames(sizes: [CGSize(width: 40, height: 10)], width: 100, rtl: false, centered: true, spacing: 8)
         XCTAssertEqual(f[0].minX, 30)
     }
+
+    func testTileCuesAreNotColorOnly() {
+        XCTAssertNil(TileLook.plain.cueSymbol)
+        let cues = [TileLook.right, .swapped, .wrong, .missing].map { $0.cueSymbol }
+        XCTAssertFalse(cues.contains { $0 == nil })
+        XCTAssertEqual(Set(cues.compactMap { $0 }).count, 4)
+    }
+
+    func testTileAccessibilityPlacedAndBank() {
+        let placed = TileAccessibility.make(text: "a", placed: true, position: 1, look: .plain, reviewing: false)
+        XCTAssertEqual(placed.value, "In answer, position 2")
+        XCTAssertTrue(placed.isSelected)
+        XCTAssertEqual(placed.hint, "Double tap to put it back in the word bank")
+        let bank = TileAccessibility.make(text: "b", placed: false, position: nil, look: .plain, reviewing: false)
+        XCTAssertEqual(bank.value, "In word bank")
+        XCTAssertFalse(bank.isSelected)
+        XCTAssertEqual(bank.hint, "Double tap to add it to your answer")
+    }
+
+    func testTileAccessibilityReviewStates() {
+        let right = TileAccessibility.make(text: "a", placed: true, position: 0, look: .right, reviewing: true)
+        XCTAssertEqual(right.value, "In answer, position 1, Correct")
+        XCTAssertEqual(right.hint, "")
+        let wrong = TileAccessibility.make(text: "a", placed: true, position: 0, look: .wrong, reviewing: true)
+        XCTAssertTrue(wrong.value.hasSuffix("Incorrect"))
+        let swapped = TileAccessibility.make(text: "a", placed: true, position: 0, look: .swapped, reviewing: true)
+        XCTAssertTrue(swapped.value.hasSuffix("wrong place"))
+        let missing = TileAccessibility.make(text: "c", placed: false, position: nil, look: .missing, reviewing: true)
+        XCTAssertEqual(missing.value, "In word bank, Needed in the answer")
+    }
 }

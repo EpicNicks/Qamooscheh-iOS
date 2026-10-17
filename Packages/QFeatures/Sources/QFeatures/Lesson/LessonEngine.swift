@@ -187,12 +187,19 @@ public struct LessonState: Codable, Equatable, Sendable {
     /// Whether this lesson completes its skill, by the server's rule: every exercise of the skill answered and a first-try score of at least 75%. nil when answers went unchecked (only the server can say) or in practice.
     public func localLessonCompleted(exerciseCountBySkill: [String: Int]) -> Bool? {
         if practice || uncheckedFirstTries > 0 { return nil }
-        var ordinals: [String: Set<Int>] = [:]
-        for recorded in items { ordinals[recorded.skillKey, default: []].insert(recorded.item.exerciseOrdinal) }
+        // Counts are keyed "unit/skill" when the loader knows the unit (saved practice spans units), else by skill key.
+        var ordinals: [String: (skillKey: String, seen: Set<Int>)] = [:]
+        for recorded in items {
+            var id = recorded.skillKey
+            if let unit = recorded.unitKey { id = unit + "/" + recorded.skillKey }
+            var entry = ordinals[id] ?? (skillKey: recorded.skillKey, seen: [])
+            entry.seen.insert(recorded.item.exerciseOrdinal)
+            ordinals[id] = entry
+        }
         var covered = false
-        for (skill, seen) in ordinals {
-            let count = exerciseCountBySkill[skill] ?? 0
-            if count > 0 && seen.count >= count { covered = true }
+        for (id, entry) in ordinals {
+            let count = exerciseCountBySkill[id] ?? exerciseCountBySkill[entry.skillKey] ?? 0
+            if count > 0 && entry.seen.count >= count { covered = true }
         }
         return covered && score >= lessonPassThreshold
     }

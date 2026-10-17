@@ -3,8 +3,8 @@ import QDomain
 import QDesign
 
 /// The course glossary (web GlossaryPage/GlossaryEntryPage, Android GlossaryScreen): an accordion
-/// tree whose leaves open a term table. The abjad leaf's interactive view is a follow-up; it shows
-/// its note only. On a leaf the back button steps to the tree before the glossary is left.
+/// tree whose leaves open a term table. The abjad leaf opens the interactive abjad view (Glossary/AbjadGlossaryViews).
+/// On a leaf the back button steps to the tree before the glossary is left.
 public struct GlossaryScreen: View {
     @ObservedObject private var model: GlossaryModel
 
@@ -54,7 +54,9 @@ struct GlossaryContent: View {
                 if let note = entry.note {
                     Text(note).font(.body).foregroundColor(Color(argb: p.textMuted))
                 }
-                if entry.view == nil {
+                if entry.view == .abjad {
+                    AbjadGlossaryView()
+                } else if entry.view == nil {
                     TermTable(terms: entry.terms, model: model, p: p)
                 }
             }

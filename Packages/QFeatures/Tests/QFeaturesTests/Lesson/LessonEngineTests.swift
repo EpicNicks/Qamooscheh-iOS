@@ -155,6 +155,14 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertNil(deferred.state.localLessonCompleted(exerciseCountBySkill: ["s": 1]))
     }
 
+    func testCountsKeyedByUnitAndSkillAreNotSharedAcrossUnits() {
+        var e = engine(["a", "b"], grader: FakeGrader(["Correct", "Correct"]))
+        for text in ["a", "b"] { e.submit(text) }
+        // Skill "s" in unit "u" has 2 exercises and both were answered; a same-named skill elsewhere with 5 must not count.
+        XCTAssertEqual(e.state.localLessonCompleted(exerciseCountBySkill: ["u/s": 2, "v/s": 5]), true)
+        XCTAssertEqual(e.state.localLessonCompleted(exerciseCountBySkill: ["u/s": 3]), false)
+    }
+
     func testPracticeSubmitsNothing() {
         let skill = SkillArtifact(id: "s", title: "S", exercises: [exercise("a")])
         let instances = buildInstances(skills: [(ref: SkillRef(unitKey: nil, skillKey: "s"), skill: skill)], cards: [:])

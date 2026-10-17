@@ -20,8 +20,12 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var checkpoint: Bool
     /// Non-nil for a remix: the topics to blend (the loader picks the lessons).
     public var remixThemeIds: [String]?
+    /// Non-nil for saved-words practice: the exact exercises to play, in order (the server picked them).
+    public var exerciseRefs: [StarredPracticeExercise]?
+    /// The course version the server picked `exerciseRefs` against; the loader refuses a different one.
+    public var exerciseCourseVersion: Int?
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -29,6 +33,15 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
         self.checkpointSummary = checkpointSummary
         self.checkpoint = checkpoint
         self.remixThemeIds = remixThemeIds
+        self.exerciseRefs = exerciseRefs
+        self.exerciseCourseVersion = exerciseCourseVersion
+    }
+
+    /// The route the saved-words practice's "Continue" leads to.
+    public static func forSavedPractice(_ picked: SavedPracticeExercises) -> LessonRoute {
+        // The picked set is part of the skill key, so an abandoned run's draft is only offered for the same set (the draft key has no other room for it).
+        let skillKey = "saved-practice-v\(picked.courseVersion)-" + stableDigest(picked.exercises)
+        return LessonRoute(skillKey: skillKey, exerciseRefs: picked.refs, exerciseCourseVersion: picked.courseVersion)
     }
 
     /// The route the Library's remix picker leads to.
@@ -45,6 +58,16 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public static func forNode(_ node: PathCurrentNode, practice: Bool = false) -> LessonRoute {
         return LessonRoute(unitKey: node.unitKey, skillKey: node.skillKey, practice: practice)
     }
+}
+
+/// FNV-1a over the UTF-8 bytes, in hex: stable across launches (unlike `Hasher`), so it can name a draft.
+func stableDigest(_ text: String) -> String {
+    var hash: UInt64 = 0xcbf29ce484222325
+    for byte in text.utf8 {
+        hash ^= UInt64(byte)
+        hash = hash &* 0x100000001b3
+    }
+    return String(hash, radix: 16)
 }
 
 /// Turns a route into a playable lesson: the session plan, the skills' content from disk and the learner's cards (`buildInstances`).
