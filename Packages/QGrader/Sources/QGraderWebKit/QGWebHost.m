@@ -1,7 +1,7 @@
 #import "QGWebHost.h"
 #import <WebKit/WebKit.h>
 
-@interface QGWebHost () <WKScriptMessageHandler, WKURLSchemeHandler>
+@interface QGWebHost () <WKScriptMessageHandler, WKURLSchemeHandler, WKNavigationDelegate>
 @property (nonatomic, copy) NSString *indexHTML;
 @property (nonatomic, copy) QGWebFileProvider provider;
 @property (nonatomic, copy) void (^onMessage)(NSString *);
@@ -27,6 +27,7 @@
     [config setURLSchemeHandler:self forURLScheme:@"qgrader"];
     [config.userContentController addScriptMessageHandler:self name:@"qgrader"];
     self.webView = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 1, 1) configuration:config];
+    self.webView.navigationDelegate = self;
     [self.webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"qgrader://grader/index.html"]]];
 }
 
@@ -99,6 +100,18 @@ static NSString *QGMimeType(NSString *path) {
     [urlSchemeTask didReceiveResponse:response];
     [urlSchemeTask didReceiveData:data];
     [urlSchemeTask didFinish];
+}
+
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    self.onMessage([NSString stringWithFormat:@"error: navigation failed: %@", error]);
+}
+
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    self.onMessage([NSString stringWithFormat:@"error: provisional navigation failed: %@", error]);
+}
+
+- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
+    self.onMessage(@"error: web content process terminated");
 }
 
 - (void)webView:(WKWebView *)webView stopURLSchemeTask:(id<WKURLSchemeTask>)urlSchemeTask {
