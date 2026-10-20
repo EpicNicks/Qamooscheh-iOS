@@ -100,7 +100,7 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
 
     public func setup(for route: LessonRoute) async throws -> LessonSetup? {
         if route.checkpoint { return try await checkpointSetup(route) }
-        if let themeIds = route.remixThemeIds { return try await remixSetup(themeIds) }
+        if let themeIds = route.remixThemeIds { return try await remixSetup(themeIds, contents: route.remixContents ?? .all) }
         if let refs = route.exerciseRefs { return try await exercisesSetup(refs, pickedVersion: route.exerciseCourseVersion) }
         if let unitKey = route.unitKey, let found = try await course() {
             if let skill = try content.skill(found, unitKey, route.skillKey), skill.category == .story {
@@ -168,7 +168,34 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         return LessonSetup(courseCode: found.code, courseVersion: found.version, instances: instances, exerciseCountBySkill: counts)
     }
 
-    private func remixSetup(_ themeIds: [String]) async throws -> LessonSetup? {
+    /// The lessons a remix of `themeIds` plays, picked by how well the learner knows them.
+    private struct RemixPick {
+        var found: CourseRef
+        var picked: [(ref: SkillRef, skill: SkillArtifact)]
+        var counts: [String: Int]
+        var held: [String: CardState]
+    }
+
+    public func remixCloze(for route: LessonRoute) async throws -> RemixClozePool? {
+        guard let themeIds = route.remixThemeIds else { return nil }
+        let pick = try await pickRemix(themeIds)
+        let exercises = pick.picked.flatMap { $0.skill.exercises }
+        var tags: [String] = []
+        for exercise in exercises { tags.append(contentsOf: exercise.tags) }
+        return RemixClozePool(
+            courseCode: pick.found.code, exercises: exercises,
+            tags: remixClozeTags(tags, cards: pick.held, now: Date()))
+    }
+
+    private func remixSetup(_ themeIds: [String], contents: RemixContents) async throws -> LessonSetup? {
+        let pick = try await pickRemix(themeIds)
+        let built = buildInstances(skills: pick.picked, cards: pick.held)
+        let instances = filterRemixExercises(built, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
+        if instances.isEmpty { return nil }
+        return LessonSetup(courseCode: pick.found.code, courseVersion: pick.found.version, instances: instances, exerciseCountBySkill: pick.counts)
+    }
+
+    private func pickRemix(_ themeIds: [String]) async throws -> RemixPick {
         guard let found = try await course() else { throw LessonLoadError.noCourse }
         guard let library = try content.themes(found) else { throw LessonLoadError.contentMissing }
         let pool = buildRemixPool(
@@ -197,9 +224,6 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             picked.append((ref: SkillRef(unitKey: nil, skillKey: lesson.id), skill: skill))
             counts[lesson.id] = skill.exercises.count
         }
-        let built = buildInstances(skills: picked, cards: held)
-        let instances = filterRemixExercises(built, contents: .all, max: remixMaxExercises, renderType: { $0.renderType })
-        if instances.isEmpty { return nil }
-        return LessonSetup(courseCode: found.code, courseVersion: found.version, instances: instances, exerciseCountBySkill: counts)
+        return RemixPick(found: found, picked: picked, counts: counts, held: held)
     }
 }
