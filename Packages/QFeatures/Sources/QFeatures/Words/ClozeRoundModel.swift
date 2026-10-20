@@ -90,11 +90,19 @@ public struct ClozeServices: @unchecked Sendable {
     public var practice: SavedPracticeSource?
     public var sentences: ClozeSentenceSource?
     public var settings: ClozeSettings
+    /// The race endpoints, for the "Race the clock" entry next to the fill-in-the-blank round.
+    public var race: RaceService?
 
-    public init(practice: SavedPracticeSource?, sentences: ClozeSentenceSource?, settings: ClozeSettings = .standard) {
+    public init(practice: SavedPracticeSource?, sentences: ClozeSentenceSource?, settings: ClozeSettings = .standard, race: RaceService? = nil) {
         self.practice = practice
         self.sentences = sentences
         self.settings = settings
+        self.race = race
+    }
+
+    /// Everything the signed-in app has for fill-in-the-blank cards.
+    public static func live(app: AppEnvironment) -> ClozeServices {
+        return ClozeServices(practice: app.savedPractice, sentences: app.clozeSentences, settings: .live(app: app), race: app.race)
     }
 }
 

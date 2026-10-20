@@ -8,7 +8,7 @@ public extension SignedInShell {
         let store = vocabulary
         let submitter = app?.flashcards
         let unauthorized = unauthorizedHandler
-        let services = app.map { ClozeServices(practice: $0.savedPractice, sentences: $0.clozeSentences, settings: .live(app: $0)) }
+        let services = app.map { ClozeServices.live(app: $0) }
             ?? ClozeServices(practice: nil, sentences: nil)
         return RemixHostModel(route: route, environment: environment, store: store, makeRound: { deck, hardcore in
             ClozeRoundModel(

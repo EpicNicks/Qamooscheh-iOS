@@ -17,6 +17,9 @@ public struct FlashcardsScreen: View {
         if let round = model.clozeRound {
             ClozeRoundView(model: round, onExit: { model.leaveCloze() })
                 .navigationTitle("Fill in the blank")
+        } else if let race = model.race, let boards = model.boards {
+            RaceScreen(model: race, boards: boards, onExit: { model.leaveRace() })
+                .navigationTitle("Race")
         } else {
             ScrollView {
                 FlashcardsContent(model: model, onBack: onBack).padding(16).frame(maxWidth: .infinity)
@@ -75,6 +78,9 @@ struct FlashcardsContent: View {
             }
             if model.kind == .cloze {
                 primaryButton("Start", p) { model.start() }
+                if model.canRace {
+                    Button("Race the clock") { model.startRace() }.buttonStyle(.bordered).frame(maxWidth: .infinity)
+                }
             } else {
                 let count = min(model.words.count, FlashcardsModel.roundSize)
                 primaryButton("Start \(count) card\(count == 1 ? "" : "s")", p) { model.start() }

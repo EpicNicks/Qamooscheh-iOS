@@ -48,6 +48,9 @@ public final class FlashcardsModel: ObservableObject {
     @Published public var hardcore = false
     /// The fill-in-the-blank round being played; nil on the start screen.
     @Published public private(set) var clozeRound: ClozeRoundModel?
+    /// The Repack race being played; nil on the start screen.
+    @Published public private(set) var race: RaceModel?
+    @Published public private(set) var boards: RaceBoardsModel?
 
     private let submitter: FlashcardSubmitter?
     private let cloze: ClozeServices?
@@ -112,6 +115,21 @@ public final class FlashcardsModel: ObservableObject {
     /// Whether this build can play a fill-in-the-blank round at all.
     public var canPlayCloze: Bool { return cloze?.practice != nil && cloze?.sentences != nil }
 
+    /// Whether this build can race (it needs the race endpoints besides the cards).
+    public var canRace: Bool { return canPlayCloze && cloze?.race != nil }
+
+    /// Opens the Repack race: the lobby, over the same saved words and sentences.
+    public func startRace() {
+        guard canRace, let cloze = cloze else { return }
+        race = RaceModel(store: store, race: cloze.race, services: cloze, onUnauthorized: onUnauthorized)
+        boards = RaceBoardsModel(store: store, race: cloze.race, onUnauthorized: onUnauthorized)
+    }
+
+    public func leaveRace() {
+        race = nil
+        boards = nil
+    }
+
     /// A fresh round: up to `roundSize` of the saved words, shuffled. "Fill in" hands over to a cloze round.
     public func start() {
         if kind == .cloze {
@@ -140,6 +158,7 @@ public final class FlashcardsModel: ObservableObject {
     /// Leaves the round for the start screen. A round already being saved still lands on the server.
     public func stop() {
         clozeRound = nil
+        leaveRace()
         roundId += 1
         roundCourse = nil
         deck = nil
