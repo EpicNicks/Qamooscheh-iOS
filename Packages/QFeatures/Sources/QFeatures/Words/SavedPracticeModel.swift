@@ -134,7 +134,10 @@ public final class SavedPracticeModel: ObservableObject {
             if cards.isEmpty && picked.isEmpty {
                 state = .empty
             } else {
-                state = .choosing(options: remixContentsOptions(hasFlashcards: !cards.isEmpty), selected: .all, noneOfThat: false, hardcore: false)
+                // The flashcards come too unless the learner narrows it, as before the choice existed.
+                state = .choosing(
+                    options: remixContentsOptions(hasFlashcards: !cards.isEmpty), selected: cards.isEmpty ? .all : .flashcardsAndAll,
+                    noneOfThat: false, hardcore: false)
             }
         } catch {
             if isCancellation(error) { return }

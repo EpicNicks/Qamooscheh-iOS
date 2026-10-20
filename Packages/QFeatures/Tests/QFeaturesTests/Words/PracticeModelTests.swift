@@ -62,7 +62,7 @@ final class SavedPracticeModelTests: XCTestCase {
         await model.load()
         guard case .choosing(let options, let selected, let none, _) = model.state else { return XCTFail("\(model.state)") }
         XCTAssertEqual(options, [.all, .typeIn, .wordBank, .flashcards, .flashcardsAndAll, .cloze])
-        XCTAssertEqual(selected, .all)
+        XCTAssertEqual(selected, .flashcardsAndAll)
         XCTAssertFalse(none)
         model.selectContents(.flashcardsAndAll)
         await model.start()
