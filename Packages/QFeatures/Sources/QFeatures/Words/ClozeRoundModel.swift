@@ -236,7 +236,7 @@ public final class ClozeRoundModel: ObservableObject {
 
     /// The course-wide hint map from the lexeme index. A dictionary has lost lexemes.json's authored order, so the tags are
     /// sorted; only which homograph's romanization wins depends on the order, never where a word is found.
-    static func hintMap(_ lexemes: [String: LexemeIndexEntry]) -> [String: WordHint] {
+    nonisolated static func hintMap(_ lexemes: [String: LexemeIndexEntry]) -> [String: WordHint] {
         return buildLexemeHintMap(lexemes.keys.sorted().compactMap { tag in lexemes[tag].map { (tag: tag, entry: $0) } })
     }
 
