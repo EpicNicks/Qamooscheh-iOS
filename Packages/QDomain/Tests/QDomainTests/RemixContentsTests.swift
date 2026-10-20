@@ -46,8 +46,8 @@ final class RemixContentsTests: XCTestCase {
     }
 
     func testOffersTheFlashcardChoicesOnlyWhenTheRemixHasFlashcards() {
-        XCTAssertEqual(remixContentsOptions(hasFlashcards: false), [.all, .typeIn, .wordBank])
-        XCTAssertEqual(remixContentsOptions(hasFlashcards: true).count, 5)
+        XCTAssertEqual(remixContentsOptions(hasFlashcards: false), [.all, .typeIn, .wordBank, .cloze])
+        XCTAssertEqual(remixContentsOptions(hasFlashcards: true), [.all, .typeIn, .wordBank, .flashcards, .flashcardsAndAll, .cloze])
     }
 
     func testFallsBackWhenTheRememberedChoiceIsNotOffered() {
@@ -64,11 +64,43 @@ final class RemixContentsTests: XCTestCase {
         XCTAssertTrue(includesExercise(.all, renderType: .speak))
     }
 
+    func testFillInTheBlankHoldsNoExercisesAndNoFlashcards() {
+        XCTAssertTrue(isClozeContents(.cloze))
+        XCTAssertFalse(isClozeContents(.all))
+        XCTAssertFalse(includesFlashcards(.cloze))
+        XCTAssertFalse(includesExercise(.cloze, renderType: .typeIn))
+        XCTAssertEqual(filter(built, .cloze), [])
+    }
+
     func testRawValuesAndLabelsMatchTheWeb() {
-        XCTAssertEqual(RemixContents.allCases.map { $0.rawValue }, ["all", "type_in", "word_bank", "flashcards", "flashcards_and_all"])
+        XCTAssertEqual(RemixContents.allCases.map { $0.rawValue }, ["all", "type_in", "word_bank", "flashcards", "flashcards_and_all", "cloze"])
         XCTAssertEqual(
             RemixContents.allCases.map { $0.label },
-            ["All exercises", "Typing only", "Word bank only", "Flashcards only", "Flashcards + all exercises"]
+            ["All exercises", "Typing only", "Word bank only", "Flashcards only", "Flashcards + all exercises", "Fill in the blank"]
         )
+    }
+}
+
+final class SavedRemixSelectionTests: XCTestCase {
+    private let types: [String: ExerciseType] = ["a": .typeIn, "b": .wordBank]
+
+    private func pick(_ contents: RemixContents, _ exercises: [String] = ["a", "b", "unknown"]) -> SavedRemixSelection<Int, String> {
+        return selectSavedRemix(cards: [1, 2], exercises: exercises, contents: contents, renderType: { types[$0] })
+    }
+
+    func testKeepsCardsOnlyWhereTheChoiceIncludesThem() {
+        XCTAssertEqual(pick(.flashcards).cards, [1, 2])
+        XCTAssertEqual(pick(.flashcardsAndAll).cards, [1, 2])
+        XCTAssertEqual(pick(.typeIn).cards, [])
+        XCTAssertEqual(pick(.cloze).cards, [])
+    }
+
+    func testFiltersExercisesByTypeAndKeepsUnknownOnesOnlyWhereEverythingStays() {
+        XCTAssertEqual(pick(.typeIn).exercises, ["a"])
+        XCTAssertEqual(pick(.wordBank).exercises, ["b"])
+        XCTAssertEqual(pick(.all).exercises, ["a", "b", "unknown"])
+        XCTAssertEqual(pick(.flashcardsAndAll).exercises, ["a", "b", "unknown"])
+        XCTAssertTrue(pick(.flashcards).exercises.isEmpty)
+        XCTAssertTrue(pick(.wordBank, ["a"]).isEmpty)
     }
 }

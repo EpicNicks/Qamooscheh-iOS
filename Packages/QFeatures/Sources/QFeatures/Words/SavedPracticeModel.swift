@@ -39,6 +39,8 @@ public enum SavedPracticeState: Equatable, Sendable {
     case failed(String)
     /// No saved words from this course to practise.
     case empty
+    /// What the Repack should hold (web RemixContentsPicker), over everything the picked words brought. `noneOfThat` after a Start that found nothing.
+    case choosing(options: [RemixContents], selected: RemixContents, noneOfThat: Bool, hardcore: Bool)
     /// The words' flashcards, one at a time.
     case cards(courseCode: String, cards: [FlashcardWord], results: [FlashcardResult])
     /// The cards are done; `exercises` (nil when the words have none) are next. `xp` is nil when it couldn't be saved.
@@ -47,26 +49,37 @@ public enum SavedPracticeState: Equatable, Sendable {
 
 /// The saved-words remix (web SavedPracticePage, Android SavedPracticeViewModel): flashcards for the
 /// most-due saved words, each self-rated and sent with inRemix so it earns XP; the exercises then play
-/// on the lesson screen. Unlike the web, the cards all come first.
+/// on the lesson screen. Unlike the web, the cards all come first. Before any of that the learner chooses what it holds:
+/// flashcards, exercises, or both, or a round of fill-in-the-blank cards, which `clozeRound` plays: its deck is built
+/// here and handed to the round.
 @MainActor
 public final class SavedPracticeModel: ObservableObject {
     /// How many saved words one remix covers.
     public static let practiceWords = 10
 
     @Published public private(set) var state: SavedPracticeState = .loading
+    /// Set while a fill-in-the-blank round is being played.
+    @Published public private(set) var clozeRound: ClozeRoundModel?
 
     public let store: VocabularyStore
     private let source: SavedPracticeSource?
     private let submitter: FlashcardSubmitter?
+    private let cloze: ClozeServices?
     private let newId: () -> String
     private let now: () -> Date
     private let onUnauthorized: (@Sendable () -> Void)?
     private var generation = 0
     private var exercises: SavedPracticeExercises?
     private var submissionId = ""
+    /// Everything the picked words brought, before the choice narrows it.
+    private var builtCards: [FlashcardWord] = []
+    private var builtRefs: [StarredPracticeExercise] = []
+    private var practiceWords: [StarredPracticeWord] = []
+    private var courseVersion = 0
+    private var builtCourseCode = ""
 
     public init(
-        store: VocabularyStore, source: SavedPracticeSource?, submitter: FlashcardSubmitter?,
+        store: VocabularyStore, source: SavedPracticeSource?, submitter: FlashcardSubmitter?, cloze: ClozeServices? = nil,
         newId: @escaping () -> String = { UUID().uuidString },
         now: @escaping () -> Date = { Date() },
         onUnauthorized: (@Sendable () -> Void)? = nil
@@ -74,6 +87,7 @@ public final class SavedPracticeModel: ObservableObject {
         self.store = store
         self.source = source
         self.submitter = submitter
+        self.cloze = cloze
         self.newId = newId
         self.now = now
         self.onUnauthorized = onUnauthorized
@@ -96,6 +110,7 @@ public final class SavedPracticeModel: ObservableObject {
         let mine = generation
         state = .loading
         exercises = nil
+        clozeRound = nil
         await store.refresh()
         if mine != generation { return }
         guard let content = store.content, let source = source else {
@@ -109,23 +124,104 @@ public final class SavedPracticeModel: ObservableObject {
                 flashcardWords(savedTags: [$0.tag], lexemeIndex: content.lexemes).first
             }
             let picked = SavedPracticeModel.distinctRefs(practice.words.flatMap { $0.exercises })
-            exercises = picked.isEmpty ? nil : SavedPracticeExercises(
-                courseVersion: practice.courseVersion,
-                exercises: picked.map { "\($0.unitKey)/\($0.skillKey)/\($0.ordinal)" }.joined(separator: ","),
-                count: picked.count)
             submissionId = newId()
-            if !cards.isEmpty {
-                state = .cards(courseCode: content.courseCode, cards: cards, results: [])
-            } else if exercises != nil {
-                state = .cardsDone(known: 0, total: 0, xp: 0, exercises: exercises)
-            } else {
+            builtCards = cards
+            builtRefs = picked
+            practiceWords = practice.words
+            courseVersion = practice.courseVersion
+            builtCourseCode = content.courseCode
+            exercises = nil
+            if cards.isEmpty && picked.isEmpty {
                 state = .empty
+            } else {
+                state = .choosing(options: remixContentsOptions(hasFlashcards: !cards.isEmpty), selected: .all, noneOfThat: false, hardcore: false)
             }
         } catch {
             if isCancellation(error) { return }
             if isUnauthorizedError(error) { onUnauthorized?() }
             if mine != generation { return }
             state = .failed(AuthRules.message(for: error, fallback: "Couldn't put together your saved-words practice."))
+        }
+    }
+
+    public func selectContents(_ contents: RemixContents) {
+        if case .choosing(let options, _, _, let hardcore) = state {
+            state = .choosing(options: options, selected: contents, noneOfThat: false, hardcore: hardcore)
+        }
+    }
+
+    public func setHardcore(_ hardcore: Bool) {
+        if case .choosing(let options, let selected, let none, _) = state {
+            state = .choosing(options: options, selected: selected, noneOfThat: none, hardcore: hardcore)
+        }
+    }
+
+    /// Back to the choice from a finished or abandoned fill-in-the-blank round.
+    public func leaveCloze() {
+        clozeRound = nil
+    }
+
+    /// Starts the Repack with what was chosen; stays on the choice, with a message, when the words have none of it (web `start`).
+    public func start() async {
+        guard case .choosing(let options, let selected, _, let hardcore) = state else { return }
+        if isClozeContents(selected) {
+            await startCloze(options: options, hardcore: hardcore)
+            return
+        }
+        let mine = generation
+        let types = await renderTypes()
+        if mine != generation { return }
+        let kept = selectSavedRemix(cards: builtCards, exercises: builtRefs, contents: selected, renderType: { types[practiceExerciseKey($0)] })
+        if kept.isEmpty {
+            state = .choosing(options: options, selected: selected, noneOfThat: true, hardcore: hardcore)
+            return
+        }
+        exercises = kept.exercises.isEmpty ? nil : SavedPracticeExercises(
+            courseVersion: courseVersion,
+            exercises: kept.exercises.map { "\($0.unitKey)/\($0.skillKey)/\($0.ordinal)" }.joined(separator: ","),
+            count: kept.exercises.count)
+        if kept.cards.isEmpty {
+            state = .cardsDone(known: 0, total: 0, xp: 0, exercises: exercises)
+        } else {
+            state = .cards(courseCode: builtCourseCode, cards: kept.cards, results: [])
+        }
+    }
+
+    /// How each picked exercise will show, by `practiceExerciseKey`; empty when the lessons can't be read (the unknown ones then
+    /// stay only in the choices that keep everything). A composite exercise is judged as for a word with no card.
+    private func renderTypes() async -> [String: ExerciseType] {
+        guard let sentences = cloze?.sentences, !builtRefs.isEmpty,
+              let found = try? await sentences.exercises(builtRefs, courseVersion: courseVersion) else { return [:] }
+        return found.mapValues { resolveExerciseType($0, cardState: nil) }
+    }
+
+    /// The picked words' fill-in-the-blank round; words with no usable sentence are dropped, and none left is the empty choice.
+    private func startCloze(options: [RemixContents], hardcore: Bool) async {
+        guard let services = cloze, let sentences = services.sentences, let content = store.content else {
+            state = .failed("Couldn't put together your fill-in-the-blank round.")
+            return
+        }
+        let mine = generation
+        do {
+            let found = try await sentences.exercises(builtRefs, courseVersion: courseVersion)
+            if mine != generation { return }
+            let deck = buildClozeDeck(
+                sources: clozeSourcesFromPractice(practiceWords, exercises: found),
+                hintMap: ClozeRoundModel.hintMap(content.lexemes), lexemeIndex: content.lexemes,
+                pick: { Int.random(in: 0..<max($0, 1)) })
+            if deck.isEmpty {
+                state = .choosing(options: options, selected: .cloze, noneOfThat: true, hardcore: hardcore)
+                return
+            }
+            clozeRound = ClozeRoundModel(
+                store: store, services: services, submitter: submitter, hardcore: hardcore,
+                handed: ClozeDeck(courseCode: content.courseCode, cards: Array(deck.prefix(maxClozeSubmitCards))),
+                onUnauthorized: onUnauthorized)
+        } catch {
+            if isCancellation(error) { return }
+            if isUnauthorizedError(error) { onUnauthorized?() }
+            if mine != generation { return }
+            state = .failed(AuthRules.message(for: error, fallback: "Couldn't put together your fill-in-the-blank round."))
         }
     }
 
