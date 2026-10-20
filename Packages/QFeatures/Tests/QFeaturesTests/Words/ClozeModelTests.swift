@@ -381,3 +381,68 @@ private final class Box<T>: @unchecked Sendable {
     func set(_ value: T) { lock.lock(); stored = value; lock.unlock() }
     var value: T? { lock.lock(); defer { lock.unlock() }; return stored }
 }
+
+@MainActor
+final class SavedPracticeClozeTests: XCTestCase {
+    private func makeModel(_ practice: PracticeFake, _ sentences: SentencesFake, submitter: ClozeSubmitter? = ClozeSubmitter()) -> SavedPracticeModel {
+        let source = FakeVocabSource()
+        source.loadHandler = { .ready(clozeContent) }
+        return SavedPracticeModel(
+            store: VocabularyStore(source: source), source: practice, submitter: submitter,
+            cloze: ClozeServices(practice: practice, sentences: sentences), newId: { "sub-1" })
+    }
+
+    private func teaWords() -> (PracticeFake, SentencesFake) {
+        let practice = PracticeFake()
+        practice.handler = { _ in StarredPracticeResponse(courseVersion: 4, words: [StarredPracticeWord(tag: chai, exercises: [ref(0)])]) }
+        let sentences = SentencesFake()
+        sentences.handler = { _, _ in ["u1/s1/0": teaExercise()] }
+        return (practice, sentences)
+    }
+
+    func testFillInTheBlankHandsItsDeckToARoundPlayedUnderTheChosenHardcore() async {
+        let (practice, sentences) = teaWords()
+        let model = makeModel(practice, sentences)
+        await model.load()
+        model.selectContents(.cloze)
+        model.setHardcore(true)
+        await model.start()
+        guard let round = model.clozeRound else { return XCTFail("\(model.state)") }
+        XCTAssertTrue(round.hardcore)
+        XCTAssertTrue(round.repack)
+        await round.load()
+        XCTAssertEqual(round.phase, .playing)
+        XCTAssertEqual(round.deck.map { $0.tag }, [chai])
+        XCTAssertEqual(round.courseCode, "fa")
+        model.leaveCloze()
+        XCTAssertNil(model.clozeRound)
+    }
+
+    func testWordsWithNoUsableSentenceLeaveTheChoiceWithAMessage() async {
+        let (practice, sentences) = teaWords()
+        sentences.handler = { _, _ in [:] }
+        let model = makeModel(practice, sentences)
+        await model.load()
+        model.selectContents(.cloze)
+        await model.start()
+        XCTAssertNil(model.clozeRound)
+        guard case .choosing(_, let selected, let none, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertEqual(selected, .cloze)
+        XCTAssertTrue(none)
+    }
+
+    func testTheFilteredChoicesReadTheLessonsToTellWhichExercisesAreTyped() async {
+        let (practice, sentences) = teaWords()
+        let model = makeModel(practice, sentences)
+        await model.load()
+        // teaExercise is a plain typed exercise, so Typing only keeps it and Word bank only finds nothing.
+        model.selectContents(.wordBank)
+        await model.start()
+        guard case .choosing(_, _, let none, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertTrue(none)
+        model.selectContents(.typeIn)
+        await model.start()
+        XCTAssertEqual(model.state, .cardsDone(
+            known: 0, total: 0, xp: 0, exercises: SavedPracticeExercises(courseVersion: 4, exercises: "u1/s1/0", count: 1)))
+    }
+}

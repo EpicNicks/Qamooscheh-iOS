@@ -323,3 +323,25 @@ public func clozeResultLines(_ summary: ClozeSummary, correct: Int, xp: ClozeXp)
     }
     return ClozeResultLines(breakdown: parts.joined(separator: ", ") + ".", xp: line)
 }
+
+/// Cards in a lesson or theme Repack's cloze round, at most; a hand-picked Repack has no limit.
+public let remixClozeMaxCards = 20
+
+/// The words a lesson or theme Repack's cloze round is cut from: those due for review first (the learner has a card for
+/// them and it is due), then new ones (no card yet), each in the order `tags` give. A word whose card isn't due yet is left out.
+public func remixClozeTags(_ tags: [String], cards: [String: CardState], now: Date) -> [String] {
+    var due: [String] = []
+    var new: [String] = []
+    var seen = Set<String>()
+    for tag in tags where seen.insert(tag).inserted {
+        if let card = cards[tag] {
+            if card.dueAt.map({ $0 <= now }) ?? true { due.append(tag) }
+        } else {
+            new.append(tag)
+        }
+    }
+    return due + new
+}
+
+/// Cards in one cloze submission, at most (the server takes 1...200).
+public let maxClozeSubmitCards = 200
