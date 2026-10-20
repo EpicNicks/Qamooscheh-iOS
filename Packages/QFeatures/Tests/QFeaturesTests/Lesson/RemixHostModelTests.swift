@@ -103,7 +103,7 @@ final class RemixHostModelTests: XCTestCase {
         XCTAssertTrue(round.repack)
         await round.load()
         XCTAssertEqual(round.phase, .playing)
-        XCTAssertEqual(round.deck.map { $0.tag }, [chai])
+        XCTAssertEqual(round.deck.map { $0.tag }, [man, chai])
         XCTAssertEqual(round.courseCode, "fa")
     }
 
