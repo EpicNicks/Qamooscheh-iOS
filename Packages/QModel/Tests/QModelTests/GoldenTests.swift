@@ -249,6 +249,40 @@ final class GoldenTests: XCTestCase {
         XCTAssertEqual(cloze.hardcore, true)
     }
 
+    func testRace() throws {
+        let start = try golden(StartRaceRequest.self, """
+        {"courseCode":"fa","mode":"perfect_delivery","hardcore":false,"deviceClass":"touch","tags":["a","b"]}
+        """)
+        XCTAssertEqual(start.mode, .perfectDelivery)
+        XCTAssertEqual(start.deviceClass, .touch)
+        let started = try golden(StartRaceResponse.self, """
+        {"runId":"77777777-7777-7777-7777-777777777777","serverStartedAt":"2026-03-01T12:30:45.123+00:00","weights":{"a":1.5,"b":1.9}}
+        """)
+        XCTAssertEqual(started.weights["b"], 1.9)
+        let finish = try golden(FinishRaceRequest.self, """
+        {"answers":[{"tag":"a","attempt":1,"correct":true,"elapsedMs":2100},{"tag":"b","attempt":3,"correct":false}],"deckDone":true}
+        """)
+        XCTAssertNil(finish.answers[1].elapsedMs)
+        let done = try golden(FinishRaceResponse.self, """
+        {"score":3.4,"timeMs":41200,"solved":2,"strikes":1,"endReason":"deck_done","xp":8,"held":false,"rank":12,
+         "personalBest":{"score":3.4,"timeMs":41200},"alreadyFinished":false}
+        """)
+        XCTAssertEqual(done.rank, 12)
+        let held = try decode(FinishRaceResponse.self, """
+        {"score":1,"timeMs":900,"solved":1,"strikes":0,"endReason":"deck_done","xp":0,"held":true,"heldReason":"answer_too_fast",
+         "rank":null,"personalBest":null,"alreadyFinished":true}
+        """)
+        XCTAssertTrue(held.held)
+        XCTAssertNil(held.rank)
+        XCTAssertNil(held.personalBest)
+        let board = try golden(RaceBoardResponse.self, """
+        {"entries":[{"rank":1,"userId":"88888888-8888-8888-8888-888888888888","displayName":"Sam","country":"CA","score":9.5,"timeMs":60000,"isYou":true}]}
+        """)
+        XCTAssertTrue(board.entries[0].isYou)
+        XCTAssertEqual(RaceMode.allCases.map { $0.rawValue }, ["perfect_delivery", "endless_practice"])
+        XCTAssertEqual(RaceScope.allCases.map { $0.rawValue }, ["global", "country", "weekly", "friends"])
+    }
+
     func testExerciseReport() throws {
         let r = try golden(SubmitExerciseReportRequest.self, """
         {"exercisePrompt":"Hello","exerciseTags":["salam<interj>"],"reasons":["audio_wrong","other"],"details":"crackly",

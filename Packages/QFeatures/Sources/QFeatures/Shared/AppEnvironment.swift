@@ -24,6 +24,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let savedPractice: SavedPracticeSource?
     /// The lesson exercises a fill-in-the-blank round cuts its sentences from; nil in tests.
     public let clozeSentences: ClozeSentenceSource?
+    /// The Repack race endpoints; nil in tests.
+    public let race: RaceService?
     public let themes: ThemeLibrarySource
     /// The bundled glossary (QDomain); filter it with `Glossary.forCourse`.
     public let glossary: Glossary
@@ -66,9 +68,11 @@ public struct AppEnvironment: @unchecked Sendable {
         savedPractice: SavedPracticeSource? = nil,
         contacts: ContactsService? = nil,
         contactEmails: ContactEmailReading? = nil,
-        clozeSentences: ClozeSentenceSource? = nil
+        clozeSentences: ClozeSentenceSource? = nil,
+        race: RaceService? = nil
     ) {
         self.clozeSentences = clozeSentences
+        self.race = race
         self.contacts = contacts
         self.contactEmails = contactEmails
         self.savedPractice = savedPractice
@@ -204,7 +208,8 @@ public struct AppEnvironment: @unchecked Sendable {
             savedPractice: LiveSavedPracticeSource(repository: vocab),
             contacts: ContactsRepository(client: client),
             contactEmails: systemContactEmails(),
-            clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned))
+            clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned),
+            race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit))
     }
 }
 
