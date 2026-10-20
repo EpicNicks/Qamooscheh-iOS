@@ -54,6 +54,7 @@ public enum ExerciseReportReason: String, Codable, Equatable, Hashable, Sendable
 public enum FlashcardKind: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
     case selfRated = "self_rated"
     case translation = "translation"
+    case cloze = "cloze"
 }
 
 /// Qamooscheh.Api.SessionSubmit.SessionOutcome (PascalCase on the wire).

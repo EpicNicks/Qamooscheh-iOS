@@ -71,16 +71,20 @@ public struct StarredPracticeResponse: Codable, Equatable, Sendable {
     }
 }
 
-/// One flashcard result.
+/// One flashcard result. `attempt` (1 to 50, the attempt the card ended on) and `elapsedMs` (0 to 600000) are sent for kind "cloze" only.
 public struct SubmittedFlashcard: Codable, Equatable, Sendable {
     public var tag: String
     public var kind: FlashcardKind
     public var correct: Bool
+    public var attempt: Int?
+    public var elapsedMs: Int?
 
-    public init(tag: String, kind: FlashcardKind, correct: Bool) {
+    public init(tag: String, kind: FlashcardKind, correct: Bool, attempt: Int? = nil, elapsedMs: Int? = nil) {
         self.tag = tag
         self.kind = kind
         self.correct = correct
+        self.attempt = attempt
+        self.elapsedMs = elapsedMs
     }
 }
 
@@ -90,13 +94,16 @@ public struct SubmitFlashcardsRequest: Codable, Equatable, Sendable {
     public var courseCode: String
     public var occurredAt: Date
     public var inRemix: Bool
+    /// A cloze round played with no typo tolerance; sent for kind "cloze" only (the server defaults it to false).
+    public var hardcore: Bool?
     public var cards: [SubmittedFlashcard]
 
-    public init(submissionId: String, courseCode: String, occurredAt: Date, inRemix: Bool, cards: [SubmittedFlashcard]) {
+    public init(submissionId: String, courseCode: String, occurredAt: Date, inRemix: Bool, hardcore: Bool? = nil, cards: [SubmittedFlashcard]) {
         self.submissionId = submissionId
         self.courseCode = courseCode
         self.occurredAt = occurredAt
         self.inRemix = inRemix
+        self.hardcore = hardcore
         self.cards = cards
     }
 }

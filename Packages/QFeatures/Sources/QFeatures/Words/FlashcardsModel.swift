@@ -30,7 +30,8 @@ public enum RoundXp: Equatable, Sendable {
 
 /// Saved words as flashcards, outside any lesson (web FlashcardsPage, Android FlashcardsViewModel).
 /// "Type the meaning" earns XP per right meaning, sent once when the round ends; "Flip cards" is
-/// practice only. Neither touches review scheduling. A round remembers its own course and
+/// practice only. Neither touches review scheduling. "Fill in" plays a `ClozeRoundModel`, which
+/// the server pays and counts as reviews. A round remembers its own course and
 /// submission id, so a course change or a new round never redirects or drops its result.
 @MainActor
 public final class FlashcardsModel: ObservableObject {
@@ -43,8 +44,13 @@ public final class FlashcardsModel: ObservableObject {
     @Published public private(set) var deck: [FlashcardWord]?
     @Published public private(set) var results: [FlashcardResult] = []
     @Published public private(set) var xp: RoundXp = .idle
+    /// The "Fill in" switch: no typo is forgiven in a cloze round (it pays the same).
+    @Published public var hardcore = false
+    /// The fill-in-the-blank round being played; nil on the start screen.
+    @Published public private(set) var clozeRound: ClozeRoundModel?
 
     private let submitter: FlashcardSubmitter?
+    private let cloze: ClozeServices?
     private let shuffle: @MainActor ([FlashcardWord]) -> [FlashcardWord]
     private let newId: () -> String
     private let now: () -> Date
@@ -56,7 +62,7 @@ public final class FlashcardsModel: ObservableObject {
     private var forwarding: AnyCancellable?
 
     public init(
-        store: VocabularyStore, submitter: FlashcardSubmitter?,
+        store: VocabularyStore, submitter: FlashcardSubmitter?, cloze: ClozeServices? = nil,
         shuffle: @escaping @MainActor ([FlashcardWord]) -> [FlashcardWord] = { $0.shuffled() },
         newId: @escaping () -> String = { UUID().uuidString },
         now: @escaping () -> Date = { Date() },
@@ -64,6 +70,7 @@ public final class FlashcardsModel: ObservableObject {
     ) {
         self.store = store
         self.submitter = submitter
+        self.cloze = cloze
         self.shuffle = shuffle
         self.newId = newId
         self.now = now
@@ -102,8 +109,15 @@ public final class FlashcardsModel: ObservableObject {
         if deck == nil { kind = next }
     }
 
-    /// A fresh round: up to `roundSize` of the saved words, shuffled.
+    /// Whether this build can play a fill-in-the-blank round at all.
+    public var canPlayCloze: Bool { return cloze?.practice != nil && cloze?.sentences != nil }
+
+    /// A fresh round: up to `roundSize` of the saved words, shuffled. "Fill in" hands over to a cloze round.
     public func start() {
+        if kind == .cloze {
+            startCloze()
+            return
+        }
         let pool = words
         guard !pool.isEmpty, let course = store.content?.courseCode else { return }
         roundId += 1
@@ -114,8 +128,18 @@ public final class FlashcardsModel: ObservableObject {
         xp = .idle
     }
 
+    private func startCloze() {
+        guard let cloze = cloze, !words.isEmpty else { return }
+        clozeRound = ClozeRoundModel(
+            store: store, services: cloze, submitter: submitter, hardcore: hardcore, onUnauthorized: onUnauthorized)
+    }
+
+    /// Leaves the cloze round for the start screen. A round already being saved still lands on the server.
+    public func leaveCloze() { clozeRound = nil }
+
     /// Leaves the round for the start screen. A round already being saved still lands on the server.
     public func stop() {
+        clozeRound = nil
         roundId += 1
         roundCourse = nil
         deck = nil

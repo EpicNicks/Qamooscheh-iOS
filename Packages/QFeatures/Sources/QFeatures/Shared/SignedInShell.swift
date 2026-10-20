@@ -77,7 +77,10 @@ public final class SignedInShell: ObservableObject {
             service: app?.contacts, reader: app?.contactEmails, onUnauthorized: unauthorized)
         let store = VocabularyStore(source: app?.vocabulary, onUnauthorized: unauthorized)
         self.vocabulary = store
-        self.flashcards = FlashcardsModel(store: store, submitter: app?.flashcards, onUnauthorized: unauthorized)
+        let cloze = app.map {
+            ClozeServices(practice: $0.savedPractice, sentences: $0.clozeSentences, settings: .live(app: $0))
+        }
+        self.flashcards = FlashcardsModel(store: store, submitter: app?.flashcards, cloze: cloze, onUnauthorized: unauthorized)
         self.leagues = LeaguesModel(service: app?.leagues, viewerId: { box.id }, onUnauthorized: unauthorized)
     }
 

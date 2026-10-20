@@ -22,6 +22,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let flashcards: FlashcardSubmitter
     /// The saved-words remix source; nil in tests.
     public let savedPractice: SavedPracticeSource?
+    /// The lesson exercises a fill-in-the-blank round cuts its sentences from; nil in tests.
+    public let clozeSentences: ClozeSentenceSource?
     public let themes: ThemeLibrarySource
     /// The bundled glossary (QDomain); filter it with `Glossary.forCourse`.
     public let glossary: Glossary
@@ -63,8 +65,10 @@ public struct AppEnvironment: @unchecked Sendable {
         previewer: VoicePreviewing? = nil,
         savedPractice: SavedPracticeSource? = nil,
         contacts: ContactsService? = nil,
-        contactEmails: ContactEmailReading? = nil
+        contactEmails: ContactEmailReading? = nil,
+        clozeSentences: ClozeSentenceSource? = nil
     ) {
+        self.clozeSentences = clozeSentences
         self.contacts = contacts
         self.contactEmails = contactEmails
         self.savedPractice = savedPractice
@@ -199,7 +203,8 @@ public struct AppEnvironment: @unchecked Sendable {
             previewer: previewer,
             savedPractice: LiveSavedPracticeSource(repository: vocab),
             contacts: ContactsRepository(client: client),
-            contactEmails: systemContactEmails())
+            contactEmails: systemContactEmails(),
+            clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned))
     }
 }
 
