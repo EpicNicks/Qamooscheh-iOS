@@ -147,6 +147,44 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         XCTAssertFalse(LessonRoute(skillKey: "s").needsContentsChoice)
     }
 
+    func testDeepDiveBlendsTheOtherLessonsUnderTheTopicsTheLessonTouches() async throws {
+        let library = ThemeLibraryData(
+            index: ThemeIndexArtifact(themes: [
+                ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "src", path: "themes/src.json"), ThemeLessonRef(id: "l2", path: "themes/l2.json")]),
+                ThemeEntry(id: "travel", lessons: [ThemeLessonRef(id: "l3", path: "themes/l3.json")]),
+            ]),
+            headers: [
+                "src": ThemeLessonHeader(title: "Src", category: .standard),
+                "l2": ThemeLessonHeader(title: "Two", category: .standard),
+                "l3": ThemeLessonHeader(title: "Three", category: .standard),
+            ])
+        let paths = [
+            "themes/src.json": SkillArtifact(id: "src", title: "Src", exercises: [bank("s")]),
+            "themes/l2.json": SkillArtifact(id: "l2", title: "Two", exercises: [bank("b")]),
+            "themes/l3.json": SkillArtifact(id: "l3", title: "Three", exercises: [bank("c")]),
+        ]
+        let loader = makeLoader(paths: paths, themes: library)
+        let route = LessonRoute.forDeepDive(lessonKey: "src")
+        XCTAssertTrue(route.isRemix)
+        XCTAssertTrue(route.needsContentsChoice)
+        XCTAssertFalse(route.choosing(.all, hardcore: false).needsContentsChoice)
+        let setup = try await loader.setup(for: route.choosing(.all, hardcore: false))
+        // Only the lessons under src's own topics, and not src itself.
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["_/l2/0"])
+        let pool = try await loader.remixCloze(for: route.choosing(.cloze, hardcore: false))
+        XCTAssertEqual(pool?.tags, ["b"])
+    }
+
+    func testDeepDiveWithNothingElseToBlendPlaysTheLessonItself() async throws {
+        let library = ThemeLibraryData(
+            index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "src", path: "themes/src.json")])]),
+            headers: ["src": ThemeLessonHeader(title: "Src", category: .standard)])
+        let loader = makeLoader(
+            paths: ["themes/src.json": SkillArtifact(id: "src", title: "Src", exercises: [bank("s")])], themes: library)
+        let setup = try await loader.setup(for: LessonRoute.forDeepDive(lessonKey: "src", contents: .all))
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["_/src/0"])
+    }
+
     private func foodLoader() -> LiveLessonSetupLoader {
         let library = ThemeLibraryData(
             index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "l1", path: "themes/l1.json")])]),

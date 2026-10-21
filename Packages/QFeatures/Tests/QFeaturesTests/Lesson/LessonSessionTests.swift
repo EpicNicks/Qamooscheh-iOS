@@ -36,13 +36,26 @@ private final class EventLog {
 
 private struct Boom: Error {}
 
+private final class SpyHaptics: HapticsPlaying {
+    var played: [HapticKind] = []
+    func play(_ kind: HapticKind) { played.append(kind) }
+}
+
+private final class SpySfx: SfxPlaying {
+    var played: [String] = []
+    func play(fileName: String, volume: Float) { played.append(fileName) }
+}
+
 final class LessonSessionTests: XCTestCase {
     private func instance(_ ordinal: Int, _ type: ExerciseType, answer: String) -> ExerciseInstance {
         let exercise = ExerciseArtifact(type: type, scriptMode: .native, prompt: "p\(ordinal)", tiles: type == .wordBank ? [answer] : nil, answer: [answer], tags: ["t\(ordinal)"])
         return ExerciseInstance(key: "u/s/\(ordinal)", unitKey: "u", skillKey: "s", ordinal: ordinal, exercise: exercise, renderType: type)
     }
 
-    private func makeSession(grading: Bool = true, practice: Bool = false, recorder: Recorder = Recorder(), events: EventLog = EventLog()) -> LessonSession {
+    private func makeSession(
+        grading: Bool = true, practice: Bool = false, recorder: Recorder = Recorder(), events: EventLog = EventLog(),
+        effects: FeedbackEffects? = nil, prefs: LocalPrefs = LocalPrefs()
+    ) -> LessonSession {
         let setup = LessonSetup(
             courseCode: "fa", courseVersion: 3,
             instances: [instance(0, .wordBank, answer: "a"), instance(1, .typeIn, answer: "b")],
@@ -56,9 +69,33 @@ final class LessonSessionTests: XCTestCase {
                 recorder.add(session)
                 return LessonSubmitResult.queued
             },
-            onFeedback: { events.add($0) }
+            onFeedback: { events.add($0) },
+            effects: effects
         )
-        return LessonSession(setup: setup, dependencies: deps)
+        return LessonSession(setup: setup, prefs: prefs, dependencies: deps)
+    }
+
+    func testAnAnswerPlaysItsSoundAndHapticAsThePrefsAllow() {
+        let haptics = SpyHaptics()
+        let sfx = SpySfx()
+        let session = makeSession(effects: FeedbackEffects(haptics: haptics, sfx: sfx))
+        session.setTileAnswer("a")
+        session.check()
+        XCTAssertTrue(haptics.played.contains(.success))
+        XCTAssertTrue(sfx.played.contains("sfx_correct"))
+    }
+
+    func testNothingPlaysWhenSoundAndHapticsAreOff() {
+        let haptics = SpyHaptics()
+        let sfx = SpySfx()
+        var prefs = LocalPrefs()
+        prefs.hapticsEnabled = false
+        prefs.soundEffectsEnabled = false
+        let session = makeSession(effects: FeedbackEffects(haptics: haptics, sfx: sfx), prefs: prefs)
+        session.setTileAnswer("a")
+        session.check()
+        XCTAssertTrue(haptics.played.isEmpty)
+        XCTAssertTrue(sfx.played.isEmpty)
     }
 
     func testCheckNeedsAnAnswer() {

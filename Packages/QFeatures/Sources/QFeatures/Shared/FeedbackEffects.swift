@@ -65,9 +65,9 @@ public extension FeedbackEffects {
     /// The one player for the app: sound and haptics are device-wide.
     static let shared = FeedbackEffects(haptics: SystemHaptics(), sfx: SystemSfx())
 
-    /// Plays `event` as the learner's device prefs allow. Nothing is speaking on the cards that use this.
-    func play(_ event: FeedbackEvent, prefs: LocalPrefs) {
-        perform(event, hapticsEnabled: prefs.hapticsEnabled, soundEnabled: prefs.soundEffectsEnabled, isSpeaking: false, reduceMotion: FeedbackEffects.reduceMotion)
+    /// Plays `event` as the learner's device prefs allow; the sound is skipped while a voice is speaking.
+    func play(_ event: FeedbackEvent, prefs: LocalPrefs, isSpeaking: Bool = false) {
+        perform(event, hapticsEnabled: prefs.hapticsEnabled, soundEnabled: prefs.soundEffectsEnabled, isSpeaking: isSpeaking, reduceMotion: FeedbackEffects.reduceMotion)
     }
 
     private static var reduceMotion: Bool {

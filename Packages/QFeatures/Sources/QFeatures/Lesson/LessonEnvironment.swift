@@ -24,12 +24,14 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var exerciseRefs: [StarredPracticeExercise]?
     /// The course version the server picked `exerciseRefs` against; the loader refuses a different one.
     public var exerciseCourseVersion: Int?
+    /// Non-nil for a Deep Dive remix: the standard lesson to blend more of (the loader finds its topics and picks the other lessons).
+    public var deepDiveLessonKey: String?
     /// What a remix holds, once the learner has chosen; nil until then (the cover asks first).
     public var remixContents: RemixContents?
     /// Fill in the blank without typo tolerance; only read when the remix holds cloze cards.
     public var hardcore: Bool
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, deepDiveLessonKey: String? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -39,12 +41,16 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
         self.remixThemeIds = remixThemeIds
         self.exerciseRefs = exerciseRefs
         self.exerciseCourseVersion = exerciseCourseVersion
+        self.deepDiveLessonKey = deepDiveLessonKey
         self.remixContents = remixContents
         self.hardcore = hardcore
     }
 
+    /// Whether this route is a remix of topics, picked or found from a lesson (a Deep Dive).
+    public var isRemix: Bool { return remixThemeIds != nil || deepDiveLessonKey != nil }
+
     /// A remix whose contents the learner hasn't chosen yet: the cover shows the contents picker first.
-    public var needsContentsChoice: Bool { return remixThemeIds != nil && remixContents == nil }
+    public var needsContentsChoice: Bool { return isRemix && remixContents == nil }
 
     /// This remix route with what it holds chosen.
     public func choosing(_ contents: RemixContents, hardcore: Bool) -> LessonRoute {
@@ -64,6 +70,11 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     /// The route the Library's remix picker leads to.
     public static func forRemix(themeIds: [String], contents: RemixContents? = nil, hardcore: Bool = false) -> LessonRoute {
         return LessonRoute(skillKey: "remix", remixThemeIds: themeIds, remixContents: contents, hardcore: hardcore)
+    }
+
+    /// The route a Deep Dive sheet's "Remix all topics" leads to: more like `lessonKey`, from the topics it touches.
+    public static func forDeepDive(lessonKey: String, contents: RemixContents? = nil, hardcore: Bool = false) -> LessonRoute {
+        return LessonRoute(skillKey: "remix-" + lessonKey, deepDiveLessonKey: lessonKey, remixContents: contents, hardcore: hardcore)
     }
 
     /// The route a path node's "Test out" leads to: `unitKey`/`skillKey` name the position to jump to.
@@ -150,6 +161,8 @@ public struct LessonEnvironment {
     public var speech: SpeechService?
     public var courseHints: [String: WordHint]
     public var onFeedback: (FeedbackEvent) -> Void
+    /// Sounds and haptics for feedback events; nil plays none.
+    public var effects: FeedbackEffects?
     public var onInstallVoice: () -> Void
     public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
 
@@ -167,6 +180,7 @@ public struct LessonEnvironment {
         speech: SpeechService? = nil,
         courseHints: [String: WordHint] = emptyHintMap,
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
+        effects: FeedbackEffects? = nil,
         onInstallVoice: @escaping () -> Void = {},
         makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil
     ) {
@@ -183,6 +197,7 @@ public struct LessonEnvironment {
         self.speech = speech
         self.courseHints = courseHints
         self.onFeedback = onFeedback
+        self.effects = effects
         self.onInstallVoice = onInstallVoice
         self.makeReportModel = makeReportModel
     }
@@ -195,6 +210,7 @@ public struct LessonEnvironment {
         loader: LessonSetupLoading = UnwiredLessonSetupLoader(),
         speech: SpeechService? = nil,
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
+        effects: FeedbackEffects? = .shared,
         onInstallVoice: @escaping () -> Void = {},
         onCheckpointSubmitted: @escaping @Sendable (CheckpointSubmitResponse) async -> Void = { _ in }
     ) -> LessonEnvironment {
@@ -227,6 +243,7 @@ public struct LessonEnvironment {
             draftDirectory: support.appendingPathComponent("lesson-drafts", isDirectory: true),
             speech: speech,
             onFeedback: onFeedback,
+            effects: effects,
             onInstallVoice: onInstallVoice
         )
     }
@@ -280,6 +297,7 @@ public struct LessonEnvironment {
             speech: speech,
             courseHints: courseHints,
             onFeedback: onFeedback,
+            effects: effects,
             onInstallVoice: onInstallVoice,
             makeReportModel: makeReportModel,
             submitCheckpoint: checkpointSend
