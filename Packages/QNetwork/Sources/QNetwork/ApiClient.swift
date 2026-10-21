@@ -90,9 +90,8 @@ public actor ApiClient {
             } catch is SessionExpiredError {
                 throw SessionExpiredError()
             } catch is StaleRefreshError {
-                // The session changed mid-refresh; use whoever is signed in now.
-                guard let current = await store.load() else { throw SessionExpiredError() }
-                accessToken = current.accessToken
+                // The session changed mid-refresh; keep going only if it is still this account.
+                accessToken = try await currentToken(for: stored.userId)
             } catch {
                 // Transient refresh failure (5xx/408/429/network): the access token
                 // may still be valid, so send with it. A 401 takes the normal path.
@@ -104,14 +103,22 @@ public actor ApiClient {
         if result.1.statusCode == 401 && !anonymous && stored != nil {
             // Another caller may have refreshed while this request was in
             // flight; only refresh when storage still holds the token we used.
-            let current = await store.load()?.accessToken
+            // Never retry under a different account's token.
+            let current = await store.load()
+            if let current = current, current.userId != stored?.userId { throw AccountChangedError() }
             let retryToken: String
-            if let current = current, current != accessToken {
-                retryToken = current
+            if let current = current, current.accessToken != accessToken {
+                retryToken = current.accessToken
             } else {
-                retryToken = try await refreshOrCurrent()
+                retryToken = try await refreshOrCurrent(for: stored?.userId)
             }
             result = try await perform(method, path, bodyData: bodyData, accessToken: retryToken)
+        }
+
+        // The account changed while the request was out: the response is not this user's to apply.
+        if let stored = stored {
+            let now = await store.load()
+            if now?.userId != stored.userId { throw AccountChangedError() }
         }
 
         let data = result.0
@@ -155,13 +162,19 @@ public actor ApiClient {
 
     /// Refreshes, but if the session was replaced mid-flight returns the new
     /// session's token instead of failing; throws SessionExpiredError if none remains.
-    private func refreshOrCurrent() async throws -> String {
+    private func refreshOrCurrent(for userId: String?) async throws -> String {
         do {
             return try await refreshAccessToken()
         } catch is StaleRefreshError {
-            guard let current = await store.load() else { throw SessionExpiredError() }
-            return current.accessToken
+            return try await currentToken(for: userId)
         }
+    }
+
+    /// The signed-in token, provided it still belongs to `userId`.
+    private func currentToken(for userId: String?) async throws -> String {
+        guard let current = await store.load() else { throw SessionExpiredError() }
+        if let userId = userId, current.userId != userId { throw AccountChangedError() }
+        return current.accessToken
     }
 
     /// Refreshes once at a time; concurrent callers share the in-flight task.
@@ -203,11 +216,18 @@ public actor ApiClient {
         let auth = try decoder.decode(AuthResponse.self, from: data)
         let stillCurrentAfterDecode = await isCurrent(start)
         if !stillCurrentAfterDecode { throw StaleRefreshError() }
-        await store.save(StoredSession(
+        // The old refresh token is spent. If the new one can't be kept, end the session now:
+        // the spent token left on disk would trip reuse detection at the next launch.
+        let saved = await store.saveChecked(StoredSession(
             userId: auth.userId,
             accessToken: auth.accessToken,
             accessTokenExpiresAt: auth.accessTokenExpiresAt,
             refreshToken: auth.refreshToken))
+        guard saved == .saved else {
+            await store.clear()
+            onSessionExpired?()
+            throw SessionExpiredError()
+        }
         return auth.accessToken
     }
 

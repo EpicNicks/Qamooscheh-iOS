@@ -20,6 +20,24 @@ public protocol SessionStore: Sendable {
     func load() async -> StoredSession?
     func save(_ session: StoredSession) async
     func clear() async
+    /// Saves and reports whether the session is durably stored. On `.failed` and
+    /// `.lowStorage` nothing usable is stored, so callers must not announce it.
+    func saveChecked(_ session: StoredSession) async -> SessionSaveResult
+}
+
+/// The outcome of persisting a session.
+public enum SessionSaveResult: Equatable, Sendable {
+    case saved
+    case failed
+    /// The write failed and the device is out of (or nearly out of) space.
+    case lowStorage
+}
+
+extension SessionStore {
+    public func saveChecked(_ session: StoredSession) async -> SessionSaveResult {
+        await save(session)
+        return .saved
+    }
 }
 
 /// In-memory store, for tests and previews.

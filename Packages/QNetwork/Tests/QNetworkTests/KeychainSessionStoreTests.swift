@@ -102,4 +102,75 @@ final class KeychainSessionStoreTests: XCTestCase {
         let loaded = await store.load()
         XCTAssertNil(loaded)
     }
+
+    func testSaveCheckedRetriesThenSucceeds() async {
+        let client = FlakySetKeychainClient(failures: 2, status: -25308)
+        let store = KeychainSessionStore(client: client, freeBytes: { 10_000_000_000 }, notice: nil)
+        let result = await store.saveChecked(session())
+        XCTAssertEqual(result, .saved)
+        XCTAssertEqual(client.setCalls, 3)
+    }
+
+    func testSaveCheckedFailureWithRoomIsNotLowStorage() async {
+        let client = FlakySetKeychainClient(failures: 99, status: -25308)
+        let notice = StorageNotice()
+        let posted = PostCounter()
+        notice.setHandler { posted.bump() }
+        let store = KeychainSessionStore(client: client, freeBytes: { 10_000_000_000 }, notice: notice)
+        let result = await store.saveChecked(session())
+        XCTAssertEqual(result, .failed)
+        XCTAssertEqual(posted.count, 0)
+    }
+
+    func testSaveCheckedDiskFullIsLowStorageAndNotifies() async {
+        let client = FlakySetKeychainClient(failures: 99, status: -34)
+        let notice = StorageNotice()
+        let posted = PostCounter()
+        notice.setHandler { posted.bump() }
+        let store = KeychainSessionStore(client: client, freeBytes: { 10_000_000_000 }, notice: notice)
+        let result = await store.saveChecked(session())
+        XCTAssertEqual(result, .lowStorage)
+        XCTAssertEqual(posted.count, 1)
+        let loaded = await store.load()
+        XCTAssertNil(loaded)
+    }
+
+    func testSaveCheckedFailureUnderThresholdIsLowStorage() async {
+        let client = FlakySetKeychainClient(failures: 99, status: -25308)
+        let store = KeychainSessionStore(client: client, freeBytes: { 10_000_000 }, notice: nil)
+        let result = await store.saveChecked(session())
+        XCTAssertEqual(result, .lowStorage)
+    }
+}
+
+private final class PostCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func bump() { lock.lock(); value += 1; lock.unlock() }
+    var count: Int { lock.lock(); defer { lock.unlock() }; return value }
+}
+
+private final class FlakySetKeychainClient: KeychainClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private var remainingFailures: Int
+    private let status: Int32
+    private var data: Data?
+    private(set) var setCalls = 0
+
+    init(failures: Int, status: Int32) {
+        remainingFailures = failures
+        self.status = status
+    }
+
+    func get() throws -> Data? { lock.lock(); defer { lock.unlock() }; return data }
+    func set(_ data: Data) throws {
+        lock.lock(); defer { lock.unlock() }
+        setCalls += 1
+        if remainingFailures > 0 {
+            remainingFailures -= 1
+            throw KeychainError(status: status)
+        }
+        self.data = data
+    }
+    func delete() throws { lock.lock(); defer { lock.unlock() }; data = nil }
 }

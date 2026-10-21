@@ -43,6 +43,7 @@ struct QamooschehApp: App {
                 }
             }
             .id(sessionEpoch)
+            .lowStorageAlert()
         }
     }
 }

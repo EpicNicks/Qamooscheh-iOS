@@ -270,6 +270,62 @@ final class ApiClientTests: XCTestCase {
         XCTAssertEqual(auth(StubURLProtocol.requests[1]), "Bearer other")
     }
 
+    func testRetryNeverGoesOutUnderAnotherAccount() async throws {
+        let store = LockedSessionStore(session: session())
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" {
+                return StubResponse(200, self.refreshJSON(access: "new"))
+            }
+            store.replace(StoredSession(
+                userId: "u2", accessToken: "theirs",
+                accessTokenExpiresAt: self.t0.addingTimeInterval(3600), refreshToken: "r7"))
+            return StubResponse(401)
+        }
+        let client = makeClient(store: store)
+        do {
+            let _: Ping = try await client.send(.get, "/v1/ping")
+            XCTFail("expected AccountChangedError")
+        } catch is AccountChangedError {
+        }
+        let sent = StubURLProtocol.requests.compactMap { auth($0) }
+        XCTAssertFalse(sent.contains("Bearer theirs"))
+        XCTAssertEqual(StubURLProtocol.requests.count, 1)
+    }
+
+    func testResponseForPreviousAccountIsDropped() async throws {
+        let store = LockedSessionStore(session: session())
+        StubURLProtocol.install { _ in
+            store.replace(StoredSession(
+                userId: "u2", accessToken: "theirs",
+                accessTokenExpiresAt: self.t0.addingTimeInterval(3600), refreshToken: "r7"))
+            return StubResponse(200, "{\"value\":3}")
+        }
+        let client = makeClient(store: store)
+        do {
+            let _: Ping = try await client.send(.get, "/v1/ping")
+            XCTFail("expected AccountChangedError")
+        } catch is AccountChangedError {
+        }
+    }
+
+    func testRefreshThatCannotBeSavedSignsOut() async throws {
+        let store = RefusingSaveStore(session: session())
+        StubURLProtocol.install { request in
+            if request.url?.path == "/v1/auth/refresh" { return StubResponse(200, self.refreshJSON(access: "new")) }
+            return StubResponse(401)
+        }
+        let expired = ExpiredFlag()
+        let client = makeClient(store: store, onExpired: { expired.set() })
+        do {
+            let _: Ping = try await client.send(.get, "/v1/ping")
+            XCTFail("expected SessionExpiredError")
+        } catch is SessionExpiredError {
+        }
+        let left = await store.load()
+        XCTAssertNil(left)
+        XCTAssertTrue(expired.value)
+    }
+
     func testBodilessErrorFallbackMessage() {
         XCTAssertEqual(ApiError(status: 429, body: nil).localizedDescription,
                        "Too many attempts. Wait a moment and try again.")
@@ -318,4 +374,13 @@ final class LockedSessionStore: SessionStore, @unchecked Sendable {
     func load() async -> StoredSession? { snapshot }
     func save(_ session: StoredSession) async { replace(session) }
     func clear() async { replace(nil) }
+}
+
+private actor RefusingSaveStore: SessionStore {
+    private var current: StoredSession?
+    init(session: StoredSession?) { current = session }
+    func load() async -> StoredSession? { current }
+    func save(_ session: StoredSession) async {}
+    func clear() async { current = nil }
+    func saveChecked(_ session: StoredSession) async -> SessionSaveResult { .failed }
 }
