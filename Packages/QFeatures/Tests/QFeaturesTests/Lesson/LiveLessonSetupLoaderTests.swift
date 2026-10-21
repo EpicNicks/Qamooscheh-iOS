@@ -80,6 +80,32 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         }
     }
 
+    func testCheckpointPlanOnAnotherVersionRefreshesThenTellsTheLearner() async throws {
+        var plan = checkpointPlan()
+        plan.courseVersion = 5
+        let skill = SkillArtifact(id: "a", title: "A", exercises: [bank("x"), bank("y")])
+        let content = LessonContentSource(skill: { _, _, _ in skill }, skillAtPath: { _, _ in nil }, themes: { _ in nil })
+        let stale = LiveLessonSetupLoader(
+            course: { course }, userId: { "user-1" }, cards: { _ in [:] }, plan: { _, _ in plan }, content: content)
+        do {
+            _ = try await stale.setup(for: LessonRoute.forCheckpoint(unitKey: "u2", skillKey: "t"))
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertEqual(error as? LessonLoadError, .courseUpdated)
+            XCTAssertEqual((error as? LocalizedError)?.errorDescription, "This Parsle was updated. Reopen it to continue.")
+        }
+        // The first read is stale; the refresh finds the planned version.
+        let reads = Recorder()
+        let fresh = LiveLessonSetupLoader(
+            course: {
+                reads.add("read")
+                return CourseRef(code: "fa", version: reads.values.count == 1 ? 4 : 5, manifestSha256: "abc")
+            },
+            userId: { "user-1" }, cards: { _ in [:] }, plan: { _, _ in plan }, content: content)
+        let setup = try await fresh.setup(for: LessonRoute.forCheckpoint(unitKey: "u2", skillKey: "t"))
+        XCTAssertEqual(setup?.courseVersion, 5)
+    }
+
     func testStorySkillBecomesAChapter() async throws {
         let story = SkillArtifact(id: "s", title: "Chapter 1", category: .story, exercises: [bank("a"), bank("b")])
         let loader = makeLoader(skills: ["u1/s": story])
