@@ -34,6 +34,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 
 struct RootTabView: View {
     private let lessons: LessonEnvironment?
+    private let app: AppEnvironment?
     @StateObject private var shell: SignedInShell
     @StateObject private var rejections: RejectionBannerModel
     @State private var selection: AppTab
@@ -52,6 +53,7 @@ struct RootTabView: View {
         initialTab: AppTab = .learn
     ) {
         self.lessons = lessons
+        self.app = app
         _rejections = StateObject(wrappedValue: RejectionBannerModel(source: lessons?.rejections))
         _shell = StateObject(wrappedValue: SignedInShell(app: app, onboarding: onboarding, onSignedOut: onSignedOut))
         _selection = State(initialValue: initialTab)
@@ -89,10 +91,12 @@ struct RootTabView: View {
     }
 
     var body: some View {
-        if let lessons = lessons {
-            tabs.lessonCover(route: $lessonRoute, environment: lessons, remixHost: { shell.makeRemixHost(route: $0, environment: lessons) })
-        } else {
-            tabs
+        ReenablePromptHost(app: app) {
+            if let lessons = lessons {
+                tabs.lessonCover(route: $lessonRoute, environment: lessons, remixHost: { shell.makeRemixHost(route: $0, environment: lessons) })
+            } else {
+                tabs
+            }
         }
     }
 }
