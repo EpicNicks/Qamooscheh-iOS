@@ -223,6 +223,7 @@ struct SavedPracticeDestination: View {
         self.onExercises = onExercises
         _model = StateObject(wrappedValue: SavedPracticeModel(
             store: shell.vocabulary, source: shell.app?.savedPractice, submitter: shell.app?.flashcards,
+            cloze: shell.app.map { ClozeServices(practice: $0.savedPractice, sentences: $0.clozeSentences, settings: .live(app: $0)) },
             onUnauthorized: shell.unauthorizedHandler))
     }
 

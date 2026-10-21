@@ -235,3 +235,19 @@ final class ClozeTests: XCTestCase {
         XCTAssertEqual(clozeResultLines(summary, correct: 2, xp: .failed).xp, "Couldn't save this round's XP.")
     }
 }
+
+final class RemixClozeTagsTests: XCTestCase {
+    private func card(_ tag: String, due: Date?) -> CardState {
+        return CardState(lexemeTag: tag, stability: 1, difficulty: 5, dueAt: due, reviewCount: 1, lapseCount: 0)
+    }
+
+    func testDueWordsComeBeforeNewOnesAndNotYetDueOnesAreLeftOut() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let cards = [
+            "a": card("a", due: Date(timeIntervalSince1970: 2_000)),
+            "b": card("b", due: Date(timeIntervalSince1970: 500)),
+            "c": card("c", due: nil),
+        ]
+        XCTAssertEqual(remixClozeTags(["a", "n1", "b", "c", "n2", "b"], cards: cards, now: now), ["b", "c", "n1", "n2"])
+    }
+}

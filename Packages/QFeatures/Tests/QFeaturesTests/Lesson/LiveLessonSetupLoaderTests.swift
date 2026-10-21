@@ -139,6 +139,40 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         let route = LessonRoute.forRemix(themeIds: ["a", "b"])
         XCTAssertEqual(route.remixThemeIds, ["a", "b"])
         XCTAssertFalse(route.checkpoint)
+        XCTAssertTrue(route.needsContentsChoice)
+        let chosen = route.choosing(.typeIn, hardcore: true)
+        XCTAssertFalse(chosen.needsContentsChoice)
+        XCTAssertEqual(chosen.remixContents, .typeIn)
+        XCTAssertTrue(chosen.hardcore)
+        XCTAssertFalse(LessonRoute(skillKey: "s").needsContentsChoice)
+    }
+
+    private func foodLoader() -> LiveLessonSetupLoader {
+        let library = ThemeLibraryData(
+            index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "l1", path: "themes/l1.json")])]),
+            headers: ["l1": ThemeLessonHeader(title: "One", category: .standard)])
+        let typed = ExerciseArtifact(type: .typeIn, scriptMode: .native, prompt: "p-typed", answer: ["a"], tags: ["a"])
+        return makeLoader(paths: ["themes/l1.json": SkillArtifact(id: "l1", title: "One", exercises: [bank("b"), typed])], themes: library)
+    }
+
+    func testRemixKeepsOnlyTheChosenContents() async throws {
+        let loader = foodLoader()
+        let typing = try await loader.setup(for: LessonRoute.forRemix(themeIds: ["food"], contents: .typeIn))
+        XCTAssertEqual(typing?.instances.map { $0.key }, ["_/l1/1"])
+        let bankOnly = try await loader.setup(for: LessonRoute.forRemix(themeIds: ["food"], contents: .wordBank))
+        XCTAssertEqual(bankOnly?.instances.map { $0.key }, ["_/l1/0"])
+        let none = try await loader.setup(for: LessonRoute.forRemix(themeIds: ["food"], contents: .cloze))
+        XCTAssertNil(none)
+    }
+
+    func testRemixClozePoolHoldsThePickedLessonsExercisesAndTheirWordsInOrder() async throws {
+        let loader = foodLoader()
+        let pool = try await loader.remixCloze(for: LessonRoute.forRemix(themeIds: ["food"], contents: .cloze))
+        XCTAssertEqual(pool?.courseCode, "fa")
+        XCTAssertEqual(pool?.exercises.count, 2)
+        XCTAssertEqual(pool?.tags, ["b", "a"])
+        let notARemix = try await loader.remixCloze(for: LessonRoute(skillKey: "s"))
+        XCTAssertNil(notARemix)
     }
 
     func testPassedCheckpointAnnouncesARefreshAndAFailedOneDoesNot() {

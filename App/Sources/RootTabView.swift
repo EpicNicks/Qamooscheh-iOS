@@ -86,7 +86,7 @@ struct RootTabView: View {
 
     var body: some View {
         if let lessons = lessons {
-            tabs.lessonCover(route: $lessonRoute, environment: lessons)
+            tabs.lessonCover(route: $lessonRoute, environment: lessons, remixHost: { shell.makeRemixHost(route: $0, environment: lessons) })
         } else {
             tabs
         }

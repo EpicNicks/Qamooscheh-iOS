@@ -60,6 +60,12 @@ final class SavedPracticeModelTests: XCTestCase {
         }
         let model = makeModel(source, RecordingSubmitter())
         await model.load()
+        guard case .choosing(let options, let selected, let none, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertEqual(options, [.all, .typeIn, .wordBank, .flashcards, .flashcardsAndAll, .cloze])
+        XCTAssertEqual(selected, .flashcardsAndAll)
+        XCTAssertFalse(none)
+        model.selectContents(.flashcardsAndAll)
+        await model.start()
         guard case .cards(let code, let cards, let results) = model.state else { return XCTFail("\(model.state)") }
         XCTAssertEqual(code, "fa")
         XCTAssertEqual(cards.map { $0.tag }, ["a", "b"])
@@ -77,6 +83,7 @@ final class SavedPracticeModelTests: XCTestCase {
         let submitter = RecordingSubmitter()
         let model = makeModel(source, submitter)
         await model.load()
+        await model.start()
         await model.answer(knew: true)
         XCTAssertTrue(submitter.requests.isEmpty)
         await model.answer(knew: false)
@@ -99,6 +106,7 @@ final class SavedPracticeModelTests: XCTestCase {
         submitter.fail = true
         let model = makeModel(source, submitter)
         await model.load()
+        await model.start()
         await model.answer(knew: true)
         XCTAssertEqual(model.state, .cardsDone(known: 1, total: 1, xp: nil, exercises: nil))
     }
@@ -111,8 +119,25 @@ final class SavedPracticeModelTests: XCTestCase {
 
         source.handler = { _ in StarredPracticeResponse(courseVersion: 2, words: [StarredPracticeWord(tag: "gone", exercises: [ref(0)])]) }
         await model.load()
+        guard case .choosing(let options, _, _, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertEqual(options, [.all, .typeIn, .wordBank, .cloze])
+        await model.start()
         XCTAssertEqual(model.state, .cardsDone(
             known: 0, total: 0, xp: 0, exercises: SavedPracticeExercises(courseVersion: 2, exercises: "u1/s1/0", count: 1)))
+    }
+
+    func testAChoiceThatKeepsNothingStaysOnTheChoiceWithAMessage() async {
+        let source = FakePracticeSource()
+        source.handler = { _ in StarredPracticeResponse(courseVersion: 1, words: [StarredPracticeWord(tag: "gone", exercises: [ref(0)])]) }
+        let model = makeModel(source, nil)
+        await model.load()
+        // Without lessons to read, the exercise's type is unknown, so only the choices that keep everything hold it.
+        model.selectContents(.typeIn)
+        await model.start()
+        XCTAssertEqual(model.state, .choosing(options: [.all, .typeIn, .wordBank, .cloze], selected: .typeIn, noneOfThat: true, hardcore: false))
+        model.selectContents(.all)
+        model.setHardcore(true)
+        XCTAssertEqual(model.state, .choosing(options: [.all, .typeIn, .wordBank, .cloze], selected: .all, noneOfThat: false, hardcore: true))
     }
 
     func testALoadFailureIsReportedAndRetryable() async {

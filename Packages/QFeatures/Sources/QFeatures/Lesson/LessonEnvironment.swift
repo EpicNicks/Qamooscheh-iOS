@@ -24,8 +24,12 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var exerciseRefs: [StarredPracticeExercise]?
     /// The course version the server picked `exerciseRefs` against; the loader refuses a different one.
     public var exerciseCourseVersion: Int?
+    /// What a remix holds, once the learner has chosen; nil until then (the cover asks first).
+    public var remixContents: RemixContents?
+    /// Fill in the blank without typo tolerance; only read when the remix holds cloze cards.
+    public var hardcore: Bool
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -35,6 +39,19 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
         self.remixThemeIds = remixThemeIds
         self.exerciseRefs = exerciseRefs
         self.exerciseCourseVersion = exerciseCourseVersion
+        self.remixContents = remixContents
+        self.hardcore = hardcore
+    }
+
+    /// A remix whose contents the learner hasn't chosen yet: the cover shows the contents picker first.
+    public var needsContentsChoice: Bool { return remixThemeIds != nil && remixContents == nil }
+
+    /// This remix route with what it holds chosen.
+    public func choosing(_ contents: RemixContents, hardcore: Bool) -> LessonRoute {
+        var chosen = self
+        chosen.remixContents = contents
+        chosen.hardcore = hardcore
+        return chosen
     }
 
     /// The route the saved-words practice's "Continue" leads to.
@@ -45,8 +62,8 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     }
 
     /// The route the Library's remix picker leads to.
-    public static func forRemix(themeIds: [String]) -> LessonRoute {
-        return LessonRoute(skillKey: "remix", remixThemeIds: themeIds)
+    public static func forRemix(themeIds: [String], contents: RemixContents? = nil, hardcore: Bool = false) -> LessonRoute {
+        return LessonRoute(skillKey: "remix", remixThemeIds: themeIds, remixContents: contents, hardcore: hardcore)
     }
 
     /// The route a path node's "Test out" leads to: `unitKey`/`skillKey` name the position to jump to.
@@ -74,8 +91,27 @@ func stableDigest(_ text: String) -> String {
 public protocol LessonSetupLoading: Sendable {
     /// nil when there is nothing to play.
     func setup(for route: LessonRoute) async throws -> LessonSetup?
+    /// What a remix route's fill-in-the-blank round is cut from; nil when the route isn't a remix.
+    func remixCloze(for route: LessonRoute) async throws -> RemixClozePool?
     func serverPrefs() async -> LessonServerPrefs
     func saveScriptMode(_ mode: ScriptMode) async
+}
+
+public extension LessonSetupLoading {
+    func remixCloze(for route: LessonRoute) async throws -> RemixClozePool? { return nil }
+}
+
+/// The exercises of a remix's lessons and the words its fill-in-the-blank cards are cut from, due words first (`remixClozeTags`).
+public struct RemixClozePool: Equatable, Sendable {
+    public var courseCode: String
+    public var exercises: [ExerciseArtifact]
+    public var tags: [String]
+
+    public init(courseCode: String, exercises: [ExerciseArtifact], tags: [String]) {
+        self.courseCode = courseCode
+        self.exercises = exercises
+        self.tags = tags
+    }
 }
 
 /// PLACEHOLDER until the path screen host reads course content from disk: every lesson fails to start, visibly, rather than playing fake content.
@@ -271,12 +307,17 @@ public extension EnvironmentValues {
 #if os(iOS)
 public extension View {
     /// Presents the lesson for `route` full screen; clearing the route (leave, or back to path) dismisses it.
-    func lessonCover(route: Binding<LessonRoute?>, environment: LessonEnvironment) -> some View {
+    /// A remix asks what it should hold first, through the model `remixHost` makes for it.
+    func lessonCover(route: Binding<LessonRoute?>, environment: LessonEnvironment, remixHost: ((LessonRoute) -> RemixHostModel)? = nil) -> some View {
         fullScreenCover(item: route) { current in
-            LessonHostView(
-                load: { try await environment.makeSession(for: current) },
-                onExit: { route.wrappedValue = nil }
-            )
+            if current.needsContentsChoice, let make = remixHost {
+                RemixHostView(model: make(current), onExit: { route.wrappedValue = nil })
+            } else {
+                LessonHostView(
+                    load: { try await environment.makeSession(for: current) },
+                    onExit: { route.wrappedValue = nil }
+                )
+            }
         }
     }
 }

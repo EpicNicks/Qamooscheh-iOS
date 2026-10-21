@@ -17,8 +17,22 @@ public struct SavedPracticeScreen: View {
     }
 
     public var body: some View {
-        ScrollView {
-            SavedPracticeContent(model: model, onBack: onBack, onExercises: onExercises).padding(16).frame(maxWidth: .infinity)
+        Group {
+            if let round = model.clozeRound {
+                ClozeRoundView(model: round, onExit: { model.leaveCloze() })
+            } else if case .choosing(let options, let selected, let none, let hardcore) = model.state {
+                RemixContentsPickerView(
+                    options: options, selected: selected, noneOfThat: none,
+                    noneMessage: "Your saved words have none of those right now. Pick something else.",
+                    backLabel: "Back to vocabulary",
+                    hardcore: selected == .cloze ? hardcore : nil,
+                    onSelect: { model.selectContents($0) }, onHardcoreChange: { model.setHardcore($0) },
+                    onStart: { Task { await model.start() } }, onBack: onBack)
+            } else {
+                ScrollView {
+                    SavedPracticeContent(model: model, onBack: onBack, onExercises: onExercises).padding(16).frame(maxWidth: .infinity)
+                }
+            }
         }
         .navigationTitle("Saved words")
         .task { await model.load() }
@@ -58,6 +72,9 @@ struct SavedPracticeContent: View {
                 } else {
                     ProgressView("Saving your progress\u{2026}").frame(maxWidth: .infinity)
                 }
+            case .choosing:
+                // The screen shows the contents picker itself.
+                EmptyView()
             case .cardsDone(let known, let total, let xp, let exercises):
                 done(p, known: known, total: total, xp: xp, exercises: exercises)
             }
