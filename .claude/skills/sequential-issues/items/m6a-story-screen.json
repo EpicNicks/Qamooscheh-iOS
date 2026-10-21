@@ -8,6 +8,7 @@
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Lesson/",
     "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/",
     "^Packages/QDomain/Sources/QDomain/Story",
     "^Packages/QDomain/Tests/"
   ],

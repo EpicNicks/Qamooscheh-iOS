@@ -15,6 +15,17 @@ public enum LessonLoadError: Error, Equatable, Sendable {
     case contentMissing
     /// Saved practice was picked against a different course version than the one on disk, so its ordinals could point at other exercises.
     case courseVersionMismatch
+    /// The plan names a course version the device doesn't have, even after a refresh.
+    case courseUpdated
+}
+
+extension LessonLoadError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .courseUpdated: return "This Parsle was updated. Reopen it to continue."
+        default: return nil
+        }
+    }
 }
 
 /// Course files the loader reads, as closures so tests need no disk.
@@ -120,8 +131,15 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
 
     private func checkpointSetup(_ route: LessonRoute) async throws -> LessonSetup? {
         guard let unitKey = route.unitKey else { throw LessonLoadError.noUnit }
-        guard let found = try await course() else { throw LessonLoadError.noCourse }
+        guard var found = try await course() else { throw LessonLoadError.noCourse }
         let response = try await plan(unitKey, route.skillKey)
+        // A lesson shows the version it submits under: refresh once, then say so rather than mix versions.
+        if response.courseVersion != found.version {
+            guard let refreshed = try await course(), refreshed.version == response.courseVersion else {
+                throw LessonLoadError.courseUpdated
+            }
+            found = refreshed
+        }
         var skills: [(ref: SkillRef, skill: SkillArtifact)] = []
         var seen = Set<String>()
         for entry in response.skills where seen.insert(entry.unitKey + "/" + entry.skillKey).inserted {

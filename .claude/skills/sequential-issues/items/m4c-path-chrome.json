@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Learn/: PathHeader (course picker button, streak, goal), DailyGoalRing, JumpToCurrentButton. Read web src/components/path/DailyGoalRing.tsx, JumpToCurrentButton.tsx and css modules, consuming QDomain dailyGoal (ported by m3l; do not re-port). Android reference: feature/learn/.../PathHeader.kt. Snapshots: ring at 0%, 50%, 100%, goal-met celebration state. Where web and Android differ, match the Android app's behaviour (see feature/learn/.../PathHeader.kt.).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Learn/",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",

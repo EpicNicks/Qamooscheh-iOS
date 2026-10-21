@@ -55,6 +55,18 @@ public struct LessonDraftStore: Sendable {
     }
 }
 
+extension LessonDraftStore {
+    /// Deletes every draft file the user owns under `directory` (sign-out cleanup).
+    public static func removeAll(directory: URL, userId: String) {
+        guard !userId.isEmpty else { return }
+        let prefix = String(fileName(for: userId + "|").dropLast(".json".count))
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where name.hasPrefix(prefix) {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+}
+
 /// An in-memory draft, for tests.
 public final class MemoryLessonDraft: @unchecked Sendable {
     private let lock = NSLock()

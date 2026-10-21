@@ -115,6 +115,7 @@ public final class SignedInShell: ObservableObject {
         }
         var days: [ActivityDay]?
         var goalXp: Int?
+        let requestedCourse = course?.code
         if let active = course {
             do {
                 days = try await app.activity(active.code)
@@ -126,6 +127,11 @@ public final class SignedInShell: ObservableObject {
                 _ = try? await sync.sync()
                 goalXp = await sync.prefs?.dailyGoalXp
             }
+        }
+        // The learner switched courses while these were loading: they belong to the previous course.
+        if course?.code != requestedCourse {
+            days = nil
+            goalXp = nil
         }
         // A failed fetch keeps the last values only for the same course; after a switch they show as unknown.
         let sameCourse = course?.code == activityCourse
@@ -178,6 +184,15 @@ public final class SignedInShell: ObservableObject {
 
     /// Takes a bootstrap from the server or the course switcher.
     public func apply(_ response: BootstrapResponse) {
+        // Progress belongs to one course: a switch blanks it until the new course's arrives.
+        if let previous = course?.code, previous != response.course?.code {
+            totalXp = nil
+            goal = nil
+            activityCourse = nil
+            profile.context = ProfileContext(
+                courseCode: response.course?.code, enrolledCount: response.enrolledCourseCodes.count,
+                activity: [], dailyGoalXp: nil)
+        }
         bootstrap = response
         course = response.course
     }

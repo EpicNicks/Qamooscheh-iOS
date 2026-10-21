@@ -47,6 +47,8 @@ public struct LessonDependencies {
     public var now: () -> Date
     /// Sends a checkpoint; nil (or a throw) leaves the answers in place with a retry.
     public var submitCheckpoint: CheckpointSubmitFunction?
+    /// Told which submissions this lesson's own end screen reports as rejected, so the background banner doesn't repeat them.
+    public var onRejectionShown: @Sendable ([String]) -> Void
     /// Mints a checkpoint's submission id (once per attempt; a retry after a failed send reuses it).
     public var newSubmissionId: () -> String
 
@@ -69,8 +71,10 @@ public struct LessonDependencies {
         makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
         now: @escaping () -> Date = { Date() },
         submitCheckpoint: CheckpointSubmitFunction? = nil,
-        newSubmissionId: @escaping () -> String = { UUID().uuidString.lowercased() }
+        newSubmissionId: @escaping () -> String = { UUID().uuidString.lowercased() },
+        onRejectionShown: @escaping @Sendable ([String]) -> Void = { _ in }
     ) {
+        self.onRejectionShown = onRejectionShown
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
         self.submit = submit
@@ -458,6 +462,12 @@ public final class LessonSession: ObservableObject {
                 return
             }
             deps.draft.clear()
+            // A rejection returned to this open lesson shows on its own end screen only.
+            let shown = zip(work.sessions, delivery.results).compactMap { pair -> String? in
+                if case .rejected = pair.1 { return pair.0.submissionId }
+                return nil
+            }
+            if !shown.isEmpty { deps.onRejectionShown(shown) }
             let end = LessonScreenLogic.endKind(results: delivery.results, locallyCompleted: work.locallyCompleted, practice: practice)
             if !practice && LessonSession.countsAsCompleted(end) { deps.onLessonCounted() }
             var extras = LessonResultsExtras.none

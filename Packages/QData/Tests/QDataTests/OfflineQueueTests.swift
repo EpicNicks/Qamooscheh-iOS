@@ -219,6 +219,18 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(all[0].rejectionReason, "bad")
     }
 
+    func testDismissRejectedRemovesOnlyRejectedItems() async throws {
+        let q = OfflineQueue(storage: InMemoryOfflineQueueStorage())
+        try await q.enqueue(userId: "u", session: session("a"))
+        try await q.enqueue(userId: "u", session: session("b"))
+        try await q.markRejected(userId: "u", submissionId: "a", reason: "bad")
+        let shown = try await q.rejectedRecords(userId: "u")
+        XCTAssertEqual(shown.map { $0.submissionId }, ["a"])
+        try await q.dismissRejected(userId: "u", submissionIds: ["a", "b"])
+        let left = try await q.records(userId: "u").map { $0.submissionId }
+        XCTAssertEqual(left, ["b"])
+    }
+
     func testRetryBackoffControlsEligibility() async throws {
         let clock = ClockBox(1_000_000)
         let q = OfflineQueue(storage: InMemoryOfflineQueueStorage(), nowMillis: { clock.value })

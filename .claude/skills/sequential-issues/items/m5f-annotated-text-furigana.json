@@ -9,6 +9,7 @@
     "^Packages/QDesign/Sources/QDesign/",
     "^Packages/QFeatures/Sources/QFeatures/Lesson/",
     "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/",
     "^Packages/QDesign/Tests/QDesignTests/"
   ],
   "acceptance": [

@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/LessonEngine.swift (SwiftUI-free): exercise queue, answer check via injected QGrader Grader protocol, retry-at-end of missed exercises, hearts/score, XP via QDomain lessonScore, exerciseResolution and answerFeedback, completion producing a submit payload for OfflineQueue. Read web src/hooks/useLessonEngine.ts, useExerciseSession.ts, useAnswerConfirmation.ts, web src/domain/exerciseResolution.ts. Android reference: feature/lesson/.../LessonViewModel.kt. Tests with a fake Grader returning scripted verdicts, including the deferred \"checked when you sync\" case. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../LessonViewModel.kt.).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Lesson/LessonEngine",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",

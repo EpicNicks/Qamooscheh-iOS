@@ -165,6 +165,10 @@ public struct LessonEnvironment {
     public var effects: FeedbackEffects?
     public var onInstallVoice: () -> Void
     public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
+    /// Dismisses rejections a lesson's end screen has shown (user, submission ids).
+    public var dismissRejections: @Sendable (String, [String]) async -> Void
+    /// The background rejections for the banner; nil shows none.
+    public var rejections: RejectionSource?
 
     public init(
         loader: LessonSetupLoading,
@@ -182,8 +186,12 @@ public struct LessonEnvironment {
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
         effects: FeedbackEffects? = nil,
         onInstallVoice: @escaping () -> Void = {},
-        makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil
+        makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
+        dismissRejections: @escaping @Sendable (String, [String]) async -> Void = { _, _ in },
+        rejections: RejectionSource? = nil
     ) {
+        self.dismissRejections = dismissRejections
+        self.rejections = rejections
         self.loader = loader
         self.userId = userId
         self.prefsStore = prefsStore
@@ -244,7 +252,9 @@ public struct LessonEnvironment {
             speech: speech,
             onFeedback: onFeedback,
             effects: effects,
-            onInstallVoice: onInstallVoice
+            onInstallVoice: onInstallVoice,
+            dismissRejections: { userId, ids in try? await queue.dismissRejected(userId: userId, submissionIds: ids) },
+            rejections: QueueRejectionSource(queue: queue, userId: { await store.load()?.userId })
         )
     }
 
@@ -260,6 +270,7 @@ public struct LessonEnvironment {
         let prefs = prefsStore.current(userId: id)
         let server = await loader.serverPrefs()
         let store = prefsStore
+        let dismiss = dismissRejections
         let loader = self.loader
         let submit = self.submit
         let enqueue = self.enqueue
@@ -300,7 +311,8 @@ public struct LessonEnvironment {
             effects: effects,
             onInstallVoice: onInstallVoice,
             makeReportModel: makeReportModel,
-            submitCheckpoint: checkpointSend
+            submitCheckpoint: checkpointSend,
+            onRejectionShown: { ids in Task { await dismiss(id, ids) } }
         )
         return LessonSession(setup: setup, prefs: prefs, serverPrefs: server, dependencies: deps)
     }

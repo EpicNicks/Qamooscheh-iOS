@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Learn/: LessonStartPopover, SkillGroupModal, DeepDiveChooserModal, SkillList. Read web src/components/path/LessonStartPopover.tsx, SkillGroupModal.tsx, DeepDiveChooserModal.tsx, SkillList.tsx and css. Android reference: feature/learn/.../PathPopups.kt. Navigation callbacks are closures (start lesson, practice, skip); no routing in this item. Snapshots: popover for each lesson state, group sheet with mixed states, chooser. Presentation choice (popover vs sheet on iPhone) is a design decision: implement a sheet and note it in the PR body. Where web and Android differ, match the Android app's behaviour (see feature/learn/.../PathPopups.kt.).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Learn/",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",
