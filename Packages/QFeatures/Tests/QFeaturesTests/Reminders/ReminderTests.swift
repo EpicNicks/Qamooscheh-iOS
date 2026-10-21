@@ -77,7 +77,7 @@ final class ReminderPlannerTests: XCTestCase {
     }
 
     func testSmartSuppressionOffStillSendsToday() {
-        let ctx = ReminderContext(practicedToday: true, goalMetToday: true, streakDays: 5)
+        let ctx = ReminderContext(practicedToday: true, streakDays: 5, goalMetToday: true)
         let plan = ReminderPlanner.plan(userId: "u", settings: settings(smart: false), context: ctx, now: at(2, 8), calendar: utc)
         XCTAssertEqual(plan.first?.fireAt, at(2, 19))
     }
