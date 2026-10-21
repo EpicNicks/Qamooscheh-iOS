@@ -13,6 +13,8 @@ public enum AuthError: Error, Equatable, LocalizedError, Sendable {
     case validation(message: String?)
     /// 429: too many attempts.
     case tooManyAttempts(message: String?)
+    /// The sign-in succeeded but the device couldn't store the session, so nothing is announced.
+    case sessionNotSaved
     /// Any other non-2xx response.
     case other(ApiError)
 
@@ -28,6 +30,8 @@ public enum AuthError: Error, Equatable, LocalizedError, Sendable {
             return AuthError.text(message, "Check your details and try again.")
         case .tooManyAttempts(let message):
             return AuthError.text(message, "Too many attempts. Wait a moment and try again.")
+        case .sessionNotSaved:
+            return "Signed in, but this device couldn't save your session. Please try again."
         case .other(let error):
             return error.errorDescription
         }
@@ -118,7 +122,8 @@ public struct AuthApi: Sendable {
             accessToken: auth.accessToken,
             accessTokenExpiresAt: auth.accessTokenExpiresAt,
             refreshToken: auth.refreshToken)
-        await store.save(session)
+        // Persist before publish: a session that didn't land is not a sign-in.
+        guard await store.saveChecked(session) == .saved else { throw AuthError.sessionNotSaved }
         return session
     }
 

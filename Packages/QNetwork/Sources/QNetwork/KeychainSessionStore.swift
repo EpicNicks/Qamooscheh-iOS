@@ -27,10 +27,22 @@ public actor KeychainSessionStore: SessionStore {
         var refreshToken: String
     }
 
-    private let client: KeychainClient
+    /// errSecDiskFull
+    private static let diskFullStatus: Int32 = -34
+    private static let writeAttempts = 3
 
-    public init(client: KeychainClient = SecItemKeychainClient()) {
+    private let client: KeychainClient
+    private let freeBytes: @Sendable () -> Int64?
+    private let notice: StorageNotice?
+
+    public init(
+        client: KeychainClient = SecItemKeychainClient(),
+        freeBytes: @escaping @Sendable () -> Int64? = { StorageNotice.freeBytes() },
+        notice: StorageNotice? = StorageNotice.shared
+    ) {
         self.client = client
+        self.freeBytes = freeBytes
+        self.notice = notice
     }
 
     public func load() async -> StoredSession? {
@@ -54,20 +66,43 @@ public actor KeychainSessionStore: SessionStore {
     }
 
     public func save(_ session: StoredSession) async {
+        _ = await saveChecked(session)
+    }
+
+    /// Writes with a few retries. A write that never lands deletes the item (a rotated-out refresh
+    /// token left behind would trip reuse detection at the next launch and revoke every session).
+    public func saveChecked(_ session: StoredSession) async -> SessionSaveResult {
         let blob = Blob(
             userId: session.userId,
             accessToken: session.accessToken,
             accessTokenExpiresAt: session.accessTokenExpiresAt.timeIntervalSince1970,
             refreshToken: session.refreshToken
         )
-        guard let data = try? JSONEncoder().encode(blob) else { return }
-        do {
-            try client.set(data)
-        } catch {
-            // A failed write would leave the rotated-out refresh token stored; replaying it
-            // trips reuse detection and revokes every session. Worst case is now sign-out.
-            try? client.delete()
+        guard let data = try? JSONEncoder().encode(blob) else { return .failed }
+        var lastStatus: Int32?
+        for _ in 0..<KeychainSessionStore.writeAttempts {
+            do {
+                try client.set(data)
+                return .saved
+            } catch let error as KeychainError {
+                lastStatus = error.status
+            } catch {
+                lastStatus = nil
+            }
         }
+        try? client.delete()
+        if isLowStorage(status: lastStatus) {
+            notice?.post()
+            return .lowStorage
+        }
+        return .failed
+    }
+
+    /// Out of space, not just any failure: a full disk, or under the threshold left.
+    private func isLowStorage(status: Int32?) -> Bool {
+        if status == KeychainSessionStore.diskFullStatus { return true }
+        if let free = freeBytes() { return free < StorageNotice.lowBytes }
+        return false
     }
 
     public func clear() async {

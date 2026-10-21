@@ -57,6 +57,8 @@ public enum AuthRules {
                 return nonEmpty(m) ?? fallback
             case .tooManyAttempts(let m):
                 return nonEmpty(m) ?? tooManyRequests
+            case .sessionNotSaved:
+                return sessionNotSaved
             case .other(let api):
                 return message(for: api, fallback: fallback)
             }

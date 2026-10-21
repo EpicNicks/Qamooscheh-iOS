@@ -39,6 +39,12 @@ public struct StaleRefreshError: Error, Equatable, Sendable {
     public init() {}
 }
 
+/// The signed-in account changed while a request was being made or retried. The request is dropped
+/// rather than sent under, or applied to, the other account.
+public struct AccountChangedError: Error, Equatable, Sendable {
+    public init() {}
+}
+
 /// The response was not an HTTP response.
 public struct InvalidResponseError: Error, Equatable, Sendable {
     public init() {}
