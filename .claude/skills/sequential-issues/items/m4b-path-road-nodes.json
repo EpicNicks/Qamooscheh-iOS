@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Learn/: SkillRoad, SkillNode, SkillGroupNode, PlacementTestNode views using QDomain roadLayout output and QDesign tokens. Read web src/components/path/SkillRoad.tsx, SkillNode.tsx, SkillGroupNode.tsx, PlacementTestNode.tsx and their .module.css. Android reference: feature/learn/.../SkillRoad.kt, SkillNode.kt, PathTheme.kt. Snapshot the states: locked, current, completed, golden/crowned, placement node, RTL course, light and dark. Views take plain value inputs (no repositories). Where web and Android differ, match the Android app's behaviour (see feature/learn/.../SkillRoad.kt).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Learn/",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",

@@ -9,7 +9,8 @@
     "^Packages/QData/Sources/QData/Content/",
     "^Packages/QData/Tests/QDataTests/",
     "^Packages/QFeatures/Sources/QFeatures/Learn/UpdateBanner",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",

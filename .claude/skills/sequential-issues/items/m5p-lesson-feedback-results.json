@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/: AnswerFeedback panel, SessionProgressBar, XpBurst, LessonResults, ReportIssue sheet (posts via web src/api/exerciseReport.ts; wire in C:/Users/epicn/source/repos/Qamooscheh/src/Qamooscheh.Api/ExerciseReports/ExerciseReportContracts.cs). Read web src/components/lesson/AnswerFeedback.tsx, SessionProgressBar.tsx, XpBurst.tsx, LessonResults.tsx, ReportIssue.tsx. Android reference: feature/lesson/.../LessonScreen.kt, ExerciseReport.kt, GoalCelebration.kt. Snapshots: correct, wrong with mistake hint, results with streak/goal. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../LessonScreen.kt).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Lesson/",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",

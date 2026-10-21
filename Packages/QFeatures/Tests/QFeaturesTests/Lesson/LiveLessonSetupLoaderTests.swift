@@ -81,8 +81,9 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
     }
 
     func testCheckpointPlanOnAnotherVersionRefreshesThenTellsTheLearner() async throws {
-        var plan = checkpointPlan()
-        plan.courseVersion = 5
+        var planned = checkpointPlan()
+        planned.courseVersion = 5
+        let plan = planned
         let skill = SkillArtifact(id: "a", title: "A", exercises: [bank("x"), bank("y")])
         let content = LessonContentSource(skill: { _, _, _ in skill }, skillAtPath: { _, _ in nil }, themes: { _ in nil })
         let stale = LiveLessonSetupLoader(

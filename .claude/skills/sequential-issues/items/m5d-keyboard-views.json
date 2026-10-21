@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/Keyboard/: ScriptKeyboardView, VirtualKey (candidate bubble above the pressed key, drawn by us), PhoneticCandidatePicker, VirtualCaret, bound to the QKeyboard engine. Read web src/components/lesson/PersianKeyboard.tsx, JapaneseKanaKeyboard.tsx, PhoneticCandidatePicker.tsx, VirtualCaret.tsx, keyboard/VirtualKey.tsx and css modules. Android reference: feature/lesson/.../TypeInKeyboard.kt and keyboard/.../ScriptKeyboard.kt. Snapshots: Persian native, Persian phonetic with candidates, kana, kana with dakuten pressed, dark mode, iPhone SE width. Key hit-target size and haptics are visual/device judgements. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../TypeInKeyboard.kt).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Lesson/Keyboard/",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",

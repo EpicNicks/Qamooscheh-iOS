@@ -15,7 +15,7 @@
   ],
   "requiresDocs": false,
   "allowProtocol": false,
-  "gate": "needs M0 merged and the grader fixture source named by the user",
-  "approved": false,
+  "gate": null,
+  "approved": true,
   "reviewer": "opus"
 }

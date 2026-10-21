@@ -7,7 +7,8 @@
   "issue": "Packages/QFeatures/Sources/QFeatures/Lesson/Exercises/: TypeInExercise (in-app keyboard from m5d, typed-answer marks via QDomain typedAnswerMarks, system keyboard suppressed), SpeakExercise, PlayAudioButton, NoVoiceButton using SpeechService. Read web src/components/lesson/TypeInExercise.tsx, SpeakExercise.tsx, PlayAudioButton.tsx, NoVoiceButton.tsx. Android reference: feature/lesson/.../Exercises.kt and TypeInKeyboard.kt. Snapshots: empty, typed, marked wrong with diff, no-voice state, both scripts. Speech recognition is out of scope unless the web exercise requires it; report what the web does in the PR body. Where web and Android differ, match the Android app's behaviour (see feature/lesson/.../Exercises.kt).",
   "allowedPaths": [
     "^Packages/QFeatures/Sources/QFeatures/Lesson/Exercises/",
-    "^Packages/QFeatures/Tests/QFeaturesTests/"
+    "^Packages/QFeatures/Tests/QFeaturesTests/",
+    "^App/"
   ],
   "acceptance": [
     "CI green (swift test per package, xcodebuild test)",
