@@ -1,0 +1,20 @@
+{
+  "name": "f15-standard-lesson-version-check",
+  "repo": "ios",
+  "branch": "f15-standard-lesson-version-check",
+  "title": "A standard lesson shows the course version it submits under",
+  "closes": null,
+  "issue": "Issue #14: when the session plan for a standard lesson names a course version other than the one loaded, refresh the course once; if it still is not on the device, throw LessonLoadError.courseUpdated (message 'This Parsle was updated. Reopen it to continue.'). Never show one version's exercises as another's. Mirror LiveLessonSetupLoader.checkpointSetup, which already does this for checkpoints. Review note: course() re-fetches the bootstrap, so compare against the version actually on disk if CourseRef.version can differ from the downloaded files. Needs a standard-lesson plan flow, so land after f11. Add a focused test.",
+  "allowedPaths": [
+    "^Packages/QFeatures/Sources/QFeatures/Lesson/",
+    "^Packages/QFeatures/Tests/QFeaturesTests/"
+  ],
+  "acceptance": [
+    "CI green (swift test per package, xcodebuild test)"
+  ],
+  "requiresDocs": false,
+  "allowProtocol": false,
+  "gate": "needs f11 merged",
+  "approved": false,
+  "reviewer": "opus"
+}

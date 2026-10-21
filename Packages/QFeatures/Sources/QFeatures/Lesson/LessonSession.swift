@@ -49,6 +49,8 @@ public struct LessonDependencies {
     public var submitCheckpoint: CheckpointSubmitFunction?
     /// Told which submissions this lesson's own end screen reports as rejected, so the background banner doesn't repeat them.
     public var onRejectionShown: @Sendable ([String]) -> Void
+    /// Where a finished checkpoint's answers wait for the send; survives a kill.
+    public var checkpointDraft: CheckpointDraftStore
     /// Mints a checkpoint's submission id (once per attempt; a retry after a failed send reuses it).
     public var newSubmissionId: () -> String
 
@@ -72,8 +74,10 @@ public struct LessonDependencies {
         now: @escaping () -> Date = { Date() },
         submitCheckpoint: CheckpointSubmitFunction? = nil,
         newSubmissionId: @escaping () -> String = { UUID().uuidString.lowercased() },
-        onRejectionShown: @escaping @Sendable ([String]) -> Void = { _ in }
+        onRejectionShown: @escaping @Sendable ([String]) -> Void = { _ in },
+        checkpointDraft: CheckpointDraftStore = .none
     ) {
+        self.checkpointDraft = checkpointDraft
         self.onRejectionShown = onRejectionShown
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
@@ -157,7 +161,7 @@ public final class LessonSession: ObservableObject {
     private var deliveryTask: Task<Void, Never>?
     /// A checkpoint's answers by instance key. Not marked and not saved to disk: all sent at the end, or lost on leaving.
     private var checkpointAnswers: [String: String] = [:]
-    private let checkpointSubmissionId: String
+    private var checkpointSubmissionId: String
     /// Stamped on the first send and reused by every retry, like the submission id.
     private var checkpointOccurredAt: Date?
 
@@ -205,6 +209,14 @@ public final class LessonSession: ObservableObject {
         }
         // A draft saved at the very end (killed while saving): deliver it again; the queue dedupes by submission id.
         if setup.checkpoint == nil && engine.state.finished && !engine.state.items.isEmpty { finish(resumed: true) }
+        // A checkpoint killed at "Ready to submit": its answers, id and time come back, so the send is the same request.
+        if setup.checkpoint != nil, let saved = dependencies.checkpointDraft.load(),
+           !saved.answers.isEmpty, Set(saved.answers.keys) == Set(setup.instances.map { $0.key }) {
+            checkpointAnswers = saved.answers
+            checkpointSubmissionId = saved.submissionId
+            checkpointOccurredAt = saved.occurredAt
+            while !engine.state.finished && !engine.state.queue.isEmpty { engine.advancePastCurrent() }
+        }
         // A checkpoint with nothing to ask is still submitted, to move the learner on.
         if setup.checkpoint != nil && engine.state.finished { phase = .checkpointReady }
     }
@@ -338,6 +350,10 @@ public final class LessonSession: ObservableObject {
         resetAnswer()
         if engine.state.finished {
             phase = .checkpointReady
+            let occurredAt = checkpointOccurredAt ?? deps.now()
+            checkpointOccurredAt = occurredAt
+            deps.checkpointDraft.save(CheckpointDraft(
+                submissionId: checkpointSubmissionId, occurredAt: occurredAt, answers: checkpointAnswers))
         } else {
             rebuildKeyboard()
             exerciseShown()
@@ -366,6 +382,7 @@ public final class LessonSession: ObservableObject {
                 guard let self = self else { return }
                 let outcome = CheckpointOutcome(response)
                 if outcome.passed { self.emit(.lessonComplete) }
+                self.deps.checkpointDraft.clear()
                 self.phase = .checkpointDone(outcome)
             } catch {
                 self?.checkpointError = CheckpointLogic.submitFailure
@@ -466,17 +483,18 @@ public final class LessonSession: ObservableObject {
                 return
             }
             deps.draft.clear()
+            let end = LessonScreenLogic.endKind(results: delivery.results, locallyCompleted: work.locallyCompleted, practice: practice)
+            if !practice && LessonSession.countsAsCompleted(end) { deps.onLessonCounted() }
+            var extras = LessonResultsExtras.none
+            if !practice { extras = await deps.loadExtras() }
+            // Gone with the lesson screen: leave the rejection for the background banner.
+            guard let self = self else { return }
             // A rejection returned to this open lesson shows on its own end screen only.
             let shown = zip(work.sessions, delivery.results).compactMap { pair -> String? in
                 if case .rejected = pair.1 { return pair.0.submissionId }
                 return nil
             }
             if !shown.isEmpty { deps.onRejectionShown(shown) }
-            let end = LessonScreenLogic.endKind(results: delivery.results, locallyCompleted: work.locallyCompleted, practice: practice)
-            if !practice && LessonSession.countsAsCompleted(end) { deps.onLessonCounted() }
-            var extras = LessonResultsExtras.none
-            if !practice { extras = await deps.loadExtras() }
-            guard let self = self else { return }
             let state = work.state
             self.stats = LessonResultsStats(
                 correct: state.firstTryCorrect, total: state.totalCount, score: state.score, xp: state.xp,
@@ -513,6 +531,7 @@ public final class LessonSession: ObservableObject {
     /// Leaving the lesson: stops speech, and drops the draft of a lesson abandoned part way.
     public func leave() {
         deps.speech?.stop()
+        if phase == .active || phase == .checkpointReady { deps.checkpointDraft.clear() }
         if phase == .active {
             deps.draft.clear()
             deps.practiceDraft?.clear()

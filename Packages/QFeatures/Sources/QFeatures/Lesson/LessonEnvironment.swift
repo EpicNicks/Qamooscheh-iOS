@@ -274,6 +274,7 @@ public struct LessonEnvironment {
         let loader = self.loader
         let submit = self.submit
         let enqueue = self.enqueue
+        var checkpointDraft = CheckpointDraftStore.none
         var checkpointSend: CheckpointSubmitFunction?
         if let send = self.submitCheckpoint {
             checkpointSend = { request in try await send(id, request) }
@@ -286,6 +287,9 @@ public struct LessonEnvironment {
                 practice: setup.practice, checkpoint: setup.isCheckpoint
             )
             draft = LessonDraftStore.file(directory: directory, key: key)
+            if setup.isCheckpoint {
+                checkpointDraft = CheckpointDraftStore.file(directory: directory, key: CheckpointDraftStore.key(lessonKey: key))
+            }
             if !setup.practice {
                 let practiceKey = LessonDraftStore.key(
                     userId: id, courseCode: setup.courseCode, unitKey: route.unitKey, skillKey: route.skillKey,
@@ -312,7 +316,8 @@ public struct LessonEnvironment {
             onInstallVoice: onInstallVoice,
             makeReportModel: makeReportModel,
             submitCheckpoint: checkpointSend,
-            onRejectionShown: { ids in Task { await dismiss(id, ids) } }
+            onRejectionShown: { ids in Task { await dismiss(id, ids) } },
+            checkpointDraft: checkpointDraft
         )
         return LessonSession(setup: setup, prefs: prefs, serverPrefs: server, dependencies: deps)
     }

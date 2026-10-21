@@ -145,7 +145,10 @@ public actor QueueFlusher {
             response = try await submitter.submit(sent)
         } catch {
             let message = QueueFlusher.describe(error)
-            try await queue.recordFailure(userId: userId, submissionIds: sentIds, error: message)
+            // The account changed mid-request: these items are not at fault, so leave their retry state alone.
+            if !(error is AccountChangedError) {
+                try await queue.recordFailure(userId: userId, submissionIds: sentIds, error: message)
+            }
             report.outcome = QueueFlusher.classify(error)
             report.nextRetryAtMillis = try await nextRetry(userId)
             return report
