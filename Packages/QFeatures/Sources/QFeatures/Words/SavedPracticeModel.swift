@@ -135,9 +135,17 @@ public final class SavedPracticeModel: ObservableObject {
                 state = .empty
             } else {
                 // The flashcards come too unless the learner narrows it, as before the choice existed.
-                state = .choosing(
-                    options: remixContentsOptions(hasFlashcards: !cards.isEmpty), selected: cards.isEmpty ? .all : .flashcardsAndAll,
-                    noneOfThat: false, hardcore: false)
+                let options = remixContentsOptions(hasFlashcards: !cards.isEmpty)
+                let fallback: RemixContents = cards.isEmpty ? .all : .flashcardsAndAll
+                var selected = fallback
+                if let settings = cloze?.settings {
+                    let prefs = await settings.load().prefs
+                    if let remembered = prefs.savedRemixContents.flatMap({ RemixContents(rawValue: $0) }) {
+                        selected = initialRemixContents(remembered: remembered, options: options, fallback: fallback)
+                    }
+                }
+                if mine != generation { return }
+                state = .choosing(options: options, selected: selected, noneOfThat: false, hardcore: false)
             }
         } catch {
             if isCancellation(error) { return }
@@ -167,6 +175,7 @@ public final class SavedPracticeModel: ObservableObject {
     /// Starts the Repack with what was chosen; stays on the choice, with a message, when the words have none of it (web `start`).
     public func start() async {
         guard case .choosing(let options, let selected, _, let hardcore) = state else { return }
+        remember(selected)
         if isClozeContents(selected) {
             await startCloze(options: options, hardcore: hardcore)
             return
@@ -190,12 +199,23 @@ public final class SavedPracticeModel: ObservableObject {
         }
     }
 
-    /// How each picked exercise will show, by `practiceExerciseKey`; empty when the lessons can't be read (the unknown ones then
-    /// stay only in the choices that keep everything). A composite exercise is judged as for a word with no card.
+    /// How each picked exercise will show, by `practiceExerciseKey`, as the lesson would show it for the learner's card on its
+    /// first word; empty when the lessons can't be read (the unknown ones then stay only in the choices that keep everything).
     private func renderTypes() async -> [String: ExerciseType] {
         guard let sentences = cloze?.sentences, !builtRefs.isEmpty,
               let found = try? await sentences.exercises(builtRefs, courseVersion: courseVersion) else { return [:] }
-        return found.mapValues { resolveExerciseType($0, cardState: nil) }
+        let held = store.cards
+        return found.mapValues { exercise in resolveExerciseType(exercise, cardState: exercise.tags.first.flatMap { held[$0] }) }
+    }
+
+    /// Opens the next saved-words Repack on this choice.
+    private func remember(_ contents: RemixContents) {
+        guard let settings = cloze?.settings else { return }
+        Task {
+            var prefs = await settings.load().prefs
+            prefs.savedRemixContents = contents.rawValue
+            settings.save(prefs)
+        }
     }
 
     /// The picked words' fill-in-the-blank round; words with no usable sentence are dropped, and none left is the empty choice.

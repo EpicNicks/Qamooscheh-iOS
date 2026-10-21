@@ -9,12 +9,12 @@ public struct RaceScreen: View {
     @ObservedObject private var model: RaceModel
     private let boards: RaceBoardsModel
     private let onExit: () -> Void
-    private let onEffect: (FeedbackEvent) -> Void
+    private let onEffect: ((FeedbackEvent) -> Void)?
     @State private var showingBoards = false
     @State private var confirmingLeave = false
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(model: RaceModel, boards: RaceBoardsModel, onExit: @escaping () -> Void, onEffect: @escaping (FeedbackEvent) -> Void = { _ in }) {
+    public init(model: RaceModel, boards: RaceBoardsModel, onExit: @escaping () -> Void, onEffect: ((FeedbackEvent) -> Void)? = nil) {
         self.model = model
         self.boards = boards
         self.onExit = onExit
@@ -40,11 +40,16 @@ public struct RaceScreen: View {
                 case .done(let mode, _, let response):
                     RaceResultsView(
                         mode: mode, response: response, onAgain: { model.again() }, onBoards: { showingBoards = true },
-                        onExit: onExit, onEffect: onEffect)
+                        onExit: onExit, onEffect: effect)
                 }
             }
         }
         .background(Color(argb: p.bg).ignoresSafeArea())
+    }
+
+    /// The device's sounds and haptics as the learner's prefs allow, unless the host supplies its own.
+    private var effect: (FeedbackEvent) -> Void {
+        return onEffect ?? { FeedbackEffects.shared.play($0, prefs: model.prefs) }
     }
 
     @ViewBuilder
@@ -63,7 +68,7 @@ public struct RaceScreen: View {
                 RaceHud(run: run, now: { model.now() }, onClose: { confirmingLeave = true })
                 ClozeCardView(
                     card: card, courseCode: run.courseCode, hardcore: run.hardcore, prefs: model.prefs, serverPrefs: model.serverPrefs,
-                    look: model.textLook, onPrefsChange: { model.savePrefs($0) }, onEffect: onEffect,
+                    look: model.textLook, onPrefsChange: { model.savePrefs($0) }, onEffect: effect,
                     onFinished: { result in Task { await model.finished(result) } })
                     .id("\(card.tag)#\(run.results.count)")
             }

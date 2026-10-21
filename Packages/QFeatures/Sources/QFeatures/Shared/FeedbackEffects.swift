@@ -1,5 +1,9 @@
 import Foundation
+import QData
 import QDomain
+#if canImport(UIKit) && !os(watchOS)
+import UIKit
+#endif
 
 /// Haptic patterns, mirroring Android's CONFIRM / REJECT / CLOCK_TICK / composed flourish.
 public enum HapticKind: Equatable, Sendable {
@@ -54,5 +58,23 @@ public final class FeedbackEffects {
            let name = FeedbackSound.fileName(for: event) {
             sfx.play(fileName: name, volume: FeedbackSound.volume)
         }
+    }
+}
+
+public extension FeedbackEffects {
+    /// The one player for the app: sound and haptics are device-wide.
+    static let shared = FeedbackEffects(haptics: SystemHaptics(), sfx: SystemSfx())
+
+    /// Plays `event` as the learner's device prefs allow. Nothing is speaking on the cards that use this.
+    func play(_ event: FeedbackEvent, prefs: LocalPrefs) {
+        perform(event, hapticsEnabled: prefs.hapticsEnabled, soundEnabled: prefs.soundEffectsEnabled, isSpeaking: false, reduceMotion: FeedbackEffects.reduceMotion)
+    }
+
+    private static var reduceMotion: Bool {
+        #if canImport(UIKit) && !os(watchOS)
+        return UIAccessibility.isReduceMotionEnabled
+        #else
+        return false
+        #endif
     }
 }

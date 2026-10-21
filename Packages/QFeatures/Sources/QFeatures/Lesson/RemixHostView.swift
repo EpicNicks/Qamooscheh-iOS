@@ -15,6 +15,11 @@ public struct RemixHostView: View {
 
     public var body: some View {
         let p = colorScheme == .dark ? AppPalette.dark : AppPalette.light
+        content(p).task { await model.prepare() }
+    }
+
+    @ViewBuilder
+    private func content(_ p: AppPalette) -> some View {
         switch model.stage {
         case .choosing(let selected, let none, let hardcore):
             RemixContentsPickerView(
