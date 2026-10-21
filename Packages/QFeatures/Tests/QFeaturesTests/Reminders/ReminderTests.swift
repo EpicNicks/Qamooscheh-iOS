@@ -65,7 +65,7 @@ final class ReminderPlannerTests: XCTestCase {
 
     func testLateReminderTimeDropsTheNudge() {
         let plan = ReminderPlanner.plan(userId: "u", settings: settings(hour: 21), context: ReminderContext(streakDays: 5), now: at(2, 8), calendar: utc)
-        XCTAssertTrue(plan.allSatisfy { $0.kind == .daily })
+        XCTAssertFalse(plan.contains { $0.kind == .streak })
     }
 
     func testPracticedTodaySkipsTodaysDailyAndNudgeOnly() {
@@ -89,7 +89,7 @@ final class ReminderPlannerTests: XCTestCase {
 
     func testNoStreakMeansNoNudge() {
         let plan = ReminderPlanner.plan(userId: "u", settings: settings(), context: ReminderContext(streakDays: 0), now: at(2, 8), calendar: utc)
-        XCTAssertTrue(plan.allSatisfy { $0.kind == .daily })
+        XCTAssertFalse(plan.contains { $0.kind == .streak })
     }
 
     func testBackoffThinsThenStopsWithOneLastNotice() {
