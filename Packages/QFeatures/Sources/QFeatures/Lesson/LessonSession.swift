@@ -466,17 +466,18 @@ public final class LessonSession: ObservableObject {
                 return
             }
             deps.draft.clear()
+            let end = LessonScreenLogic.endKind(results: delivery.results, locallyCompleted: work.locallyCompleted, practice: practice)
+            if !practice && LessonSession.countsAsCompleted(end) { deps.onLessonCounted() }
+            var extras = LessonResultsExtras.none
+            if !practice { extras = await deps.loadExtras() }
+            // Gone with the lesson screen: leave the rejection for the background banner.
+            guard let self = self else { return }
             // A rejection returned to this open lesson shows on its own end screen only.
             let shown = zip(work.sessions, delivery.results).compactMap { pair -> String? in
                 if case .rejected = pair.1 { return pair.0.submissionId }
                 return nil
             }
             if !shown.isEmpty { deps.onRejectionShown(shown) }
-            let end = LessonScreenLogic.endKind(results: delivery.results, locallyCompleted: work.locallyCompleted, practice: practice)
-            if !practice && LessonSession.countsAsCompleted(end) { deps.onLessonCounted() }
-            var extras = LessonResultsExtras.none
-            if !practice { extras = await deps.loadExtras() }
-            guard let self = self else { return }
             let state = work.state
             self.stats = LessonResultsStats(
                 correct: state.firstTryCorrect, total: state.totalCount, score: state.score, xp: state.xp,

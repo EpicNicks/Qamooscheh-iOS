@@ -212,6 +212,18 @@ final class QueueFlusherTests: XCTestCase {
         XCTAssertEqual(left, [])
     }
 
+    func testAccountChangeLeavesRetryStateAlone() async throws {
+        let queue = makeQueue()
+        try await queue.enqueue(userId: user, session: session("a"))
+        let submitter = MockSubmitter { _, _ in throw AccountChangedError() }
+        let flusher = QueueFlusher(queue: queue, submitter: submitter)
+        let report = try await flusher.flush(userId: user)
+        guard case .transientFailure = report.outcome else { return XCTFail("expected transient") }
+        let record = try await queue.records(userId: user).first
+        XCTAssertEqual(record?.attempts, 0)
+        XCTAssertNil(record?.lastError)
+    }
+
     func testRetryableStatusesAreTransient() async throws {
         for status in [408, 429, 500, 502, 503] {
             let queue = makeQueue()

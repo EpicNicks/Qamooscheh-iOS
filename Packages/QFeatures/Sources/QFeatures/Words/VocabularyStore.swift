@@ -178,5 +178,5 @@ public final class VocabularyStore: ObservableObject {
 
 /// A load cut short because its view went away (structured cancellation, or URLSession's cancelled error) is not a failure.
 func isCancellation(_ error: Error) -> Bool {
-    return error is CancellationError || (error as? URLError)?.code == .cancelled
+    return error is CancellationError || error is AccountChangedError || (error as? URLError)?.code == .cancelled
 }
