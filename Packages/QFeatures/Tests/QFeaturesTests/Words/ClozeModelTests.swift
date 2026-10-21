@@ -431,6 +431,66 @@ final class SavedPracticeClozeTests: XCTestCase {
         XCTAssertTrue(none)
     }
 
+    private func settings(saved: String?, log: Box<LocalPrefs>) -> ClozeSettings {
+        var prefs = LocalPrefs()
+        prefs.savedRemixContents = saved
+        return ClozeSettings(load: { (prefs, LessonServerPrefs()) }, save: { log.set($0) })
+    }
+
+    func testOpensOnWhatTheLastRepackHeldWhenThisOneOffersItAndRemembersTheNewChoice() async {
+        let (practice, sentences) = teaWords()
+        let log = Box<LocalPrefs>()
+        let source = FakeVocabSource()
+        source.loadHandler = { .ready(clozeContent) }
+        let model = SavedPracticeModel(
+            store: VocabularyStore(source: source), source: practice, submitter: nil,
+            cloze: ClozeServices(practice: practice, sentences: sentences, settings: settings(saved: "type_in", log: log)), newId: { "sub-1" })
+        await model.load()
+        guard case .choosing(_, let selected, _, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertEqual(selected, .typeIn)
+        model.selectContents(.all)
+        await model.start()
+        for _ in 0..<50 where log.value == nil { await Task.yield() }
+        XCTAssertEqual(log.value?.savedRemixContents, "all")
+    }
+
+    func testARememberedChoiceThisRepackDoesNotOfferFallsBack() async {
+        let (practice, sentences) = teaWords()
+        let source = FakeVocabSource()
+        source.loadHandler = { .ready(clozeContent) }
+        // Flashcards only needs flashcards, and the remembered choice is not offered when there are none.
+        practice.handler = { _ in StarredPracticeResponse(courseVersion: 4, words: [StarredPracticeWord(tag: "gone", exercises: [ref(0)])]) }
+        let model = SavedPracticeModel(
+            store: VocabularyStore(source: source), source: practice, submitter: nil,
+            cloze: ClozeServices(practice: practice, sentences: sentences, settings: settings(saved: "flashcards", log: Box<LocalPrefs>())),
+            newId: { "sub-1" })
+        await model.load()
+        guard case .choosing(_, let selected, _, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertEqual(selected, .all)
+    }
+
+    func testAComposingExerciseIsJudgedByTheLearnersCard() async {
+        let (practice, sentences) = teaWords()
+        let composite = ExerciseArtifact(type: .typeIn, scriptMode: .native, prompt: "I like tea", tiles: ["a"], answer: [sentence], tags: [man, chai])
+        sentences.handler = { _, _ in ["u1/s1/0": composite] }
+        let source = FakeVocabSource()
+        source.loadHandler = { .ready(clozeContent) }
+        source.cards = [man: CardState(lexemeTag: man, stability: 5, difficulty: 5, reviewCount: 6, lapseCount: 0)]
+        let model = SavedPracticeModel(
+            store: VocabularyStore(source: source), source: practice, submitter: nil,
+            cloze: ClozeServices(practice: practice, sentences: sentences), newId: { "sub-1" })
+        await model.load()
+        // A well-known first word shows the exercise as typing, not as a word bank.
+        model.selectContents(.wordBank)
+        await model.start()
+        guard case .choosing(_, _, let none, _) = model.state else { return XCTFail("\(model.state)") }
+        XCTAssertTrue(none)
+        model.selectContents(.typeIn)
+        await model.start()
+        XCTAssertEqual(model.state, .cardsDone(
+            known: 0, total: 0, xp: 0, exercises: SavedPracticeExercises(courseVersion: 4, exercises: "u1/s1/0", count: 1)))
+    }
+
     func testTheFilteredChoicesReadTheLessonsToTellWhichExercisesAreTyped() async {
         let (practice, sentences) = teaWords()
         let model = makeModel(practice, sentences)

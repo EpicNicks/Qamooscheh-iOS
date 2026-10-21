@@ -27,17 +27,27 @@ public final class RemixHostModel: ObservableObject {
     private let store: VocabularyStore
     private let makeRound: (ClozeDeck, Bool) -> ClozeRoundModel
     private let pick: (Int) -> Int
+    private let settings: ClozeSettings
 
     public init(
         route: LessonRoute, environment: LessonEnvironment, store: VocabularyStore,
         makeRound: @escaping (ClozeDeck, Bool) -> ClozeRoundModel,
+        settings: ClozeSettings = .standard,
         pick: @escaping (Int) -> Int = { Int.random(in: 0..<max($0, 1)) }
     ) {
         self.route = route
         self.environment = environment
         self.store = store
         self.makeRound = makeRound
+        self.settings = settings
         self.pick = pick
+    }
+
+    /// Opens the choice on what the last topics Repack held, when this one offers it.
+    public func prepare() async {
+        let remembered = await settings.load().prefs.lessonRemixContents.flatMap { RemixContents(rawValue: $0) }
+        guard let kept = remembered, options.contains(kept), case .choosing(_, let none, let hardcore) = stage else { return }
+        stage = .choosing(selected: kept, noneOfThat: none, hardcore: hardcore)
     }
 
     public func select(_ contents: RemixContents) {
@@ -55,6 +65,7 @@ public final class RemixHostModel: ObservableObject {
     /// Starts the Repack with what was chosen, or says it has none of that kind and stays on the choice.
     public func start() async {
         guard case .choosing(let selected, _, let hardcore) = stage else { return }
+        remember(selected)
         stage = .working
         do {
             if isClozeContents(selected) {
@@ -66,6 +77,15 @@ public final class RemixHostModel: ObservableObject {
             }
         } catch {
             stage = .failed(LessonScreenLogic.loadFailureMessage(for: error))
+        }
+    }
+
+    private func remember(_ contents: RemixContents) {
+        let settings = self.settings
+        Task {
+            var prefs = await settings.load().prefs
+            prefs.lessonRemixContents = contents.rawValue
+            settings.save(prefs)
         }
     }
 

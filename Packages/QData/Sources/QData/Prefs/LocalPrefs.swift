@@ -64,6 +64,9 @@ public struct LocalPrefs: Codable, Equatable, Sendable {
     public var reminderEnabled = false
     public var reminderHour = 19
     public var reminderMinute = 0
+    /// What the last saved-words and topics Repacks held (`RemixContents` raw values), so the next one opens on it; nil before a first choice.
+    public var savedRemixContents: String?
+    public var lessonRemixContents: String?
 
     public init() {}
 
@@ -76,6 +79,7 @@ public struct LocalPrefs: Codable, Equatable, Sendable {
         case shuffleVoices, hapticsEnabled, soundEffectsEnabled, lessonsCompleted
         case reviewPromptShown, notificationPermissionAsked
         case reminderEnabled, reminderHour, reminderMinute
+        case savedRemixContents, lessonRemixContents
     }
 
     public init(from decoder: Decoder) throws {
@@ -114,6 +118,8 @@ public struct LocalPrefs: Codable, Equatable, Sendable {
         reminderEnabled = value(.reminderEnabled, d.reminderEnabled)
         reminderHour = min(23, max(0, value(.reminderHour, d.reminderHour)))
         reminderMinute = min(59, max(0, value(.reminderMinute, d.reminderMinute)))
+        savedRemixContents = value(.savedRemixContents, d.savedRemixContents)
+        lessonRemixContents = value(.lessonRemixContents, d.lessonRemixContents)
     }
 }
 

@@ -220,11 +220,12 @@ struct ClozeCardView: View {
 public struct ClozeRoundView: View {
     @ObservedObject private var model: ClozeRoundModel
     private let onExit: () -> Void
-    private let onEffect: (FeedbackEvent) -> Void
+    private let onEffect: ((FeedbackEvent) -> Void)?
     @State private var confirmingLeave = false
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(model: ClozeRoundModel, onExit: @escaping () -> Void, onEffect: @escaping (FeedbackEvent) -> Void = { _ in }) {
+    /// `onEffect` defaults to the device's sounds and haptics, as the learner's prefs allow.
+    public init(model: ClozeRoundModel, onExit: @escaping () -> Void, onEffect: ((FeedbackEvent) -> Void)? = nil) {
         self.model = model
         self.onExit = onExit
         self.onEffect = onEffect
@@ -281,7 +282,7 @@ public struct ClozeRoundView: View {
             .padding(.vertical, Spacing.standard.s1)
             ClozeCardView(
                 card: card, courseCode: model.courseCode, hardcore: model.hardcore, prefs: model.prefs, serverPrefs: model.serverPrefs,
-                look: model.textLook, onPrefsChange: { model.savePrefs($0) }, onEffect: onEffect,
+                look: model.textLook, onPrefsChange: { model.savePrefs($0) }, onEffect: onEffect ?? { FeedbackEffects.shared.play($0, prefs: model.prefs) },
                 onFinished: { result in Task { await model.finished(result) } })
                 .id("\(card.tag)#\(model.results.count)")
         }

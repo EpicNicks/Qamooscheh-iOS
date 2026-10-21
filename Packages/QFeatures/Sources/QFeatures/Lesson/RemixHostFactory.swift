@@ -14,6 +14,6 @@ public extension SignedInShell {
             ClozeRoundModel(
                 store: store, services: services, submitter: submitter, hardcore: hardcore, handed: deck,
                 onUnauthorized: unauthorized)
-        })
+        }, settings: services.settings)
     }
 }

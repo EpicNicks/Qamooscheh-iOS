@@ -393,6 +393,18 @@ final class PrefsTests: XCTestCase {
         XCTAssertEqual(store.current(userId: "a"), LocalPrefs())
     }
 
+    func testLocalPrefsRememberTheLastRepackContents() {
+        let store = LocalPrefsStore(defaults: makeDefaults())
+        XCTAssertNil(store.current(userId: "u").savedRemixContents)
+        XCTAssertNil(store.current(userId: "u").lessonRemixContents)
+        _ = store.update(userId: "u") {
+            $0.savedRemixContents = "cloze"
+            $0.lessonRemixContents = "type_in"
+        }
+        XCTAssertEqual(store.current(userId: "u").savedRemixContents, "cloze")
+        XCTAssertEqual(store.current(userId: "u").lessonRemixContents, "type_in")
+    }
+
     func testLocalPrefsToleratesOldAndCorruptBlobs() throws {
         let defaults = makeDefaults()
         let store = LocalPrefsStore(defaults: defaults)
