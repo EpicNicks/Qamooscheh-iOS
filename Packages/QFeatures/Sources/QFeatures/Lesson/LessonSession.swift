@@ -158,6 +158,8 @@ public final class LessonSession: ObservableObject {
     /// A checkpoint's answers by instance key. Not marked and not saved to disk: all sent at the end, or lost on leaving.
     private var checkpointAnswers: [String: String] = [:]
     private let checkpointSubmissionId: String
+    /// Stamped on the first send and reused by every retry, like the submission id.
+    private var checkpointOccurredAt: Date?
 
     /// What `finish` hands to the delivery step, kept so a failed save can be retried.
     private struct PendingDelivery {
@@ -350,9 +352,11 @@ public final class LessonSession: ObservableObject {
         guard phase == .checkpointReady, let info = setup.checkpoint else { return }
         phase = .checkpointSubmitting
         checkpointError = nil
+        let occurredAt = checkpointOccurredAt ?? deps.now()
+        checkpointOccurredAt = occurredAt
         let request = CheckpointLogic.request(
             info: info, instances: setup.instances, answers: checkpointAnswers,
-            submissionId: checkpointSubmissionId, occurredAt: deps.now()
+            submissionId: checkpointSubmissionId, occurredAt: occurredAt
         )
         let send = deps.submitCheckpoint
         deliveryTask = Task { @MainActor [weak self] in
