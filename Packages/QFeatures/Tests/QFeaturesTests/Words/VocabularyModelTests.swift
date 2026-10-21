@@ -153,6 +153,29 @@ final class VocabularyModelTests: XCTestCase {
         XCTAssertEqual(source.setCalls, ["c=true", "b=true", "a=false"])
     }
 
+    func testStarRequestsGoOneAtATimeAndLatestChoiceShows() async {
+        let source = FakeVocabSource()
+        let store = makeStore(source)
+        await store.refresh()
+        let gate = GateBox()
+        source.setHandler = { tag, starred in
+            if starred { await gate.wait(); return StarredVocabResponse(tags: ["a"], limit: 100, refused: []) }
+            return StarredVocabResponse(tags: [], limit: 100, refused: [])
+        }
+        let first = Task { await store.toggleStar("a") }
+        for _ in 0..<200 where source.setCalls.isEmpty { await Task.yield() }
+        let second = Task { await store.toggleStar("a") }
+        for _ in 0..<50 { await Task.yield() }
+        // The second tap is waiting its turn; the learner already sees their latest choice.
+        XCTAssertEqual(source.setCalls, ["a=true"])
+        XCTAssertEqual(store.starredTags, [])
+        gate.open()
+        await first.value
+        await second.value
+        XCTAssertEqual(source.setCalls, ["a=true", "a=false"])
+        XCTAssertEqual(store.starredTags, [])
+    }
+
     func testUnstarSendsAbsoluteStateAndClearsMessage() async {
         let source = FakeVocabSource()
         source.starredHandler = { StarredVocabResponse(tags: ["a", "b"], limit: 100, refused: []) }

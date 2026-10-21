@@ -198,10 +198,21 @@ public struct AppEnvironment: @unchecked Sendable {
             settingsVoices: { pinned in (try? reader.settingsVoices(pinned)) ?? [] },
             signOut: {
                 await MainActor.run { previewer?.stop() }
-                let uid = await userId()
-                await auth.logout()
-                // Forget the signed-out user's prefs and card mirror so the next account starts clean.
-                if let uid { await forget(uid) }
+                // Detached so the cleanup finishes even if the screen that started it goes away.
+                await Task.detached {
+                    let uid = await userId()
+                    await auth.logout()
+                    guard let uid else { return }
+                    // Forget the signed-out user's prefs and card mirror so the next account starts clean.
+                    await forget(uid)
+                    let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+                    let queue = OfflineQueue(storage: FileOfflineQueueStorage(
+                        directory: support.appendingPathComponent("offline-queue", isDirectory: true)))
+                    try? await queue.clear(userId: uid)
+                    LessonDraftStore.removeAll(
+                        directory: support.appendingPathComponent("lesson-drafts", isDirectory: true), userId: uid)
+                }.value
             },
             forgetUser: forget,
             previewer: previewer,

@@ -64,6 +64,8 @@ public final class VocabularyStore: ObservableObject {
     private var requestSeq = 0
     private var appliedSeq = 0
     private var pendingToken: [String: Int] = [:]
+    /// The tail of the star requests: each waits for the one before it, so they reach the server in tap order.
+    private var starQueue: Task<Void, Never>?
 
     public init(source: VocabularySource?, onUnauthorized: (@Sendable () -> Void)? = nil) {
         self.source = source
@@ -137,6 +139,16 @@ public final class VocabularyStore: ObservableObject {
         let seq = requestSeq
         let token = (pendingToken[tag] ?? 0) + 1
         pendingToken[tag] = token
+        let previous = starQueue
+        let turn = Task { @MainActor in
+            await previous?.value
+            await self.sendStar(tag: tag, want: want, seq: seq, token: token, source: source)
+        }
+        starQueue = turn
+        await turn.value
+    }
+
+    private func sendStar(tag: String, want: Bool, seq: Int, token: Int, source: VocabularySource) async {
         do {
             let response = try await source.setStarred(tag: tag, starred: want)
             starEpoch += 1
