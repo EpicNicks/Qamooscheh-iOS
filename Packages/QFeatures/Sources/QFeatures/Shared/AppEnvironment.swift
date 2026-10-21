@@ -131,7 +131,8 @@ public struct AppEnvironment: @unchecked Sendable {
                 await signOutAction()
                 await afterSignOut?()
             },
-            previewer: previewer)
+            previewer: previewer,
+            reenable: reminders == nil ? nil : ReenablePromptStore())
     }
 
     /// The app's environment: one ApiClient on `sessions`, course files and the card mirror under Application Support/content

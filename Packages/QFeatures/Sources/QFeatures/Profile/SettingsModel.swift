@@ -37,6 +37,7 @@ public final class SettingsModel: ObservableObject {
     private let sync: PrefsSync
     private let localStore: LocalPrefsStore
     private let scheduler: ReminderScheduling
+    private let reenable: ReenablePromptStore?
     private var pauseObserver: AnyCancellable?
     private let signOutAction: (() async throws -> Void)?
     private let previewer: VoicePreviewing?
@@ -52,8 +53,10 @@ public final class SettingsModel: ObservableObject {
         voices: [SettingsVoice] = [],
         accountName: String? = nil,
         signOut: (() async throws -> Void)? = nil,
-        previewer: VoicePreviewing? = nil
+        previewer: VoicePreviewing? = nil,
+        reenable: ReenablePromptStore? = nil
     ) {
+        self.reenable = reenable
         self.userId = userId
         self.courseCode = courseCode
         self.sync = sync
@@ -160,6 +163,13 @@ public final class SettingsModel: ObservableObject {
     public func updateReminders(_ change: (inout ReminderSettings) -> Void) {
         var next = reminders
         change(&next)
+        if reminders.enabled != next.enabled {
+            if next.enabled {
+                reenable?.recordEnabled(userId: userId)
+            } else {
+                reenable?.recordDisabled(userId: userId, nowMillis: Int64(Date().timeIntervalSince1970 * 1000))
+            }
+        }
         reminders = next
         scheduler.apply(next)
         local = localStore.update(userId: userId) {
