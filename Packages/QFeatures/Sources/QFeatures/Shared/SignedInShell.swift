@@ -149,6 +149,13 @@ public final class SignedInShell: ObservableObject {
             enrolledCount: bootstrap?.enrolledCourseCodes.count ?? 0,
             activity: days ?? (keepContext ? profile.context.activity : []),
             dailyGoalXp: goalXp ?? (keepContext ? profile.context.dailyGoalXp : nil))
+        // Fresh facts about today replan the learner's reminders (and drop any left by another account).
+        if let reminders = app.reminders, let user = uid {
+            let goalMet = goal.map { $0.goal > 0 && $0.xp >= $0.goal } ?? false
+            await reminders.refresh(userId: user, context: ReminderContext(
+                practicedToday: streak?.practicedToday ?? false, pausedToday: streak?.pausedToday ?? false,
+                streakDays: streak?.currentStreakDays ?? 0, goalMetToday: goalMet))
+        }
         if modelsCourse == nil || modelsCourse! != course?.code {
             let switched = modelsCourse != nil
             modelsCourse = .some(course?.code)

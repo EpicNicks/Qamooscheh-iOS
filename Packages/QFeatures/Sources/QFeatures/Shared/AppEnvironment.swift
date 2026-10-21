@@ -3,6 +3,9 @@ import QModel
 import QDomain
 import QNetwork
 import QData
+#if canImport(UserNotifications)
+import UserNotifications
+#endif
 #if canImport(AVFoundation)
 import AVFoundation
 #endif
@@ -46,6 +49,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let forgetUser: @Sendable (_ userId: String) async -> Void
     /// The voice sample player; nil in tests.
     public let previewer: VoicePreviewing?
+    /// Schedules the learner's reminders; nil in tests and previews.
+    public let reminders: ReminderService?
 
     public init(
         profile: ProfileService,
@@ -69,8 +74,10 @@ public struct AppEnvironment: @unchecked Sendable {
         contacts: ContactsService? = nil,
         contactEmails: ContactEmailReading? = nil,
         clozeSentences: ClozeSentenceSource? = nil,
-        race: RaceService? = nil
+        race: RaceService? = nil,
+        reminders: ReminderService? = nil
     ) {
+        self.reminders = reminders
         self.clozeSentences = clozeSentences
         self.race = race
         self.contacts = contacts
@@ -108,14 +115,17 @@ public struct AppEnvironment: @unchecked Sendable {
         course: CourseRef,
         accountName: String?,
         localStore: LocalPrefsStore = LocalPrefsStore(),
-        scheduler: ReminderScheduling = StubReminderScheduler(),
+        scheduler: ReminderScheduling? = nil,
         afterSignOut: (@Sendable () async -> Void)? = nil
     ) -> SettingsModel {
         let signOutAction = signOut
+        let reminderScheduler: ReminderScheduling = scheduler
+            ?? reminders.map { LiveReminderScheduler(userId: userId, service: $0) }
+            ?? StubReminderScheduler()
         return SettingsModel(
             userId: userId, courseCode: course.code,
             sync: makePrefsSync(userId, course.code), localStore: localStore,
-            scheduler: scheduler, streakService: streak,
+            scheduler: reminderScheduler, streakService: streak,
             voices: settingsVoices(course), accountName: accountName,
             signOut: {
                 await signOutAction()
@@ -136,7 +146,9 @@ public struct AppEnvironment: @unchecked Sendable {
         #else
         let previewer: VoicePreviewing? = nil
         #endif
-        return live(client: client, sessions: sessions, contentStore: store, previewer: previewer)
+        return live(
+            client: client, sessions: sessions, contentStore: store, previewer: previewer,
+            reminders: systemReminders(currentUserId: { await sessions.load()?.userId }))
     }
 
     /// Builds the environment on `client`, reading course files and the card mirror from `contentStore`.
@@ -145,7 +157,8 @@ public struct AppEnvironment: @unchecked Sendable {
         sessions: SessionStore,
         contentStore: ContentFileStore,
         afterFlashcardSubmit: (@Sendable () async -> Void)? = nil,
-        previewer: VoicePreviewing? = nil
+        previewer: VoicePreviewing? = nil,
+        reminders: ReminderService? = nil
     ) -> AppEnvironment {
         let auth = AuthApi(client: client, store: sessions)
         let reader = CourseContentReader(store: contentStore)
@@ -171,6 +184,7 @@ public struct AppEnvironment: @unchecked Sendable {
         let prefsProvider = PrefsSyncProvider(api: PrefsRepository(client: client))
         let forget: @Sendable (String) async -> Void = { uid in
             guard !uid.isEmpty else { return }
+            await reminders?.cancelAll()
             await prefsProvider.clear(userId: uid)
             try? await cardStore.clear(userId: uid)
         }
@@ -201,6 +215,7 @@ public struct AppEnvironment: @unchecked Sendable {
                 // Detached so the cleanup finishes even if the screen that started it goes away.
                 await Task.detached {
                     let uid = await userId()
+                    await reminders?.cancelAll()
                     await auth.logout()
                     guard let uid else { return }
                     // Forget the signed-out user's prefs and card mirror so the next account starts clean.
@@ -220,7 +235,8 @@ public struct AppEnvironment: @unchecked Sendable {
             contacts: ContactsRepository(client: client),
             contactEmails: systemContactEmails(),
             clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned),
-            race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit))
+            race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit),
+            reminders: reminders)
     }
 }
 
@@ -245,6 +261,18 @@ enum PinCache {
         guard let key = key(userId: userId), let data = try? store.read(key) else { return nil }
         return try? QJSON.makeDecoder().decode(CourseRef.self, from: data)
     }
+}
+
+/// The real notification center with the account-checking delegate installed; nil where there is none.
+private func systemReminders(currentUserId: @escaping @Sendable () async -> String?) -> ReminderService? {
+    #if canImport(UserNotifications)
+    let center = SystemReminderCenter()
+    let delegate = ReminderNotificationDelegate(center: center, currentUserId: currentUserId)
+    UNUserNotificationCenter.current().delegate = delegate
+    return ReminderService(center: center, retaining: [delegate])
+    #else
+    return nil
+    #endif
 }
 
 private func systemContactEmails() -> ContactEmailReading? {
