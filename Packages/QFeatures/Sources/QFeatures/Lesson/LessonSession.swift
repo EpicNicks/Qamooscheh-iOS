@@ -38,6 +38,8 @@ public struct LessonDependencies {
     public var speech: SpeechService?
     public var courseHints: [String: WordHint]
     public var onFeedback: (FeedbackEvent) -> Void
+    /// Plays each feedback event's sound and haptic as the learner's prefs allow; nil plays nothing (tests).
+    public var effects: FeedbackEffects?
     public var onInstallVoice: () -> Void
     /// Builds the report form for the answer under review; nil hides "Report".
     public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
@@ -62,6 +64,7 @@ public struct LessonDependencies {
         speech: SpeechService? = nil,
         courseHints: [String: WordHint] = emptyHintMap,
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
+        effects: FeedbackEffects? = nil,
         onInstallVoice: @escaping () -> Void = {},
         makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
         now: @escaping () -> Date = { Date() },
@@ -81,6 +84,7 @@ public struct LessonDependencies {
         self.speech = speech
         self.courseHints = courseHints
         self.onFeedback = onFeedback
+        self.effects = effects
         self.onInstallVoice = onInstallVoice
         self.makeReportModel = makeReportModel
         self.now = now
@@ -253,11 +257,17 @@ public final class LessonSession: ObservableObject {
         return { make(shown) }
     }
 
+    /// Tells the host a feedback event happened and plays its sound and haptic.
+    private func emit(_ event: FeedbackEvent) {
+        deps.onFeedback(event)
+        deps.effects?.play(event, prefs: prefs, isSpeaking: deps.speech?.isSpeaking ?? false)
+    }
+
     // MARK: Answering
 
     public func setTileAnswer(_ answer: String?) {
         tileAnswer = answer
-        deps.onFeedback(.tilePlaced)
+        emit(.tilePlaced)
     }
 
     public func markHintUsed() { usedHint = true }
@@ -308,8 +318,8 @@ public final class LessonSession: ObservableObject {
         let shown = FeedbackReview(feedback: outcome.feedback, instance: current, submittedText: text, xp: outcome.xpGained)
         review = shown
         switch outcome.feedback.verdict {
-        case .correct, .acceptedWithCorrection: deps.onFeedback(.correct)
-        case .incorrect: deps.onFeedback(.incorrect)
+        case .correct, .acceptedWithCorrection: emit(.correct)
+        case .incorrect: emit(.incorrect)
         case .pending: break
         }
         if prefs.speakAnswers { playAnswer() }
@@ -347,7 +357,7 @@ public final class LessonSession: ObservableObject {
                 let response = try await send(request)
                 guard let self = self else { return }
                 let outcome = CheckpointOutcome(response)
-                if outcome.passed { self.deps.onFeedback(.lessonComplete) }
+                if outcome.passed { self.emit(.lessonComplete) }
                 self.phase = .checkpointDone(outcome)
             } catch {
                 self?.checkpointError = CheckpointLogic.submitFailure
@@ -391,7 +401,7 @@ public final class LessonSession: ObservableObject {
         if finishing { return }
         finishing = true
         phase = .saving
-        if !resumed { deps.onFeedback(.lessonComplete) }
+        if !resumed { emit(.lessonComplete) }
         let completion = engine.completion(
             courseCode: setup.courseCode,
             courseVersion: setup.courseVersion,
