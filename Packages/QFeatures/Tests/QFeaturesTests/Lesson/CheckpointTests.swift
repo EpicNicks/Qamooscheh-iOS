@@ -150,7 +150,7 @@ final class CheckpointSessionTests: XCTestCase {
         CheckpointSubmitResponse(passed: passed, score: 0.9, cards: [], skippedLessons: [], skippedCount: 2, alreadyCompletedCount: 0, requiresTest: true, applied: true)
     }
 
-    private func make(count: Int, requiresTest: Bool = true, send: CheckpointSubmitFunction?, submits: Box<String> = Box<String>(), now: @escaping () -> Date = { Date() }) -> LessonSession {
+    private func make(count: Int, requiresTest: Bool = true, send: CheckpointSubmitFunction?, submits: Box<String> = Box<String>(), now: @escaping () -> Date = { Date() }, checkpointDraft: CheckpointDraftStore = .none) -> LessonSession {
         let deps = LessonDependencies(
             grader: AlwaysWrong(), gradingOnDevice: true,
             submit: { _ in
@@ -160,7 +160,8 @@ final class CheckpointSessionTests: XCTestCase {
             enqueue: { _ in submits.add("session enqueued") },
             now: now,
             submitCheckpoint: send,
-            newSubmissionId: { "fixed-id" }
+            newSubmissionId: { "fixed-id" },
+            checkpointDraft: checkpointDraft
         )
         return LessonSession(setup: setup(count: count, requiresTest: requiresTest), dependencies: deps)
     }
@@ -250,6 +251,30 @@ final class CheckpointSessionTests: XCTestCase {
         await session.waitForDelivery()
         XCTAssertEqual(stamps.values.count, 2)
         XCTAssertEqual(stamps.values[0], stamps.values[1])
+    }
+
+    func testKilledAtReadyToSubmitRestoresAnswersIdAndTime() async {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cp-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = CheckpointDraftStore.file(directory: dir, key: "u|fa|-|t|counted|checkpoint|answers")
+        let first = make(count: 2, send: nil, now: { Date(timeIntervalSince1970: 5_000) }, checkpointDraft: store)
+        answer(first)
+        XCTAssertNil(store.load())
+        answer(first)
+        XCTAssertEqual(first.phase, .checkpointReady)
+        XCTAssertEqual(store.load()?.answers.count, 2)
+
+        // The app was killed here. A new session finds the draft.
+        let sent = Box<String>()
+        let second = make(count: 2, send: { request in
+            sent.add("\(request.submissionId)@\(request.occurredAt.timeIntervalSince1970)")
+            return CheckpointSubmitResponse(passed: true, score: 1, cards: [], skippedLessons: [], skippedCount: 2, alreadyCompletedCount: 0, requiresTest: true, applied: true)
+        }, now: { Date(timeIntervalSince1970: 9_999) }, checkpointDraft: store)
+        XCTAssertEqual(second.phase, .checkpointReady)
+        second.submitCheckpoint()
+        await second.waitForDelivery()
+        XCTAssertEqual(sent.values, ["fixed-id@5000.0"])
+        XCTAssertNil(store.load())
     }
 
     func testNoSubmitFunctionIsAFailureNotACrash() async {
