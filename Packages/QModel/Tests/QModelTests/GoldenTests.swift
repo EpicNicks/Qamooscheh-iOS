@@ -240,6 +240,13 @@ final class GoldenTests: XCTestCase {
         XCTAssertEqual(f.cards[0].kind, .selfRated)
         XCTAssertEqual(f.cards[1].kind, .translation)
         try golden(SubmitFlashcardsResponse.self, #"{"alreadyProcessed":false,"xp":6}"#)
+        let cloze = try golden(SubmitFlashcardsRequest.self, """
+        {"submissionId":"66666666-6666-6666-6666-666666666666","courseCode":"fa","occurredAt":"2026-03-01T12:30:45.000Z",
+         "inRemix":false,"hardcore":true,"cards":[{"tag":"a","kind":"cloze","correct":true,"attempt":2,"elapsedMs":4200}]}
+        """)
+        XCTAssertEqual(cloze.cards[0].kind, .cloze)
+        XCTAssertEqual(cloze.cards[0].attempt, 2)
+        XCTAssertEqual(cloze.hardcore, true)
     }
 
     func testExerciseReport() throws {

@@ -75,7 +75,7 @@ public func glossAnswers(_ gloss: String) -> [String] {
 }
 
 /// Whether two strings are at most one edit apart: an insertion, deletion, substitution, or two neighbouring letters swapped (the commonest typo). Compared by UTF-16 unit, like the web and Android.
-private func withinOneEdit(_ left: String, _ right: String) -> Bool {
+func withinOneEdit(_ left: String, _ right: String) -> Bool {
     if left == right { return true }
     let a = Array(left.utf16)
     let b = Array(right.utf16)

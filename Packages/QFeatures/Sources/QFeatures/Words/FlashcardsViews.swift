@@ -14,11 +14,16 @@ public struct FlashcardsScreen: View {
     }
 
     public var body: some View {
-        ScrollView {
-            FlashcardsContent(model: model, onBack: onBack).padding(16).frame(maxWidth: .infinity)
+        if let round = model.clozeRound {
+            ClozeRoundView(model: round, onExit: { model.leaveCloze() })
+                .navigationTitle("Fill in the blank")
+        } else {
+            ScrollView {
+                FlashcardsContent(model: model, onBack: onBack).padding(16).frame(maxWidth: .infinity)
+            }
+            .navigationTitle("Flashcards")
+            .task { await model.refresh() }
         }
-        .navigationTitle("Flashcards")
-        .task { await model.refresh() }
     }
 }
 
@@ -59,17 +64,35 @@ struct FlashcardsContent: View {
             Picker("Card type", selection: Binding(get: { model.kind }, set: { model.setKind($0) })) {
                 Text("Type the meaning").tag(FlashcardKind.translation)
                 Text("Flip cards").tag(FlashcardKind.selfRated)
+                if model.canPlayCloze { Text("Fill in").tag(FlashcardKind.cloze) }
             }
             .pickerStyle(.segmented)
-            let note = model.kind == .translation
-                ? "Each meaning you get right earns 5 XP."
-                : "Flipping cards is practice only. It earns XP inside a saved-words remix."
-            Text(note + " Flashcards don't change your review schedule.")
+            Text(startNote)
                 .font(.subheadline).foregroundColor(Color(argb: p.textMuted))
-            let count = min(model.words.count, FlashcardsModel.roundSize)
-            primaryButton("Start \(count) card\(count == 1 ? "" : "s")", p) { model.start() }
+            if model.kind == .cloze {
+                Toggle("Hardcore: no typos forgiven", isOn: $model.hardcore)
+                    .foregroundColor(Color(argb: p.text))
+            }
+            if model.kind == .cloze {
+                primaryButton("Start", p) { model.start() }
+            } else {
+                let count = min(model.words.count, FlashcardsModel.roundSize)
+                primaryButton("Start \(count) card\(count == 1 ? "" : "s")", p) { model.start() }
+            }
         }
         Button("Back to vocabulary") { model.stop(); onBack() }.buttonStyle(.bordered)
+    }
+
+    /// What the chosen card type earns, under the picker.
+    private var startNote: String {
+        switch model.kind {
+        case .translation:
+            return "Each meaning you get right earns 5 XP. Flashcards don't change your review schedule."
+        case .selfRated:
+            return "Flipping cards is practice only. It earns XP inside a saved-words remix. Flashcards don't change your review schedule."
+        case .cloze:
+            return "A sentence from a Parsle you've done, with a saved word taken out: type it. A right answer pays 5 XP on the first try, 3 on the second and 1 on the third. Each answer counts as a review of the word, so this one does change your review schedule."
+        }
     }
 
     @ViewBuilder
