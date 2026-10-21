@@ -150,7 +150,7 @@ final class CheckpointSessionTests: XCTestCase {
         CheckpointSubmitResponse(passed: passed, score: 0.9, cards: [], skippedLessons: [], skippedCount: 2, alreadyCompletedCount: 0, requiresTest: true, applied: true)
     }
 
-    private func make(count: Int, requiresTest: Bool = true, send: CheckpointSubmitFunction?, submits: Box<String> = Box<String>()) -> LessonSession {
+    private func make(count: Int, requiresTest: Bool = true, send: CheckpointSubmitFunction?, submits: Box<String> = Box<String>(), now: @escaping () -> Date = { Date() }) -> LessonSession {
         let deps = LessonDependencies(
             grader: AlwaysWrong(), gradingOnDevice: true,
             submit: { _ in
@@ -158,6 +158,7 @@ final class CheckpointSessionTests: XCTestCase {
                 return .queued
             },
             enqueue: { _ in submits.add("session enqueued") },
+            now: now,
             submitCheckpoint: send,
             newSubmissionId: { "fixed-id" }
         )
@@ -229,6 +230,26 @@ final class CheckpointSessionTests: XCTestCase {
         XCTAssertEqual(session.phase, .checkpointDone(CheckpointOutcome(passed: false, score: 0.2, applied: true)))
         XCTAssertNil(session.checkpointError)
         XCTAssertEqual(attempts.values, ["fixed-id", "fixed-id"])
+    }
+
+    func testRetryReusesTheOriginalOccurredAt() async {
+        let stamps = Box<String>()
+        let clock = Box<String>()
+        let session = make(count: 1, send: { request in
+            stamps.add(String(request.occurredAt.timeIntervalSince1970))
+            if stamps.values.count == 1 { throw URLError(.notConnectedToInternet) }
+            return CheckpointSubmitResponse(passed: true, score: 1, cards: [], skippedLessons: [], skippedCount: 2, alreadyCompletedCount: 0, requiresTest: true, applied: true)
+        }, now: {
+            clock.add("tick")
+            return Date(timeIntervalSince1970: 1_000 * Double(clock.values.count))
+        })
+        answer(session)
+        session.submitCheckpoint()
+        await session.waitForDelivery()
+        session.submitCheckpoint()
+        await session.waitForDelivery()
+        XCTAssertEqual(stamps.values.count, 2)
+        XCTAssertEqual(stamps.values[0], stamps.values[1])
     }
 
     func testNoSubmitFunctionIsAFailureNotACrash() async {
