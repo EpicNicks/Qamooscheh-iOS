@@ -175,6 +175,25 @@ public actor OfflineQueue {
         if changed { notifyChanged() }
     }
 
+    /// Sessions the server rejected, oldest first, for the per-user banner.
+    public func rejectedRecords(userId: String) throws -> [QueuedSession] {
+        try records(userId: userId).filter { $0.rejectionReason != nil }
+    }
+
+    /// Removes rejected items only (the learner dismissed them); unsent ones are never touched.
+    public func dismissRejected(userId: String, submissionIds: [String]) throws {
+        let targets = Set(submissionIds)
+        let changed: Bool = try locked {
+            var state = try readState(userId)
+            let before = state.records.count
+            state.records.removeAll { targets.contains($0.submissionId) && $0.rejectionReason != nil }
+            guard state.records.count != before else { return false }
+            try persist(userId, state)
+            return true
+        }
+        if changed { notifyChanged() }
+    }
+
     /// Records a failed send: bumps attempts and sets the next eligible time with
     /// exponential backoff (30 s, doubling, capped at one hour; Android WorkManager
     /// uses 30 s exponential). The item stays queued.

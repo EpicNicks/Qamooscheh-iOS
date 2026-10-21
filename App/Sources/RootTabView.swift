@@ -35,6 +35,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 struct RootTabView: View {
     private let lessons: LessonEnvironment?
     @StateObject private var shell: SignedInShell
+    @StateObject private var rejections: RejectionBannerModel
     @State private var selection: AppTab
     @State private var lessonRoute: LessonRoute?
     @Environment(\.scenePhase) private var scenePhase
@@ -51,6 +52,7 @@ struct RootTabView: View {
         initialTab: AppTab = .learn
     ) {
         self.lessons = lessons
+        _rejections = StateObject(wrappedValue: RejectionBannerModel(source: lessons?.rejections))
         _shell = StateObject(wrappedValue: SignedInShell(app: app, onboarding: onboarding, onSignedOut: onSignedOut))
         _selection = State(initialValue: initialTab)
     }
@@ -75,6 +77,8 @@ struct RootTabView: View {
             }
         }
         .environment(\.startLesson, { lessonRoute = $0 })
+        .safeAreaInset(edge: .top) { RejectionBannerView(model: rejections) }
+        .task { await rejections.watch() }
         .task { await shell.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: CheckpointRefresh.notification)) { _ in
             Task { await shell.refresh() }
