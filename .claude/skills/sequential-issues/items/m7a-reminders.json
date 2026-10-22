@@ -18,7 +18,7 @@
   ],
   "requiresDocs": false,
   "allowProtocol": false,
-  "gate": "needs user on a device: confirm the notification permission prompt and a delivered reminder (simulator cannot prove delivery); needs m6m merged",
+  "gate": "code merged to master (8d6c0f7 reminders, 4b65246 re-enable prompt); remaining: needs user on a device: confirm the notification permission prompt, a delivered reminder, Snooze, sign-out cancel, and the re-enable alert with its Settings hand-off (simulator cannot prove delivery); needs m6m merged",
   "approved": true,
   "reviewer": "opus"
 }
