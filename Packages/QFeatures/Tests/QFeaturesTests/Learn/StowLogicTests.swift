@@ -208,7 +208,8 @@ final class StowPathStateTests: XCTestCase {
 
 @MainActor
 final class StowFlowModelTests: XCTestCase {
-    private func make(_ service: FakeService = FakeService(), host: FakeHost = FakeHost(), refreshes: Counter = Counter()) -> (StowFlowModel, FakeService, FakeFlusher, FakeHost, Counter) {
+    private func make(_ service: FakeService = FakeService(), host: FakeHost? = nil, refreshes: Counter = Counter()) -> (StowFlowModel, FakeService, FakeFlusher, FakeHost, Counter) {
+        let host = host ?? FakeHost()
         let flusher = FakeFlusher(service: service)
         let model = StowFlowModel(service: service, flusher: flusher, host: host, refresh: { refreshes.count += 1 })
         return (model, service, flusher, host, refreshes)
