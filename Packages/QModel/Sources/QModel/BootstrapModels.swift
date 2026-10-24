@@ -63,14 +63,36 @@ public struct BootstrapResponse: Codable, Equatable, Sendable {
     public var enrolledCourseCodes: [String]
     public var onboardingComplete: Bool
     public var update: CourseUpdateRef?
+    /// Stowed lessons by unit, units in descending position order. Empty when absent.
+    public var stowage: [StowageUnit]
+    /// Lesson keys at the cursor that pass the Stow gate, sorted by key. Empty when absent.
+    public var stowableLessonKeys: [String]
 
-    public init(course: CourseRef? = nil, position: PositionRef? = nil, graders: [GraderRef], enrolledCourseCodes: [String], onboardingComplete: Bool, update: CourseUpdateRef? = nil) {
+    public init(course: CourseRef? = nil, position: PositionRef? = nil, graders: [GraderRef], enrolledCourseCodes: [String], onboardingComplete: Bool, update: CourseUpdateRef? = nil, stowage: [StowageUnit] = [], stowableLessonKeys: [String] = []) {
         self.course = course
         self.position = position
         self.graders = graders
         self.enrolledCourseCodes = enrolledCourseCodes
         self.onboardingComplete = onboardingComplete
         self.update = update
+        self.stowage = stowage
+        self.stowableLessonKeys = stowableLessonKeys
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case course, position, graders, enrolledCourseCodes, onboardingComplete, update, stowage, stowableLessonKeys
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.course = try c.decodeIfPresent(CourseRef.self, forKey: .course)
+        self.position = try c.decodeIfPresent(PositionRef.self, forKey: .position)
+        self.graders = try c.decode([GraderRef].self, forKey: .graders)
+        self.enrolledCourseCodes = try c.decode([String].self, forKey: .enrolledCourseCodes)
+        self.onboardingComplete = try c.decode(Bool.self, forKey: .onboardingComplete)
+        self.update = try c.decodeIfPresent(CourseUpdateRef.self, forKey: .update)
+        self.stowage = try c.decodeIfPresent([StowageUnit].self, forKey: .stowage) ?? []
+        self.stowableLessonKeys = try c.decodeIfPresent([String].self, forKey: .stowableLessonKeys) ?? []
     }
 }
 
