@@ -116,20 +116,24 @@ public struct SkillActions: Equatable, Sendable {
     public var startsLesson: Bool
     /// "Test out": only on the current lesson, and only when a position follows it.
     public var skipTarget: PositionKey?
+    /// "Stow": the last action, offered only for a key the server lists as stowable.
+    public var stowOffered: Bool
 
-    public init(primaryLabel: String, startsLesson: Bool, skipTarget: PositionKey?) {
+    public init(primaryLabel: String, startsLesson: Bool, skipTarget: PositionKey?, stowOffered: Bool = false) {
         self.primaryLabel = primaryLabel
         self.startsLesson = startsLesson
         self.skipTarget = skipTarget
+        self.stowOffered = stowOffered
     }
 }
 
-public func skillActions(_ skill: PathSkill, nextSkipTarget: PositionKey?) -> SkillActions {
+public func skillActions(_ skill: PathSkill, nextSkipTarget: PositionKey?, stowableLessonKeys: Set<String> = []) -> SkillActions {
     let current = skill.status == .current
     return SkillActions(
         primaryLabel: current ? "Start lesson" : "Practice",
         startsLesson: current,
-        skipTarget: current ? nextSkipTarget : nil
+        skipTarget: current ? nextSkipTarget : nil,
+        stowOffered: stowableLessonKeys.contains(skill.skillKey) && !skill.stowed
     )
 }
 
@@ -146,8 +150,22 @@ public struct PathState: Equatable, Sendable {
     public private(set) var jumpDirection: JumpDirection?
     public private(set) var scroll: CurrentRoadScroll?
     public private(set) var dailyGoal: DailyGoalProgress?
+    /// Stowed lessons by unit, as the server returned them (units descending).
+    public private(set) var stowage: [StowageUnit] = []
+    /// Lesson keys at the cursor that pass the Stow gate.
+    public private(set) var stowableLessonKeys: [String] = []
 
     public init() {}
+
+    /// Keys of every lesson with a live Stowage entry.
+    public var stowedLessonKeys: Set<String> {
+        Set(stowage.flatMap { unit in unit.lessons.map { $0.lessonKey } })
+    }
+
+    /// Units with a live stowed lesson: never drawn as complete.
+    public var deferredUnitKeys: Set<String> {
+        Set(units.filter { $0.deferred }.map { $0.unitKey })
+    }
 
     /// The first position with status `.current`, if any.
     public var currentNode: PathCurrentNode? {
@@ -187,6 +205,8 @@ public struct PathState: Equatable, Sendable {
         let newCourse = bootstrap.course
         let newPosition = bootstrap.position.map { PositionKey(unitKey: $0.unitKey, skillKey: $0.skillKey) }
         enrolledCourseCodes = bootstrap.enrolledCourseCodes
+        stowage = bootstrap.stowage
+        stowableLessonKeys = bootstrap.stowableLessonKeys
         let courseChanged = newCourse?.code != course?.code || newCourse?.version != course?.version
         course = newCourse
         position = newPosition
@@ -199,6 +219,28 @@ public struct PathState: Equatable, Sendable {
         } else {
             recompute()
         }
+    }
+
+    /// A stow answer: the returned Stowage and cursor. The stowed lesson is no longer stowable.
+    public mutating func applyStowage(_ stowage: [StowageUnit], position: PositionRef? = nil) {
+        self.stowage = stowage
+        let stowed = stowedLessonKeys
+        stowableLessonKeys = stowableLessonKeys.filter { !stowed.contains($0) }
+        if let position = position {
+            self.position = PositionKey(unitKey: position.unitKey, skillKey: position.skillKey)
+        }
+        recompute()
+    }
+
+    /// A submit result's `stowCleared`: that lesson leaves the Stowage (and is simply passed).
+    public mutating func applyStowCleared(_ lessonKey: String) {
+        var next: [StowageUnit] = []
+        for var unit in stowage {
+            unit.lessons.removeAll(where: { $0.lessonKey == lessonKey })
+            if !unit.lessons.isEmpty { next.append(unit) }
+        }
+        stowage = next
+        recompute()
     }
 
     public mutating func setContent(_ content: PathContent) {
@@ -267,7 +309,7 @@ public struct PathState: Equatable, Sendable {
             updateJumpDirection()
             return
         }
-        units = computePathProgress(content.units, position: position, completedSkillKeys: completedSkillKeys)
+        units = computePathProgress(content.units, position: position, completedSkillKeys: completedSkillKeys, stowedLessonKeys: stowedLessonKeys)
         updateJumpDirection()
         if let open = openPopoverId, !hasSkill(popoverId: open) { openPopoverId = nil }
     }
@@ -311,6 +353,7 @@ public final class PathModel: ObservableObject {
     private let now: () -> Date
     private let calendar: Calendar
     private var generation = 0
+    private var lastBootstrap: BootstrapResponse?
 
     public init(repository: PathRepository, dailyGoalSource: DailyGoalSource? = nil, now: @escaping () -> Date = { Date() }, calendar: Calendar = .current) {
         self.repository = repository
@@ -323,6 +366,7 @@ public final class PathModel: ObservableObject {
     public func refresh(bootstrap: BootstrapResponse) async {
         generation += 1
         let mine = generation
+        lastBootstrap = bootstrap
         state.setBootstrap(bootstrap)
         guard let course = bootstrap.course else { return }
         let repository = self.repository
@@ -346,8 +390,24 @@ public final class PathModel: ObservableObject {
         }
     }
 
+    /// A submit result's `stowCleared`: drop the lesson from the local Stowage, then refresh from it.
+    public func applyStowCleared(_ lessonKey: String) async {
+        state.applyStowCleared(lessonKey)
+        guard var bootstrap = lastBootstrap else { return }
+        bootstrap.stowage = state.stowage
+        await refresh(bootstrap: bootstrap)
+    }
+
     public func openPopover(_ id: String) { state.openPopover(id) }
     public func closePopover() { state.closePopover() }
     public func togglePopover(_ id: String) { state.togglePopover(id) }
     public func setScroll(_ scroll: CurrentRoadScroll?) { state.setScroll(scroll) }
+}
+
+extension PathModel: StowStateHost {
+    public var stowage: [StowageUnit] { state.stowage }
+
+    public func applyStowage(_ stowage: [StowageUnit], position: PositionRef?) {
+        state.applyStowage(stowage, position: position)
+    }
 }
