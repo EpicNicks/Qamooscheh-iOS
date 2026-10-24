@@ -116,8 +116,10 @@ public struct SubmittedSessionResponse: Codable, Equatable, Sendable {
     public var score: Double?
     public var lessonCompleted: Bool?
     public var xp: Int?
+    /// Lesson key of a stowed lesson this pass cleared; the client drops it from its Stowage.
+    public var stowCleared: String?
 
-    public init(submissionId: String, outcome: SessionOutcome, rejectionReason: String? = nil, cards: [CardState], score: Double? = nil, lessonCompleted: Bool? = nil, xp: Int? = nil) {
+    public init(submissionId: String, outcome: SessionOutcome, rejectionReason: String? = nil, cards: [CardState], score: Double? = nil, lessonCompleted: Bool? = nil, xp: Int? = nil, stowCleared: String? = nil) {
         self.submissionId = submissionId
         self.outcome = outcome
         self.rejectionReason = rejectionReason
@@ -125,6 +127,7 @@ public struct SubmittedSessionResponse: Codable, Equatable, Sendable {
         self.score = score
         self.lessonCompleted = lessonCompleted
         self.xp = xp
+        self.stowCleared = stowCleared
     }
 }
 

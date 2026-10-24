@@ -61,11 +61,80 @@ final class GoldenTests: XCTestCase {
          "graders":[{"language":"fa","variant":"wasi","version":2,"manifestSha256":"def"}],
          "enrolledCourseCodes":["fa","ja"],
          "onboardingComplete":true,
-         "update":{"version":4,"manifestSha256":"ghi","eligible":true,"notes":"New units"}}
+         "update":{"version":4,"manifestSha256":"ghi","eligible":true,"notes":"New units"},
+         "stowage":[],"stowableLessonKeys":[]}
         """)
         XCTAssertEqual(v.course?.version, 3)
         XCTAssertEqual(v.graders.count, 1)
         XCTAssertEqual(v.update?.notes, "New units")
+        XCTAssertEqual(v.stowage, [])
+        XCTAssertEqual(v.stowableLessonKeys, [])
+    }
+
+    func testBootstrapWithStowage() throws {
+        let v = try golden(BootstrapResponse.self, """
+        {"course":{"code":"fa","version":3,"manifestSha256":"abc"},
+         "position":{"unitKey":"u3","skillKey":"s1"},
+         "graders":[],"enrolledCourseCodes":["fa"],"onboardingComplete":true,
+         "stowage":[
+           {"unitKey":"u3","lessons":[
+             {"lessonKey":"a","stowedAt":"2026-10-24T12:00:00.000Z","lessonsCompletedSince":3,"readyPromptDue":true,"muted":false},
+             {"lessonKey":"b","stowedAt":"2026-10-24T13:00:00.000Z","lessonsCompletedSince":0,"readyPromptDue":false,"muted":true}]},
+           {"unitKey":"u1","lessons":[
+             {"lessonKey":"z","stowedAt":"2026-10-23T08:00:00.000Z","lessonsCompletedSince":5,"readyPromptDue":false,"muted":false}]}],
+         "stowableLessonKeys":["c","d"]}
+        """)
+        // Units stay in the order the server sent (descending); lessons ascend within a unit.
+        XCTAssertEqual(v.stowage.map { $0.unitKey }, ["u3", "u1"])
+        XCTAssertEqual(v.stowage[0].lessons.map { $0.lessonKey }, ["a", "b"])
+        XCTAssertTrue(v.stowage[0].lessons[0].readyPromptDue)
+        XCTAssertTrue(v.stowage[0].lessons[1].muted)
+        XCTAssertEqual(v.stowage[0].lessons[0].lessonsCompletedSince, 3)
+        XCTAssertEqual(QDates.format(v.stowage[1].lessons[0].stowedAt), "2026-10-23T08:00:00.000Z")
+        XCTAssertEqual(v.stowableLessonKeys, ["c", "d"])
+    }
+
+    func testBootstrapStowFieldsAbsentDecodeEmpty() throws {
+        let v = try decode(BootstrapResponse.self, """
+        {"course":null,"position":null,"graders":[],"enrolledCourseCodes":[],"onboardingComplete":false}
+        """)
+        XCTAssertEqual(v.stowage, [])
+        XCTAssertEqual(v.stowableLessonKeys, [])
+    }
+
+    func testStowOffset() throws {
+        // The backend emits +00:00 offsets; they decode to the same instant.
+        let v = try decode(StowageResponse.self, """
+        {"applied":true,"stowage":[{"unitKey":"u","lessons":[
+          {"lessonKey":"a","stowedAt":"2026-10-24T12:00:00+00:00","lessonsCompletedSince":0,"readyPromptDue":false,"muted":false}]}]}
+        """)
+        XCTAssertEqual(QDates.format(v.stowage[0].lessons[0].stowedAt), "2026-10-24T12:00:00.000Z")
+    }
+
+    func testStowRequestAndResponses() throws {
+        try golden(StowRequest.self, #"{"lessonKey":"01-hello"}"#)
+        let s = try golden(StowResponse.self, """
+        {"applied":false,"position":{"unitKey":"01-greetings","skillKey":"02-numbers"},"stowage":[]}
+        """)
+        XCTAssertFalse(s.applied)
+        XCTAssertEqual(s.position.skillKey, "02-numbers")
+        let m = try golden(StowageResponse.self, """
+        {"applied":true,"stowage":[{"unitKey":"u","lessons":[
+          {"lessonKey":"a","stowedAt":"2026-10-24T12:00:00.000Z","lessonsCompletedSince":1,"readyPromptDue":false,"muted":true}]}]}
+        """)
+        XCTAssertTrue(m.applied)
+        XCTAssertEqual(m.stowage[0].lessons[0].lessonKey, "a")
+    }
+
+    func testSubmittedSessionStowCleared() throws {
+        let v = try golden(SubmittedSessionResponse.self, """
+        {"submissionId":"11111111-1111-1111-1111-111111111111","outcome":"Processed","cards":[],"lessonCompleted":true,"stowCleared":"01-hello"}
+        """)
+        XCTAssertEqual(v.stowCleared, "01-hello")
+        let w = try decode(SubmittedSessionResponse.self, """
+        {"submissionId":"11111111-1111-1111-1111-111111111111","outcome":"Processed","cards":[]}
+        """)
+        XCTAssertNil(w.stowCleared)
     }
 
     func testBootstrapNotEnrolled() throws {
