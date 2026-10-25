@@ -12,6 +12,7 @@ public struct SkillNodeView<Badge: View>: View {
     private let completed: Bool
     private let branch: Bool
     private let springFold: Bool
+    private let stowed: Bool
     private let accessibilityText: String
     private let theme: PathTheme
     private let palette: AppPalette?
@@ -27,6 +28,7 @@ public struct SkillNodeView<Badge: View>: View {
         completed: Bool = false,
         branch: Bool = true,
         springFold: Bool = false,
+        stowed: Bool = false,
         accessibilityLabel: String? = nil,
         theme: PathTheme = .standard,
         palette: AppPalette? = nil,
@@ -39,6 +41,7 @@ public struct SkillNodeView<Badge: View>: View {
         self.completed = completed
         self.branch = branch
         self.springFold = springFold
+        self.stowed = stowed
         self.accessibilityText = accessibilityLabel ?? title
         self.theme = theme
         self.palette = palette
@@ -48,16 +51,21 @@ public struct SkillNodeView<Badge: View>: View {
 
     public var body: some View {
         let p = palette ?? (colorScheme == .dark ? AppPalette.dark : AppPalette.light)
+        // A stowed lesson reads from StowedNodeStyle only: a gray not-done node that stays tappable.
+        let look = stowed ? StowedNodeStyle.placeholder : nil
+        let drawStatus: SkillStatus = (look?.gray ?? false) ? .locked : status
+        let drawCompleted = (look?.showsDone ?? true) ? completed : false
+        let tappable = look?.tappable ?? (status != .locked)
         Button(action: onTap) {
             SkillNodeFace(
-                title: title, status: status, icon: icon, completed: completed, branch: branch,
+                title: title, status: drawStatus, icon: icon, completed: drawCompleted, branch: branch,
                 theme: theme, palette: p, badge: badge
             )
         }
-        .buttonStyle(NodePressStyle(locked: status == .locked, theme: theme, palette: p, status: status, completed: completed, branch: branch, springFold: springFold))
-        .disabled(status == .locked)
+        .buttonStyle(NodePressStyle(locked: !tappable, theme: theme, palette: p, status: drawStatus, completed: drawCompleted, branch: branch, springFold: springFold))
+        .disabled(!tappable)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(accessibilityText), \(nodeStatusWord(status: status, completed: completed))")
+        .accessibilityLabel("\(accessibilityText), \(stowed ? "stowed" : nodeStatusWord(status: status, completed: completed))")
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -70,13 +78,14 @@ extension SkillNodeView where Badge == EmptyView {
         completed: Bool = false,
         branch: Bool = true,
         springFold: Bool = false,
+        stowed: Bool = false,
         accessibilityLabel: String? = nil,
         theme: PathTheme = .standard,
         palette: AppPalette? = nil,
         onTap: @escaping () -> Void = {}
     ) {
         self.init(
-            title: title, status: status, icon: icon, completed: completed, branch: branch, springFold: springFold,
+            title: title, status: status, icon: icon, completed: completed, branch: branch, springFold: springFold, stowed: stowed,
             accessibilityLabel: accessibilityLabel, theme: theme, palette: palette, onTap: onTap,
             badge: { EmptyView() }
         )

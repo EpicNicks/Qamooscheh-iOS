@@ -11,6 +11,7 @@ public struct LessonStartPopoverView: View {
     private let onDeepDive: (() -> Void)?
     private let onSkip: (() -> Void)?
     private let onReviewVocabulary: (() -> Void)?
+    private let onStow: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -21,7 +22,8 @@ public struct LessonStartPopoverView: View {
         onPrimary: @escaping () -> Void = {},
         onDeepDive: (() -> Void)? = nil,
         onSkip: (() -> Void)? = nil,
-        onReviewVocabulary: (() -> Void)? = nil
+        onReviewVocabulary: (() -> Void)? = nil,
+        onStow: (() -> Void)? = nil
     ) {
         self.primaryLabel = primaryLabel
         self.description = description
@@ -30,6 +32,7 @@ public struct LessonStartPopoverView: View {
         self.onDeepDive = onDeepDive
         self.onSkip = onSkip
         self.onReviewVocabulary = onReviewVocabulary
+        self.onStow = onStow
     }
 
     public var body: some View {
@@ -50,6 +53,10 @@ public struct LessonStartPopoverView: View {
             }
             if let onReviewVocabulary = onReviewVocabulary {
                 PathPopupButton(text: "Review vocabulary", kind: .secondary, palette: p, action: onReviewVocabulary)
+            }
+            // Stow is always the last action (stow-placement). Only the journey screen passes it.
+            if let onStow = onStow {
+                PathPopupButton(text: StowCopy.actionLabel, kind: .secondary, palette: p, action: onStow)
             }
         }
         .padding(Spacing.standard.s3)
