@@ -69,6 +69,9 @@ public struct PathSkill: Equatable, Sendable {
     public var completed: Bool
     /// Index within the unit's standard sequence; nil for non-standard skills.
     public var positionIndex: Int?
+    /// Whether the learner stowed this lesson and has not passed it yet. It sits behind the cursor,
+    /// so `status` says nothing about it: draw it from this flag. Comes from the Stowage, never from position.
+    public var stowed: Bool
 
     public init(
         skillKey: String,
@@ -78,7 +81,8 @@ public struct PathSkill: Equatable, Sendable {
         unitKey: String,
         status: SkillStatus,
         completed: Bool,
-        positionIndex: Int?
+        positionIndex: Int?,
+        stowed: Bool = false
     ) {
         self.skillKey = skillKey
         self.title = title
@@ -88,6 +92,7 @@ public struct PathSkill: Equatable, Sendable {
         self.status = status
         self.completed = completed
         self.positionIndex = positionIndex
+        self.stowed = stowed
     }
 }
 
@@ -115,6 +120,11 @@ public struct PathUnit: Equatable, Sendable {
         self.title = title
         self.standardPositions = standardPositions
         self.otherSkills = otherSkills
+    }
+
+    /// A unit with a live stowed lesson is never complete, however far the cursor has moved past it.
+    public var deferred: Bool {
+        standardPositions.contains(where: { position in position.skills.contains(where: { $0.stowed }) })
     }
 }
 
@@ -160,7 +170,8 @@ public func positionBranches(_ position: PathPosition) -> PositionBranches? {
 public func computePathProgress(
     _ units: [PathUnitInput],
     position: PositionKey?,
-    completedSkillKeys: Set<String> = []
+    completedSkillKeys: Set<String> = [],
+    stowedLessonKeys: Set<String> = []
 ) -> [PathUnit] {
     let currentUnitIndex: Int
     if let position = position {
@@ -204,7 +215,8 @@ public func computePathProgress(
                     unitKey: unit.unitKey,
                     status: status,
                     completed: completedSkillKeys.contains(s.skillKey),
-                    positionIndex: posIndex
+                    positionIndex: posIndex,
+                    stowed: stowedLessonKeys.contains(s.skillKey)
                 )
             }
             standardPositions.append(PathPosition(positionIndex: posIndex, status: status, skills: skills))

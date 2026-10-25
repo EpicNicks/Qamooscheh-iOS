@@ -13,23 +13,27 @@ public struct LessonPopoverActions: Equatable, Sendable {
     public var skipTarget: PositionKey?
     /// Whether this lesson is a standard one tagged with any theme.
     public var hasDeepDive: Bool
+    /// "Stow": the last action; only for a key the server lists as stowable.
+    public var stowOffered: Bool
 
-    public init(primaryLabel: String, startsLesson: Bool, skipTarget: PositionKey?, hasDeepDive: Bool) {
+    public init(primaryLabel: String, startsLesson: Bool, skipTarget: PositionKey?, hasDeepDive: Bool, stowOffered: Bool = false) {
         self.primaryLabel = primaryLabel
         self.startsLesson = startsLesson
         self.skipTarget = skipTarget
         self.hasDeepDive = hasDeepDive
+        self.stowOffered = stowOffered
     }
 }
 
-public func lessonPopoverActions(_ skill: PathSkill, nextSkipTarget: PositionKey?, themeIndex: ThemeIndexArtifact?) -> LessonPopoverActions {
-    let base = skillActions(skill, nextSkipTarget: nextSkipTarget)
+public func lessonPopoverActions(_ skill: PathSkill, nextSkipTarget: PositionKey?, themeIndex: ThemeIndexArtifact?, stowableLessonKeys: Set<String> = []) -> LessonPopoverActions {
+    let base = skillActions(skill, nextSkipTarget: nextSkipTarget, stowableLessonKeys: stowableLessonKeys)
     let tagged = !themesForLesson(themeIndex, lessonKey: skill.skillKey).isEmpty
     return LessonPopoverActions(
         primaryLabel: base.primaryLabel,
         startsLesson: base.startsLesson,
         skipTarget: base.skipTarget,
-        hasDeepDive: skill.category == .standard && tagged
+        hasDeepDive: skill.category == .standard && tagged,
+        stowOffered: base.stowOffered
     )
 }
 

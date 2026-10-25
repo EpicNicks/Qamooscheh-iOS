@@ -294,4 +294,30 @@ final class PathProgressTests: XCTestCase {
         let path = computePathProgress(courseFixture(), position: key("u1", "b1"), completedSkillKeys: ["b1", "b2"])
         XCTAssertEqual(findLessonAfter(path, finished: finished("u1", "a1")), key("u1", "b1"))
     }
+
+    // MARK: stow
+
+    private func allSkills(_ path: [PathUnit]) -> [PathSkill] {
+        path.flatMap { $0.standardPositions.flatMap { $0.skills } }
+    }
+
+    func testStowedFlagComesFromTheStowageNotFromPosition() {
+        let path = computePathProgress(courseFixture(), position: key("u2", "d1"), stowedLessonKeys: ["b2"])
+        let stowed = allSkills(path).filter { $0.stowed }.map { $0.skillKey }
+        XCTAssertEqual(stowed, ["b2"])
+        // Behind the cursor and unlocked, yet flagged only because it is in the Stowage.
+        XCTAssertEqual(allSkills(path).first(where: { $0.skillKey == "b2" })?.status, .unlocked)
+        XCTAssertFalse(allSkills(path).first(where: { $0.skillKey == "a1" })?.stowed ?? true)
+    }
+
+    func testNothingIsStowedWithoutAStowage() {
+        let path = computePathProgress(courseFixture(), position: key("u1", "b1"))
+        XCTAssertTrue(allSkills(path).allSatisfy { !$0.stowed })
+        XCTAssertTrue(path.allSatisfy { !$0.deferred })
+    }
+
+    func testUnitWithALiveStowedLessonIsDeferred() {
+        let path = computePathProgress(courseFixture(), position: key("u2", "d1"), stowedLessonKeys: ["b2"])
+        XCTAssertEqual(path.map { $0.deferred }, [true, false])
+    }
 }
