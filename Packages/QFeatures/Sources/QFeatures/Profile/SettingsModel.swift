@@ -12,6 +12,8 @@ public final class SettingsModel: ObservableObject {
     @Published public private(set) var form: UpdatePrefsRequest?
     @Published public private(set) var local: LocalPrefs
     @Published public private(set) var reminders: ReminderSettings
+    /// Device-local Stow reminders switch (stow-reminder-pref): default on, never synced.
+    @Published public private(set) var stowRemindersEnabled: Bool
     @Published public private(set) var loadError: String?
     @Published public private(set) var saving = false
     /// True while an edit has not reached the server (shown as a badge).
@@ -38,6 +40,7 @@ public final class SettingsModel: ObservableObject {
     private let localStore: LocalPrefsStore
     private let scheduler: ReminderScheduling
     private let reenable: ReenablePromptStore?
+    private let stowPrefs: StowReminderPrefs
     private var pauseObserver: AnyCancellable?
     private let signOutAction: (() async throws -> Void)?
     private let previewer: VoicePreviewing?
@@ -54,9 +57,12 @@ public final class SettingsModel: ObservableObject {
         accountName: String? = nil,
         signOut: (() async throws -> Void)? = nil,
         previewer: VoicePreviewing? = nil,
-        reenable: ReenablePromptStore? = nil
+        reenable: ReenablePromptStore? = nil,
+        stowPrefs: StowReminderPrefs = UserDefaultsStowReminderPrefs()
     ) {
         self.reenable = reenable
+        self.stowPrefs = stowPrefs
+        self.stowRemindersEnabled = stowPrefs.isEnabled()
         self.userId = userId
         self.courseCode = courseCode
         self.sync = sync
@@ -158,6 +164,11 @@ public final class SettingsModel: ObservableObject {
             if !granted { return }
         }
         updateReminders { $0.enabled = on }
+    }
+
+    public func setStowRemindersEnabled(_ on: Bool) {
+        stowPrefs.setEnabled(on)
+        stowRemindersEnabled = on
     }
 
     public func updateReminders(_ change: (inout ReminderSettings) -> Void) {

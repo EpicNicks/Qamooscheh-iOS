@@ -443,3 +443,55 @@ final class StowClearedModelTests: XCTestCase {
         XCTAssertEqual(repo.contentCalls, 2)
     }
 }
+
+@MainActor
+final class StowJourneyHooksTests: XCTestCase {
+    private func hooks() -> (StowJourneyHooks, StowFlowModel) {
+        let host = FakeHost()
+        let service = FakeService()
+        let flow = StowFlowModel(service: service, flusher: FakeFlusher(service: service), host: host)
+        let reminder = StowReminderModel(service: service, prefs: MemoryPrefs(), host: host)
+        return (StowJourneyHooks(flow: flow, reminder: reminder, onRetryLesson: { _ in }), flow)
+    }
+
+    private func pathSkill(_ key: String, stowed: Bool = false) -> PathSkill {
+        PathSkill(
+            skillKey: key, title: key, category: .standard, arc: nil, unitKey: "u1",
+            status: .unlocked, completed: true, positionIndex: 0, stowed: stowed
+        )
+    }
+
+    func testOnStowIsNilUnlessOffered() {
+        let (hooks, flow) = hooks()
+        let skill = pathSkill("a")
+        let off = SkillActions(primaryLabel: "Practice", startsLesson: false, skipTarget: nil, stowOffered: false)
+        XCTAssertNil(hooks.onStow(for: skill, actions: off))
+        let on = SkillActions(primaryLabel: "Practice", startsLesson: false, skipTarget: nil, stowOffered: true)
+        let closure = hooks.onStow(for: skill, actions: on)
+        XCTAssertNotNil(closure)
+        closure?()
+        XCTAssertEqual(flow.flow?.lessonKey, "a")
+        XCTAssertEqual(flow.flow?.step, .confirm)
+    }
+
+    func testDeferredUnitGetsTheStowStyleAndNeverTheCheck() {
+        let normal = PathUnit(unitKey: "u1", title: "U1", standardPositions: [PathPosition(positionIndex: 0, status: .unlocked, skills: [pathSkill("a")])], otherSkills: [])
+        let deferred = PathUnit(unitKey: "u1", title: "U1", standardPositions: [PathPosition(positionIndex: 0, status: .unlocked, skills: [pathSkill("a", stowed: true)])], otherSkills: [])
+        XCTAssertNil(StowedUnitStyle.style(for: normal))
+        let style = StowedUnitStyle.style(for: deferred)
+        XCTAssertEqual(style, StowedUnitStyle.placeholder)
+        XCTAssertEqual(style?.showsCheck, false)
+        XCTAssertLessThan(StowedUnitStyle.placeholder.borderOpacity, 1)
+    }
+}
+
+@MainActor
+final class StowRemindersSettingTests: XCTestCase {
+    func testPrefsDefaultOnAndDeviceLocal() {
+        let suite = UserDefaults(suiteName: "stow.prefs." + UUID().uuidString)!
+        let prefs = UserDefaultsStowReminderPrefs(defaults: suite)
+        XCTAssertTrue(prefs.isEnabled())
+        prefs.setEnabled(false)
+        XCTAssertFalse(UserDefaultsStowReminderPrefs(defaults: suite).isEnabled())
+    }
+}

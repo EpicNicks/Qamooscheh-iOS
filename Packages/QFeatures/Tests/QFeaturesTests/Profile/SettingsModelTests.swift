@@ -45,6 +45,19 @@ final class SettingsModelTests: XCTestCase {
             localStore: LocalPrefsStore(defaults: suite), scheduler: scheduler)
     }
 
+    func testStowRemindersToggleWritesTheDevicePref() {
+        let suite = UserDefaults(suiteName: "settings.stow." + UUID().uuidString)!
+        let prefs = UserDefaultsStowReminderPrefs(defaults: suite)
+        let model = SettingsModel(
+            userId: "u1", courseCode: "fa",
+            sync: PrefsSync(userId: "u1", courseCode: "fa", api: FakeAPI(), defaults: suite),
+            localStore: LocalPrefsStore(defaults: suite), scheduler: FakeScheduler(), stowPrefs: prefs)
+        XCTAssertTrue(model.stowRemindersEnabled)
+        model.setStowRemindersEnabled(false)
+        XCTAssertFalse(model.stowRemindersEnabled)
+        XCTAssertFalse(prefs.isEnabled())
+    }
+
     func testLoadThenSaveSends() async {
         let api = FakeAPI()
         let model = makeModel(api: api)

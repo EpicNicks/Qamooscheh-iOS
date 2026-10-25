@@ -511,6 +511,9 @@ private struct DeviceSections: View {
                     model.updateReminders { $0.streakNudge = on }
                 }
             }
+            switchRow("Stow reminders", model.stowRemindersEnabled, p, description: "Ask if you're ready to retry lessons you put away.") { on in
+                model.setStowRemindersEnabled(on)
+            }
         }
     }
 
