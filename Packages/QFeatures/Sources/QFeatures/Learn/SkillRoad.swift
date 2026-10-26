@@ -112,6 +112,7 @@ public struct SkillRoadView: View {
                 status: skill.status,
                 icon: theme.icons[skill.category],
                 completed: position.skills.count > 1 && skill.completed,
+                stowed: skill.stowed,
                 theme: theme,
                 palette: p,
                 onTap: { onSkillTap(skill) }
