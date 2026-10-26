@@ -137,6 +137,7 @@ public struct StowReminderView: View {
     private let palette: AppPalette?
     private let onNotYet: () -> Void
     private let onMute: () -> Void
+    private let onRetry: ((PathSkill) -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -146,7 +147,8 @@ public struct StowReminderView: View {
         error: String? = nil,
         palette: AppPalette? = nil,
         onNotYet: @escaping () -> Void = {},
-        onMute: @escaping () -> Void = {}
+        onMute: @escaping () -> Void = {},
+        onRetry: ((PathSkill) -> Void)? = nil
     ) {
         self.groups = groups
         self.busy = busy
@@ -154,6 +156,7 @@ public struct StowReminderView: View {
         self.palette = palette
         self.onNotYet = onNotYet
         self.onMute = onMute
+        self.onRetry = onRetry
     }
 
     public var body: some View {
@@ -184,12 +187,7 @@ public struct StowReminderView: View {
                                 .foregroundColor(Color(argb: p.textMuted))
                                 .accessibilityAddTraits(.isHeader)
                             ForEach(group.lessons, id: \.skillKey) { lesson in
-                                Text(lesson.title)
-                                    .font(.system(size: 16))
-                                    .foregroundColor(Color(argb: p.text))
-                                    .padding(.horizontal, Spacing.standard.s2)
-                                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                                    .background(RoundedRectangle(cornerRadius: Radii.standard.md).fill(Color(argb: p.surface)))
+                                lessonRow(lesson, palette: p)
                             }
                         }
                     }
@@ -208,6 +206,26 @@ public struct StowReminderView: View {
     }
 }
 
+extension StowReminderView {
+    /// A lesson of the list: tapping it retries that lesson when the screen supplies `onRetry`.
+    @ViewBuilder
+    fileprivate func lessonRow(_ lesson: PathSkill, palette p: AppPalette) -> some View {
+        let label = Text(lesson.title)
+            .font(.system(size: 16))
+            .foregroundColor(Color(argb: p.text))
+            .padding(.horizontal, Spacing.standard.s2)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Radii.standard.md).fill(Color(argb: p.surface)))
+        if let onRetry = onRetry {
+            Button(action: { onRetry(lesson) }) { label }
+                .buttonStyle(.plain)
+                .disabled(busy)
+        } else {
+            label
+        }
+    }
+}
+
 public extension View {
     /// Presents the reminder when the model says it is due. Back or an outside tap puts it away for now.
     func stowReminder(model: StowReminderModel, path: [PathUnit]) -> some View {
@@ -223,6 +241,7 @@ public extension View {
 struct StowReminderHost: View {
     @ObservedObject var model: StowReminderModel
     let path: [PathUnit]
+    var onRetry: ((PathSkill) -> Void)?
 
     var body: some View {
         StowReminderView(
@@ -230,7 +249,8 @@ struct StowReminderHost: View {
             busy: model.busy,
             error: model.error,
             onNotYet: { Task { await model.notYet() } },
-            onMute: { Task { await model.mute() } }
+            onMute: { Task { await model.mute() } },
+            onRetry: onRetry
         )
     }
 }

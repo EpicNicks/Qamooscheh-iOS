@@ -12,6 +12,9 @@ public struct SkillRoadView: View {
     private let palette: AppPalette?
     private let onSkillTap: (PathSkill) -> Void
     private let onGroupTap: (PathPosition) -> Void
+    private let openPopoverId: String?
+    private let popoverContent: ((PathSkill) -> AnyView)?
+    private let onPopoverDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
@@ -21,13 +24,19 @@ public struct SkillRoadView: View {
         theme: PathTheme = .standard,
         palette: AppPalette? = nil,
         onSkillTap: @escaping (PathSkill) -> Void = { _ in },
-        onGroupTap: @escaping (PathPosition) -> Void = { _ in }
+        onGroupTap: @escaping (PathPosition) -> Void = { _ in },
+        openPopoverId: String? = nil,
+        popoverContent: ((PathSkill) -> AnyView)? = nil,
+        onPopoverDismiss: @escaping () -> Void = {}
     ) {
         self.road = road
         self.theme = theme
         self.palette = palette
         self.onSkillTap = onSkillTap
         self.onGroupTap = onGroupTap
+        self.openPopoverId = openPopoverId
+        self.popoverContent = popoverContent
+        self.onPopoverDismiss = onPopoverDismiss
     }
 
     public var body: some View {
@@ -117,6 +126,15 @@ public struct SkillRoadView: View {
                 palette: p,
                 onTap: { onSkillTap(skill) }
             )
+            // The lesson popover opens above the node it belongs to (one open at a time, by popover id).
+            .lessonStartPopover(isPresented: Binding(
+                get: { popoverContent != nil && openPopoverId == pathPopoverId(unitKey: skill.unitKey, skillKey: skill.skillKey) },
+                set: { shown in if !shown { onPopoverDismiss() } }
+            )) {
+                if let content = popoverContent {
+                    content(skill)
+                }
+            }
         }
     }
 }
