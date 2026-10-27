@@ -45,6 +45,11 @@ public struct CourseContentReader: Sendable {
         try decode(CourseManifest.self, course: course, path: "manifest.json")
     }
 
+    /// A unit file by its path under the version root (a manifest entry's `path`).
+    public func unitArtifact(_ course: CourseRef, path: String) throws -> UnitArtifact? {
+        return try decode(UnitArtifact.self, course: course, path: path)
+    }
+
     /// The skill `skillKey` of unit `unitKey`, or nil when the manifest, the unit or the skill is not on disk.
     public func skill(_ course: CourseRef, unitKey: String, skillKey: String) throws -> SkillArtifact? {
         guard let manifest = try manifest(course), let unitRef = manifest.units.first(where: { $0.id == unitKey }),

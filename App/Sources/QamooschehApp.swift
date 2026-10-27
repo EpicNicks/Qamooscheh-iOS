@@ -28,9 +28,17 @@ struct QamooschehApp: App {
         // are wired. The grader is the placeholder (nothing graded on device) until M1 picks the runtime. Submit goes through the real offline queue.
         let loader = LiveLessonSetupLoader.live(
             baseURL: baseURL, clientHeader: clientHeader, store: auth.store, pinnedCourse: appEnvironment.pinnedCourse)
-        self.lessons = LessonEnvironment.live(
+        var lessonEnvironment = LessonEnvironment.live(
             baseURL: baseURL, clientHeader: clientHeader, store: auth.store, loader: loader,
             onCheckpointSubmitted: { response in CheckpointRefresh.announce(response) })
+        // A submitted lesson moves the cursor (and may clear a stowed lesson): tell the Learn tab.
+        let submitLesson = lessonEnvironment.submit
+        lessonEnvironment.submit = { userId, session in
+            let result = try await submitLesson(userId, session)
+            LessonSubmitRefresh.announce(result)
+            return result
+        }
+        self.lessons = lessonEnvironment
     }
 
     var body: some Scene {

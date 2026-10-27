@@ -7,6 +7,8 @@ public enum AppRoute: Hashable, Sendable {
     case glossary
     case flashcards
     case vocabulary
+    /// The Path's book buttons: one unit's words, or one lesson's when `skillKey` is set.
+    case skillVocabulary(unitKey: String, skillKey: String?)
     case savedPractice
     case settings
     case friends
@@ -20,7 +22,7 @@ public enum AppRoute: Hashable, Sendable {
         case .topic: return "Topic"
         case .glossary: return "Glossary"
         case .flashcards: return "Flashcards"
-        case .vocabulary: return "Vocabulary"
+        case .vocabulary, .skillVocabulary: return "Vocabulary"
         case .savedPractice: return "Practice saved words"
         case .settings: return "Settings"
         case .friends: return "Friends"
