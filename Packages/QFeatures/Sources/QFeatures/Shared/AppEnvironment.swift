@@ -143,7 +143,8 @@ public struct AppEnvironment: @unchecked Sendable {
     /// (where the lesson pipeline keeps them), and a voice previewer when the platform has speech.
     public static func live(
         baseURL: URL, clientHeader: String, sessions: SessionStore,
-        cdnBaseURL: URL = URL(string: "https://cdn.parsling.com")!
+        cdnBaseURL: URL = URL(string: "https://cdn.parsling.com")!,
+        flushQueue: (@Sendable (String) async -> Void)? = nil
     ) -> AppEnvironment {
         let client = ApiClient(baseURL: baseURL, clientHeader: clientHeader, store: sessions)
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -156,7 +157,8 @@ public struct AppEnvironment: @unchecked Sendable {
         #endif
         return live(
             client: client, sessions: sessions, contentStore: store, previewer: previewer, cdnBaseURL: cdnBaseURL,
-            reminders: systemReminders(currentUserId: { await sessions.load()?.userId }))
+            reminders: systemReminders(currentUserId: { await sessions.load()?.userId }),
+            flushQueue: flushQueue)
     }
 
     /// Builds the environment on `client`, reading course files and the card mirror from `contentStore`.
@@ -167,7 +169,8 @@ public struct AppEnvironment: @unchecked Sendable {
         afterFlashcardSubmit: (@Sendable () async -> Void)? = nil,
         previewer: VoicePreviewing? = nil,
         cdnBaseURL: URL = URL(string: "https://cdn.parsling.com")!,
-        reminders: ReminderService? = nil
+        reminders: ReminderService? = nil,
+        flushQueue: (@Sendable (String) async -> Void)? = nil
     ) -> AppEnvironment {
         let auth = AuthApi(client: client, store: sessions)
         let reader = CourseContentReader(store: contentStore)
@@ -246,7 +249,7 @@ public struct AppEnvironment: @unchecked Sendable {
             clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned),
             race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit),
             reminders: reminders,
-            path: PathServices.live(client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL))
+            path: PathServices.live(client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushQueue))
     }
 }
 

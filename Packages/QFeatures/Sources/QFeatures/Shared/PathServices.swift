@@ -48,7 +48,13 @@ public struct PathServices: @unchecked Sendable {
     }
 
     /// The production services on `client`, with course files in `contentStore` and the course CDN at `cdnBaseURL`.
-    public static func live(client: ApiClient, contentStore: ContentFileStore, cdnBaseURL: URL) -> PathServices {
+    ///
+    /// `flushQueue` is the app's single shared queue flush (`SharedOfflineQueue.flush`); no second queue is built here.
+    /// Without one the Stow flow skips its pre-flush (the lesson submit already flushes).
+    public static func live(
+        client: ApiClient, contentStore: ContentFileStore, cdnBaseURL: URL,
+        flushQueue: (@Sendable (String) async -> Void)? = nil
+    ) -> PathServices {
         let reader = CourseContentReader(store: contentStore)
         let lessons = LessonRepository(client: client)
         let repository = LivePathRepository(
@@ -62,17 +68,6 @@ public struct PathServices: @unchecked Sendable {
         let downloader = CourseDownloader(cdn: CdnClient(baseURL: cdnBaseURL), store: contentStore)
         let updater = ContentUpdater(downloader: downloader)
 
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let queue = OfflineQueue(storage: FileOfflineQueueStorage(
-            directory: support.appendingPathComponent("offline-queue", isDirectory: true)))
-        let cards = CardStateStore(store: contentStore)
-        let flushers = QueueFlusherProvider(make: { _ in
-            QueueFlusher(queue: queue, submitter: lessons, onSettled: { userId, results in
-                _ = try? await cards.merge(userId: userId, cards: results.flatMap { $0.cards })
-            })
-        })
-
         return PathServices(
             repository: repository,
             themeIndex: { course in (try? reader.themeLibrary(course))?.index },
@@ -83,9 +78,7 @@ public struct PathServices: @unchecked Sendable {
                     manifestSha256: course.manifestSha256, onProgress: onProgress)
             },
             stow: StowApi(client: client),
-            flushQueue: { userId in
-                await QueueFlusherStowAdapter(provider: flushers, userId: userId).flushQueue()
-            },
+            flushQueue: flushQueue ?? { _ in },
             rollForwardPreview: { code, version in
                 guard isSafeCode(code) else { throw URLError(.badURL) }
                 return try await client.send(.get, "/v1/courses/\(code)/roll-forward-preview?toVersion=\(version)")

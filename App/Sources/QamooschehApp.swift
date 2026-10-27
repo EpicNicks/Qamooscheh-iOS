@@ -22,7 +22,10 @@ struct QamooschehApp: App {
         let auth = AuthEnvironment.live(baseURL: baseURL, clientHeader: clientHeader)
         self.auth = auth
         self.onboarding = OnboardingEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, store: auth.store)
-        let appEnvironment = AppEnvironment.live(baseURL: baseURL, clientHeader: clientHeader, sessions: auth.store)
+        // One offline queue and flusher for lessons and the Stow flow, so a queued result is never sent twice.
+        let sharedQueue = SharedOfflineQueue.live(baseURL: baseURL, clientHeader: clientHeader, store: auth.store)
+        let appEnvironment = AppEnvironment.live(
+            baseURL: baseURL, clientHeader: clientHeader, sessions: auth.store, flushQueue: sharedQueue.flush)
         self.appEnvironment = appEnvironment
         // The loader plans checkpoints, stories and remixes; other routes still reach the unwired placeholder until standard lessons
         // are wired. The grader is the placeholder (nothing graded on device) until M1 picks the runtime. Submit goes through the real offline queue.
@@ -31,6 +34,7 @@ struct QamooschehApp: App {
         var lessonEnvironment = LessonEnvironment.live(
             baseURL: baseURL, clientHeader: clientHeader, store: auth.store, loader: loader,
             onCheckpointSubmitted: { response in CheckpointRefresh.announce(response) })
+        sharedQueue.install(into: &lessonEnvironment)
         // A submitted lesson moves the cursor (and may clear a stowed lesson): tell the Learn tab.
         let submitLesson = lessonEnvironment.submit
         lessonEnvironment.submit = { userId, session in
