@@ -39,6 +39,9 @@ struct XpVector: Decodable {
     let retype: Bool
     let retypeNumber: Int
     let xp: Int
+    let xpBase: Int
+    let xpReasons: [String]
+    let xpLines: [String]
 }
 
 /// The backend ships no recorded expectations for vectors without `expect` (tools/Qamooscheh.GraderBuilder/verify/
@@ -120,6 +123,9 @@ func runFixtureSuite(_ grader: any Grader, label: String, iterations: Int = 200)
         request.retypeNumber = row.retypeNumber
         let r = try await grader.grade(request)
         if r.xp != row.xp { problems.append("xp \(row.name): \(String(describing: r.xp)) != \(row.xp)") }
+        if r.xpBase != row.xpBase { problems.append("xpBase \(row.name): \(String(describing: r.xpBase)) != \(row.xpBase)") }
+        if r.xpReasons != row.xpReasons { problems.append("xpReasons \(row.name): \(String(describing: r.xpReasons)) != \(row.xpReasons)") }
+        if r.xpLines != row.xpLines { problems.append("xpLines \(row.name): \(String(describing: r.xpLines)) != \(row.xpLines)") }
     }
 
     // Warm single-answer latency over the interpretable vectors.

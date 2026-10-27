@@ -61,6 +61,12 @@ public struct GraderResponse: Codable, Equatable, Sendable {
     public var reasons: [String]
     public var error: String?
     public var xp: Int?
+    /// The award before hint halving. nil from a grader older than fa v107.
+    public var xpBase: Int?
+    /// Why the award is what it is: one base code (first_try, corrected, retry, retype, second_retype) plus hint_halved. nil from an older grader.
+    public var xpReasons: [String]?
+    /// The grader's English line for each xpReasons code, same order and length. nil from an older grader.
+    public var xpLines: [String]?
     public var separatorEdits: [SeparatorEditResponse]?
 
     public init(
@@ -71,7 +77,10 @@ public struct GraderResponse: Codable, Equatable, Sendable {
         reasons: [String] = [],
         error: String? = nil,
         xp: Int? = nil,
-        separatorEdits: [SeparatorEditResponse]? = nil
+        separatorEdits: [SeparatorEditResponse]? = nil,
+        xpBase: Int? = nil,
+        xpReasons: [String]? = nil,
+        xpLines: [String]? = nil
     ) {
         self.verdict = verdict
         self.matchedAnswer = matchedAnswer
@@ -81,10 +90,13 @@ public struct GraderResponse: Codable, Equatable, Sendable {
         self.error = error
         self.xp = xp
         self.separatorEdits = separatorEdits
+        self.xpBase = xpBase
+        self.xpReasons = xpReasons
+        self.xpLines = xpLines
     }
 
     private enum CodingKeys: String, CodingKey {
-        case verdict, matchedAnswer, correct, acceptedWithCorrection, reasons, error, xp, separatorEdits
+        case verdict, matchedAnswer, correct, acceptedWithCorrection, reasons, error, xp, separatorEdits, xpBase, xpReasons, xpLines
     }
 
     public init(from decoder: Decoder) throws {
@@ -97,5 +109,8 @@ public struct GraderResponse: Codable, Equatable, Sendable {
         error = try c.decodeIfPresent(String.self, forKey: .error)
         xp = try c.decodeIfPresent(Int.self, forKey: .xp)
         separatorEdits = try c.decodeIfPresent([SeparatorEditResponse].self, forKey: .separatorEdits)
+        xpBase = try c.decodeIfPresent(Int.self, forKey: .xpBase)
+        xpReasons = try c.decodeIfPresent([String].self, forKey: .xpReasons)
+        xpLines = try c.decodeIfPresent([String].self, forKey: .xpLines)
     }
 }

@@ -35,13 +35,28 @@ public struct AnswerFeedback: Equatable, Sendable {
     public var xp: Int
     /// The grader's separator edits for an accepted answer whose half-spaces or spaces were off.
     public var separators: SeparatorMarks?
+    /// The award before hint halving, as the grader reports it. nil when the grader gave none (an older build, or no grader).
+    public var xpBase: Int?
+    /// Why the award is what it is, as the grader's codes. nil when the grader gave none; empty for a wrong answer.
+    public var xpReasons: [String]?
+    /// The grader's line for each code in `xpReasons`, same order. nil when the grader gave none.
+    public var xpLines: [String]?
 
-    public init(verdict: AnswerVerdict, note: String?, xp: Int, separators: SeparatorMarks?) {
+    public init(verdict: AnswerVerdict, note: String?, xp: Int, separators: SeparatorMarks?, xpBase: Int? = nil, xpReasons: [String]? = nil, xpLines: [String]? = nil) {
         self.verdict = verdict
         self.note = note
         self.xp = xp
         self.separators = separators
+        self.xpBase = xpBase
+        self.xpReasons = xpReasons
+        self.xpLines = xpLines
     }
+
+    /// True when the grader priced this answer (its response carried xpReasons), so `xp` is authoritative.
+    public var gradedXp: Bool { xpReasons != nil }
+
+    /// The lines explaining the XP, from the grader's own text. See XpReasonText.
+    public var xpExplanation: [String] { XpReasonText.lines(reasons: xpReasons, lines: xpLines) }
 }
 
 /// What the answer's XP depends on besides its verdict. nil fields: a first attempt without a hint.
@@ -214,10 +229,13 @@ public func checkAnswer(
 
     let verdict = verdictOf(response)
     let xp = response.xp ?? 0
+    func feedback(note: String?, separators: SeparatorMarks?) -> AnswerFeedback {
+        return AnswerFeedback(verdict: verdict, note: note, xp: xp, separators: separators, xpBase: response.xpBase, xpReasons: response.xpReasons, xpLines: response.xpLines)
+    }
     // Selection-based: a typo is structurally impossible either way, and there is nothing typed to describe.
-    if selection { return AnswerFeedback(verdict: verdict, note: nil, xp: xp, separators: nil) }
+    if selection { return feedback(note: nil, separators: nil) }
     // A separator difference alone is accepted with correction, so a wrong answer is wrong for more than its spacing.
-    if verdict == .incorrect { return AnswerFeedback(verdict: verdict, note: nil, xp: xp, separators: nil) }
+    if verdict == .incorrect { return feedback(note: nil, separators: nil) }
     let romanized = exercise.scriptMode == .romanized
     let spacingMatters = Languages.isPersian(courseCode) && !romanized
     let edits = response.separatorEdits ?? []
@@ -225,10 +243,8 @@ public func checkAnswer(
     if spacingMatters, let matched = response.matchedAnswer, !matched.isEmpty, !edits.isEmpty {
         separators = SeparatorMarks(matchedAnswer: matched, edits: edits)
     }
-    return AnswerFeedback(
-        verdict: verdict,
+    return feedback(
         note: describeReasons(response, submitted: submittedText, romanized: romanized, spacingMatters: spacingMatters),
-        xp: xp,
         separators: separators
     )
 }

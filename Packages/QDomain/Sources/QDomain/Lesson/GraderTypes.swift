@@ -67,8 +67,14 @@ public struct GraderResponse: Equatable, Sendable {
     public var separatorEdits: [SeparatorEdit]?
     public var error: String?
     public var xp: Int?
+    /// The award before hint halving. nil from a grader older than fa v107.
+    public var xpBase: Int?
+    /// Why the award is what it is: one base code plus hint_halved when a hint lowered it. nil from an older grader.
+    public var xpReasons: [String]?
+    /// The grader's English line for each xpReasons code, same order and length. nil from an older grader.
+    public var xpLines: [String]?
 
-    public init(verdict: String? = "Incorrect", matchedAnswer: String? = nil, correct: Bool = false, acceptedWithCorrection: Bool = false, reasons: [String] = [], separatorEdits: [SeparatorEdit]? = nil, error: String? = nil, xp: Int? = 0) {
+    public init(verdict: String? = "Incorrect", matchedAnswer: String? = nil, correct: Bool = false, acceptedWithCorrection: Bool = false, reasons: [String] = [], separatorEdits: [SeparatorEdit]? = nil, error: String? = nil, xp: Int? = 0, xpBase: Int? = nil, xpReasons: [String]? = nil, xpLines: [String]? = nil) {
         self.verdict = verdict
         self.matchedAnswer = matchedAnswer
         self.correct = correct
@@ -77,6 +83,9 @@ public struct GraderResponse: Equatable, Sendable {
         self.separatorEdits = separatorEdits
         self.error = error
         self.xp = xp
+        self.xpBase = xpBase
+        self.xpReasons = xpReasons
+        self.xpLines = xpLines
     }
 }
 

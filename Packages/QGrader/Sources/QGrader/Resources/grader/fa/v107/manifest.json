@@ -1,17 +1,17 @@
 {
   "language": "fa",
   "variant": "browser",
-  "version": 98,
+  "version": 107,
   "files": [
     {
       "path": "Qamooscheh.Persian.Grader.Browser.runtimeconfig.json",
-      "sha256": "290f7a5db5fe9b7b68d4f1d9dc17ecd579684ac6ceca38c3ee22cfc04a2fe55e",
+      "sha256": "12ee5dfc26d5e87b0170c061395db57edcdb8522f23312d25c4c6cc9bb30db99",
       "size": 2333
     },
     {
       "path": "_framework/Qamooscheh.Domain.wasm",
-      "sha256": "2b1e1e97c0a50f291c1dfcccb01756bacb20ec09455087a50ce7fd3fb3d1517d",
-      "size": 3861
+      "sha256": "2d7eb205d9a3a45e368c2b39c9ec3a3e09e74785ca5a3ae748c7e5a26ec16d89",
+      "size": 8469
     },
     {
       "path": "_framework/Qamooscheh.Persian.Grader.Browser.wasm",
@@ -20,77 +20,77 @@
     },
     {
       "path": "_framework/Qamooscheh.Persian.Grader.Core.wasm",
-      "sha256": "7e14d3ba6068949821512de0f63ffa0d8dec7d8890c67135de5f911f2311e42b",
-      "size": 47893
+      "sha256": "d602840cfade885654e32feb18b0ac921e62bff2f04383f2e0df44b57c1289e8",
+      "size": 50965
     },
     {
       "path": "_framework/Qamooscheh.Persian.wasm",
-      "sha256": "acaec7ce2be7785ba88fcd456c6f88ba1354cf08aee35ecc789b9eb69653d3a9",
+      "sha256": "5a81a8f10383b243d0d2443cd9e3f532bc98c96c768129654066774cd3e48704",
       "size": 14101
     },
     {
       "path": "_framework/System.Collections.Concurrent.wasm",
-      "sha256": "91e2e744cc2dd795731f581c869215b6e0e32953372a69237e0255308cc64dd3",
+      "sha256": "96a5e95052d01eb6fabf8475950f48e9410ea789bd8d5dbcc71e3fd86527abd9",
       "size": 15125
     },
     {
       "path": "_framework/System.IO.Pipelines.wasm",
-      "sha256": "333a212fb58a878b5ab889527f7bb89bb7a7f442a715f44ff75fb55e0b3179c0",
+      "sha256": "3f779f31239f54239be0a449c42f30e66761c2c84d96d01b3610f89b71387a45",
       "size": 5909
     },
     {
       "path": "_framework/System.Linq.wasm",
-      "sha256": "91ecdbea4b6c459f7da8108b42420220a60f64d363f3441d2929a23c2e15005a",
+      "sha256": "65c9d962e21580cff8f4c65dcbe766b2e1c555dd9bfc0234e45b921e8c808a3a",
       "size": 9493
     },
     {
       "path": "_framework/System.Memory.wasm",
-      "sha256": "c6af5399b902102b4cf56beda3ccd07b2329e591803a7d7041e1df02252c5c8c",
+      "sha256": "396d24b6bd46f27d9ef177bf369e3715b5d77df7bdd3197f35c8619c1bb5b4fc",
       "size": 14101
     },
     {
       "path": "_framework/System.Private.CoreLib.wasm",
-      "sha256": "c6f377c32ba7d2b6a9ce341313bcb73fbed73f8402cf6d7f06f470766ea2eac9",
+      "sha256": "d2112f7d073817408767c0f47b268b274946c5f693c2da44a6df56289f33a39e",
       "size": 1149717
     },
     {
       "path": "_framework/System.Runtime.InteropServices.JavaScript.wasm",
-      "sha256": "9363cd7f5d1e16184e9fe88c55615a5fabb5e4fafad854a30468fcdad3ef60f4",
+      "sha256": "6cb404bc53487e8cc0c0fd7b399e6d481d5244a929dce91be4c156755a99ad95",
       "size": 40213
     },
     {
       "path": "_framework/System.Text.Encodings.Web.wasm",
-      "sha256": "10ef1a3ea98be98067490486d5a57e6fb934b42b5337ce66639037b261998d99",
+      "sha256": "5e73aaf3d13ac4667a259dd74d21fd2938ff2391316dbb6776efa1986ce07753",
       "size": 28949
     },
     {
       "path": "_framework/System.Text.Json.wasm",
-      "sha256": "16cf84f05b3ded1f96cd1ec2cd8b24ba9d6a47ebd3997918c752c1505a960e18",
+      "sha256": "773331a81ef44cfa710202d662da21bc4c38599e50f034a0730b954451329685",
       "size": 198933
     },
     {
       "path": "_framework/dotnet.boot.js",
-      "sha256": "7e2fbe0183ea0f156c66af26ea8a3280acaddfe7097749f5b9976402bd8768f9",
+      "sha256": "54720ca3c0bd59cb872c2f878a9adbb0170dffe0160553d03a927a2e9013ca72",
       "size": 5210
     },
     {
       "path": "_framework/dotnet.js",
-      "sha256": "0501da3cf18e752361a4d3af7880c7ff2fd65e6d8ade7e19601c993d622cb68e",
+      "sha256": "84978337f9e9c1a485eb560538b30ea1cb1209e1c40a85114a7f3742ae828a5b",
       "size": 37898
     },
     {
       "path": "_framework/dotnet.native.js",
-      "sha256": "05530759209cf71c5bcea06cf673eb8f9351aa54f7393cf4a22b14af7179af6e",
+      "sha256": "80b57471b6654329f49d9e27620a1a2662376998713952fdac1a303d575fb73f",
       "size": 120889
     },
     {
       "path": "_framework/dotnet.native.wasm",
-      "sha256": "4206a9d2995c694d5fe901a0248b72d4f85601c29669e91203f97b71882fa05e",
-      "size": 2757942
+      "sha256": "91b08118fc5bf5d1edf07e484476099841ec196752eb937e42675808ddee5c24",
+      "size": 2757941
     },
     {
       "path": "_framework/dotnet.runtime.js",
-      "sha256": "9ae374efa1e0c8e0a801a89def30fb6b6fc637b690eed98afc1cdd9ca830efc8",
+      "sha256": "ff774183db23d722c3de1d0f0cc1e73545d6b3fdb35b020c133a26d57cf7438d",
       "size": 198480
     },
     {
@@ -110,13 +110,13 @@
     },
     {
       "path": "vectors.json",
-      "sha256": "c3de6d0a288fa270fc42c4f16086d7021100bed27c5b78d516ba240008041654",
-      "size": 6479
+      "sha256": "c132e59715d30b3cff3b0088d4947cd9e92e9937bbf72923264e8af554a0c124",
+      "size": 7481
     },
     {
       "path": "xp-vectors.json",
-      "sha256": "9cf8815e2a480dd8a1318861ba59f90ec72bbac30bd04538842ccce31c34f49b",
-      "size": 3103
+      "sha256": "8b195ba9a03b20684542e6e7c02ec0d66baf9e5234b61b824b37f598b1ce4383",
+      "size": 4794
     }
   ]
 }

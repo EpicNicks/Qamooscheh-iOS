@@ -75,11 +75,11 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertEqual(e.state.items.map { $0.item.attempt }, [1, 2])
     }
 
-    func testRetryCorrectEarnsFiveAndNoFirstTryCredit() {
+    func testRetryCorrectEarnsThreeAndNoFirstTryCredit() {
         var e = engine(["a"], grader: FakeGrader(["Incorrect", "Correct"]))
         e.submit("x")
         let second = e.submit("a")
-        XCTAssertEqual(second?.xpGained, 5)
+        XCTAssertEqual(second?.xpGained, 3)
         XCTAssertEqual(e.state.firstTryCorrect, 0)
     }
 
@@ -261,7 +261,47 @@ final class LessonEngineTests: XCTestCase {
     func testXpForAnswerRounding() {
         XCTAssertEqual(xpForAnswer(.correct, attempt: 1, usedHint: true), 5)
         XCTAssertEqual(xpForAnswer(.acceptedWithCorrection, attempt: 1, usedHint: true), 4)
-        XCTAssertEqual(xpForAnswer(.correct, attempt: 2, usedHint: true), 3)
+        XCTAssertEqual(xpForAnswer(.correct, attempt: 2, usedHint: true), 2)
         XCTAssertEqual(xpForAnswer(.incorrect, attempt: 1, usedHint: false), 0)
+    }
+
+    // The local fallback must price every answer as the grader does (backend xp-vectors.json, 21 Persian rows).
+    func testFallbackXpAgreesWithGraderVectors() {
+        let rows: [(AnswerVerdict, Int, Bool, Bool, Int, Int)] = [
+            (.correct, 1, false, false, 1, 10),
+            (.acceptedWithCorrection, 1, false, false, 1, 7),
+            (.acceptedWithCorrection, 1, false, false, 1, 7),
+            (.correct, 2, false, false, 1, 3),
+            (.correct, 5, false, false, 1, 3),
+            (.acceptedWithCorrection, 3, false, false, 1, 3),
+            (.correct, 1, false, true, 1, 2),
+            (.acceptedWithCorrection, 1, false, true, 1, 2),
+            (.correct, 2, false, true, 1, 2),
+            (.correct, 2, false, true, 2, 1),
+            (.acceptedWithCorrection, 3, false, true, 2, 1),
+            (.correct, 3, false, true, 3, 0),
+            (.incorrect, 1, false, false, 1, 0),
+            (.incorrect, 2, true, false, 1, 0),
+            (.incorrect, 1, false, true, 1, 0),
+            (.correct, 1, true, false, 1, 5),
+            (.acceptedWithCorrection, 1, true, false, 1, 4),
+            (.correct, 2, true, false, 1, 2),
+            (.acceptedWithCorrection, 2, true, false, 1, 2),
+            (.correct, 1, true, true, 1, 1),
+            (.correct, 2, true, true, 2, 1),
+        ]
+        XCTAssertEqual(rows.count, 21)
+        for (verdict, attempt, hint, retype, retypeNumber, xp) in rows {
+            XCTAssertEqual(xpForAnswer(verdict, attempt: attempt, usedHint: hint, retype: retype, retypeNumber: retypeNumber), xp, "\(verdict) attempt \(attempt) hint \(hint) retype \(retype) #\(retypeNumber)")
+        }
+    }
+
+    // A grader that priced the answer is authoritative; one that did not (older build) falls back.
+    func testEngineTakesGraderXpWhenPricedAndFallsBackOtherwise() {
+        let e = engine(["a"], grader: nil)
+        let priced = AnswerFeedback(verdict: .correct, note: nil, xp: 4, separators: nil, xpBase: 4, xpReasons: ["retry"], xpLines: ["Right on a retry"])
+        XCTAssertEqual(e.state.answer(priced, submittedText: "a")?.xpGained, 4)
+        let unpriced = AnswerFeedback(verdict: .correct, note: nil, xp: 4, separators: nil)
+        XCTAssertEqual(e.state.answer(unpriced, submittedText: "a")?.xpGained, 10)
     }
 }

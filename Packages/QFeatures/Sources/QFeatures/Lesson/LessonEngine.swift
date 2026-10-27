@@ -58,19 +58,19 @@ public struct AnswerOutcome: Equatable, Sendable {
     public var xpGained: Int
 }
 
-/// Cosmetic, client-only XP for the pop animation and the recap; never sent anywhere. `attempt` is 1-based. (Android xpForAnswer.)
-public func xpForAnswer(_ verdict: AnswerVerdict, attempt: Int, usedHint: Bool) -> Int {
+/// The fallback XP for an answer, used only when the grader gave none (an older bundled build). Mirrors the backend AnswerXp, which the grader's `xp` is authoritative over; xp-vectors.json pins the two together. `attempt` is 1-based; `retypeNumber` is 1 for the first correct retype of an exercise.
+public func xpForAnswer(_ verdict: AnswerVerdict, attempt: Int, usedHint: Bool, retype: Bool = false, retypeNumber: Int = 1) -> Int {
     if verdict == .incorrect || verdict == .pending { return 0 }
     let base: Int
-    if verdict == .correct && attempt == 1 {
-        base = 10
-    } else if verdict == .correct {
-        base = 5
+    if retype {
+        base = retypeNumber <= 1 ? 2 : (retypeNumber == 2 ? 1 : 0)
+    } else if attempt > 1 {
+        base = 3
     } else {
-        base = 7
+        base = verdict == .correct ? 10 : 7
     }
-    // Round half up, like Math.round(base / 2.0).
-    return usedHint ? (base + 1) / 2 : base
+    // A hint halves the award, rounding half up, but a 1 stays 1.
+    return usedHint && base > 1 ? (base + 1) / 2 : base
 }
 
 public struct LessonState: Codable, Equatable, Sendable {
@@ -128,7 +128,8 @@ public struct LessonState: Codable, Equatable, Sendable {
             again.attempt = attempt
             rest.insert(again, at: min(retryDepth, rest.count))
         }
-        let xpGained = pending ? 0 : xpForAnswer(feedback.verdict, attempt: attempt, usedHint: usedHint)
+        // The grader's own XP when it priced the answer; the local table only for an older grader.
+        let xpGained = pending ? 0 : (feedback.gradedXp ? feedback.xp : xpForAnswer(feedback.verdict, attempt: attempt, usedHint: usedHint))
 
         var next = self
         next.queue = rest
