@@ -2,38 +2,56 @@ import SwiftUI
 import QModel
 import QDomain
 import QDesign
+import Combine
 
 // The five tab bodies behind the app's TabView. Each owns its NavigationStack path; pushes use `AppRoute`.
 
-/// Learn: the Path header (course picker, streak, Total XP, daily goal). The road itself arrives with the lesson screen item.
+/// Learn: the Path (header, update banner, the road, Stow). Its buttons open lessons through the root's lesson cover and
+/// push screens on this tab's stack.
 public struct LearnTab: View {
     @ObservedObject private var shell: SignedInShell
+    @StateObject private var host: PathHostModel
     @State private var switcher: CourseSwitcherModel?
     @State private var presenting = false
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var path: [AppRoute] = []
+    @Environment(\.startLesson) private var startLesson
 
     public init(shell: SignedInShell) {
         self.shell = shell
+        _host = StateObject(wrappedValue: PathHostModel(shell: shell))
     }
 
     public var body: some View {
-        let p = colorScheme == .dark ? AppPalette.dark : AppPalette.light
-        NavigationStack {
-            VStack(spacing: 0) {
-                PathHeaderView(
-                    courseName: shell.courseName,
-                    streakDays: shell.streakDays,
-                    goal: shell.goal,
-                    totalXp: shell.totalXp,
-                    onPickCourse: openSwitcher)
-                Color(argb: p.bg)
-            }
-            .background(Color(argb: p.bg))
-            .navigationTitle("Learn")
-            .sheet(isPresented: $presenting) {
-                if let model = switcher {
-                    CourseSwitcherView(model: model)
+        NavigationStack(path: $path) {
+            PathScreen(
+                model: host.path,
+                download: host.download,
+                themeIndex: host.themeIndex,
+                header: PathHeaderInfo(courseName: shell.courseName, streakDays: shell.streakDays, totalXp: shell.totalXp),
+                updateBanner: host.banner,
+                navigator: AppPathNavigator(startLesson: startLesson, push: { path.append($0) }),
+                stowFlow: host.stowFlow,
+                stowReminder: host.stowReminder,
+                onRetryDownload: { host.retryDownload() },
+                onPickCourse: openSwitcher,
+                onUpdate: { Task { await host.openRollForward() } },
+                onConfirmUpdate: { _ = host.confirmRollForward() })
+                .navigationTitle("Learn")
+                .navigationDestination(for: AppRoute.self) { route in
+                    AppRouteDestination(route: route, shell: shell, path: $path)
                 }
+                .sheet(isPresented: $presenting) {
+                    if let model = switcher {
+                        CourseSwitcherView(model: model)
+                    }
+                }
+        }
+        .onReceive(shell.$bootstrap.compactMap { $0 }) { bootstrap in
+            Task { await host.bootstrapChanged(bootstrap) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: LessonSubmitRefresh.notification)) { note in
+            if let key = LessonSubmitRefresh.stowCleared(in: note) {
+                Task { await host.stowCleared(key) }
             }
         }
     }
@@ -149,7 +167,9 @@ struct AppRouteDestination: View {
         case .flashcards:
             FlashcardsScreen(model: shell.flashcards, onBack: { if !path.isEmpty { path.removeLast() } })
         case .vocabulary:
-            VocabularyDestination(shell: shell)
+            VocabularyDestination(shell: shell, unitKey: "", skillKey: nil)
+        case .skillVocabulary(let unitKey, let skillKey):
+            VocabularyDestination(shell: shell, unitKey: unitKey, skillKey: skillKey)
         case .savedPractice:
             SavedPracticeDestination(
                 shell: shell, onBack: { if !path.isEmpty { path.removeLast() } },
@@ -202,9 +222,9 @@ struct GlossaryDestination: View {
 struct VocabularyDestination: View {
     @StateObject private var model: SkillVocabularyModel
 
-    init(shell: SignedInShell) {
-        // No unit or lesson here, so the screen offers the whole course.
-        _model = StateObject(wrappedValue: SkillVocabularyModel(store: shell.vocabulary, unitKey: "", skillKey: nil))
+    /// An empty `unitKey` offers the whole course.
+    init(shell: SignedInShell, unitKey: String, skillKey: String?) {
+        _model = StateObject(wrappedValue: SkillVocabularyModel(store: shell.vocabulary, unitKey: unitKey, skillKey: skillKey))
     }
 
     var body: some View {

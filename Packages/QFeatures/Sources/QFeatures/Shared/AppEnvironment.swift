@@ -51,6 +51,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let previewer: VoicePreviewing?
     /// Schedules the learner's reminders; nil in tests and previews.
     public let reminders: ReminderService?
+    /// The Learn tab's content, download, Stow and roll-forward services; nil in tests and previews.
+    public let path: PathServices?
 
     public init(
         profile: ProfileService,
@@ -75,8 +77,10 @@ public struct AppEnvironment: @unchecked Sendable {
         contactEmails: ContactEmailReading? = nil,
         clozeSentences: ClozeSentenceSource? = nil,
         race: RaceService? = nil,
-        reminders: ReminderService? = nil
+        reminders: ReminderService? = nil,
+        path: PathServices? = nil
     ) {
+        self.path = path
         self.reminders = reminders
         self.clozeSentences = clozeSentences
         self.race = race
@@ -137,7 +141,11 @@ public struct AppEnvironment: @unchecked Sendable {
 
     /// The app's environment: one ApiClient on `sessions`, course files and the card mirror under Application Support/content
     /// (where the lesson pipeline keeps them), and a voice previewer when the platform has speech.
-    public static func live(baseURL: URL, clientHeader: String, sessions: SessionStore) -> AppEnvironment {
+    public static func live(
+        baseURL: URL, clientHeader: String, sessions: SessionStore,
+        cdnBaseURL: URL = URL(string: "https://cdn.parsling.com")!,
+        flushQueue: (@Sendable (String) async -> Void)? = nil
+    ) -> AppEnvironment {
         let client = ApiClient(baseURL: baseURL, clientHeader: clientHeader, store: sessions)
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
@@ -148,8 +156,9 @@ public struct AppEnvironment: @unchecked Sendable {
         let previewer: VoicePreviewing? = nil
         #endif
         return live(
-            client: client, sessions: sessions, contentStore: store, previewer: previewer,
-            reminders: systemReminders(currentUserId: { await sessions.load()?.userId }))
+            client: client, sessions: sessions, contentStore: store, previewer: previewer, cdnBaseURL: cdnBaseURL,
+            reminders: systemReminders(currentUserId: { await sessions.load()?.userId }),
+            flushQueue: flushQueue)
     }
 
     /// Builds the environment on `client`, reading course files and the card mirror from `contentStore`.
@@ -159,7 +168,9 @@ public struct AppEnvironment: @unchecked Sendable {
         contentStore: ContentFileStore,
         afterFlashcardSubmit: (@Sendable () async -> Void)? = nil,
         previewer: VoicePreviewing? = nil,
-        reminders: ReminderService? = nil
+        cdnBaseURL: URL = URL(string: "https://cdn.parsling.com")!,
+        reminders: ReminderService? = nil,
+        flushQueue: (@Sendable (String) async -> Void)? = nil
     ) -> AppEnvironment {
         let auth = AuthApi(client: client, store: sessions)
         let reader = CourseContentReader(store: contentStore)
@@ -237,7 +248,8 @@ public struct AppEnvironment: @unchecked Sendable {
             contactEmails: systemContactEmails(),
             clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned),
             race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit),
-            reminders: reminders)
+            reminders: reminders,
+            path: PathServices.live(client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushQueue))
     }
 }
 
