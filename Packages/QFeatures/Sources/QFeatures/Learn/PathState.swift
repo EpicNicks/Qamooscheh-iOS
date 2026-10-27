@@ -130,7 +130,8 @@ public struct SkillActions: Equatable, Sendable {
 public func skillActions(_ skill: PathSkill, nextSkipTarget: PositionKey?, stowableLessonKeys: Set<String> = []) -> SkillActions {
     let current = skill.status == .current
     return SkillActions(
-        primaryLabel: current ? "Start lesson" : "Practice",
+        // A stowed lesson is behind the cursor but not passed: retrying it counts, practising it would not.
+        primaryLabel: skill.stowed ? "Retry lesson" : (current ? "Start lesson" : "Practice"),
         startsLesson: current,
         skipTarget: current ? nextSkipTarget : nil,
         stowOffered: stowableLessonKeys.contains(skill.skillKey) && !skill.stowed
