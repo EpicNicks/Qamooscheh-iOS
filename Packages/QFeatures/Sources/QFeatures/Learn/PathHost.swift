@@ -32,6 +32,10 @@ public final class PathHostModel: ObservableObject {
     private var stowUserId: String?
     private var downloadingCourse: CourseRef?
     private var downloadTask: Task<Void, Never>?
+    /// Downloads that finished but still failed the on-disk check, for the current course.
+    private var unverifiedDownloads = 0
+    /// How many finished-but-unverified downloads are retried before the screen shows Try again.
+    static let maxUnverifiedDownloads = 2
 
     public init(shell: SignedInShell, services: PathServices? = nil, reminderPrefs: StowReminderPrefs = UserDefaultsStowReminderPrefs()) {
         let resolved = services ?? shell.app?.path
@@ -67,6 +71,7 @@ public final class PathHostModel: ObservableObject {
     public func retryDownload() {
         guard let course = shell?.course, let services = services, !services.isDownloaded(course) else { return }
         downloadingCourse = nil
+        unverifiedDownloads = 0
         startDownload(course)
     }
 
@@ -87,6 +92,18 @@ public final class PathHostModel: ObservableObject {
                     Task { @MainActor [weak self] in self?.downloadProgressed(progress, course: course) }
                 })
                 guard let self = self, self.downloadingCourse == course else { return }
+                if !services.isDownloaded(course) {
+                    // Finished, yet the files don't verify on disk: retry a bounded number of times, then offer Try again.
+                    self.unverifiedDownloads += 1
+                    if self.unverifiedDownloads < PathHostModel.maxUnverifiedDownloads {
+                        self.startDownload(course)
+                    } else {
+                        self.downloadTask = nil
+                        self.download = .failed
+                    }
+                    return
+                }
+                self.unverifiedDownloads = 0
                 self.downloadingCourse = nil
                 self.downloadTask = nil
                 self.download = nil

@@ -123,6 +123,18 @@ final class PathHostTests: XCTestCase {
         XCTAssertEqual(calls.downloads, 1)
     }
 
+    func testADownloadThatNeverVerifiesOnDiskRetriesBoundedlyThenShowsTryAgain() async throws {
+        let calls = Calls()
+        // Every download "succeeds" but the on-disk check keeps failing.
+        let host = makeHost(services(downloaded: false, downloadFails: false, calls: calls))
+        await host.bootstrapChanged(bootstrap())
+        for _ in 0..<200 where host.download != .failed { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertEqual(host.download, .failed)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(calls.downloads, PathHostModel.maxUnverifiedDownloads)
+        XCTAssertEqual(host.download, .failed)
+    }
+
     func testOpenRollForwardNeedsAnActiveCourse() async {
         let calls = Calls()
         let host = makeHost(services(calls: calls))
