@@ -181,10 +181,12 @@ public extension CourseContentReader {
                 var lessons: [PathSkillInput] = []
                 for skillRef in position.skills {
                     let header = try skill(course, path: skillRef.path)
+                    var category = SkillCategory.standard
+                    if let found = header { category = found.category }
                     let input = PathSkillInput(
                         skillKey: skillRef.id, title: header?.title ?? skillRef.id,
-                        category: header?.category ?? .standard, arc: header?.arc)
-                    if input.category == .standard {
+                        category: category, arc: header?.arc)
+                    if category == SkillCategory.standard {
                         lessons.append(input)
                     } else {
                         others.append(input)
