@@ -181,12 +181,13 @@ public extension CourseContentReader {
                 var lessons: [PathSkillInput] = []
                 for skillRef in position.skills {
                     let header = try skill(course, path: skillRef.path)
-                    var category = SkillCategory.standard
-                    if let found = header { category = found.category }
+                    // The artifact's category (QModel) as the path's own (QDomain).
+                    var category = QDomain.SkillCategory.standard
+                    if let found = header, let mapped = QDomain.SkillCategory(rawValue: found.category.rawValue) { category = mapped }
                     let input = PathSkillInput(
                         skillKey: skillRef.id, title: header?.title ?? skillRef.id,
                         category: category, arc: header?.arc)
-                    if category == SkillCategory.standard {
+                    if category == QDomain.SkillCategory.standard {
                         lessons.append(input)
                     } else {
                         others.append(input)

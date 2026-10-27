@@ -3,7 +3,7 @@ import QModel
 import QDomain
 @testable import QFeatures
 
-private func skill(_ key: String, unit: String = "u1", category: SkillCategory = .standard, stowed: Bool = false) -> PathSkill {
+private func skill(_ key: String, unit: String = "u1", category: QDomain.SkillCategory = .standard, stowed: Bool = false) -> PathSkill {
     PathSkill(
         skillKey: key, title: key, category: category, arc: nil, unitKey: unit,
         status: .current, completed: false, positionIndex: 0, stowed: stowed)
@@ -28,7 +28,8 @@ private enum Opened: Equatable {
 
 final class AppPathNavigatorTests: XCTestCase {
     func testStartMapsEveryCategoryToTheLessonRouteByName() {
-        for category in SkillCategory.allCases {
+        let categories: [QDomain.SkillCategory] = [.standard, .story, .conversation, .song]
+        for category in categories {
             XCTAssertEqual(
                 Opened(AppPathNavigator.start(skill("s1", unit: "u2", category: category))),
                 .lesson(unitKey: "u2", skillKey: "s1", practice: false, checkpoint: false, deepDive: nil),
