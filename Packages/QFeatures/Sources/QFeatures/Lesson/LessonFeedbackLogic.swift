@@ -216,7 +216,7 @@ public func lessonResultsCopy(end: LessonEndKind, savedPractice: Bool = false) -
     if completed == false {
         return LessonResultsCopy(
             title: "Not passed yet",
-            body: "You need \(passPercent)% to pass (a right answer on a retry earns half credit) this lesson and unlock the next one. Your answers still count toward your reviews \u{2014} take it again to pass.",
+            body: "You need \(passPercent)% to pass this lesson and unlock the next one (a right answer on a retry earns half credit). Your answers still count toward your reviews \u{2014} take it again to pass.",
             showsScore: true, passMark: lessonPassThreshold, passed: false)
     }
     var notes: [String] = []
