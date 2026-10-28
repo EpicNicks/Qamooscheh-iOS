@@ -8,7 +8,7 @@ import QModel
 // answer went wrong. Without a grader the result is pending.
 // Port of web domain/answerFeedback.ts.
 
-public enum AnswerVerdict: String, Equatable, Sendable {
+public enum AnswerVerdict: String, Codable, Equatable, Sendable {
     case correct
     case acceptedWithCorrection = "accepted_with_correction"
     case incorrect

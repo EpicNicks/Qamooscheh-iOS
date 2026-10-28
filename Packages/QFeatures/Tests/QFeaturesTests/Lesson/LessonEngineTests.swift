@@ -98,6 +98,31 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertEqual(e.state.score, 0.25)
     }
 
+    func testUncheckedRetryLeavesCompletionToTheServer() {
+        let fake = FakeGrader(["Incorrect"])
+        var e = engine(["a"], grader: fake)
+        e.submit("x")
+        fake.erroring = true
+        e.submit("a")
+        XCTAssertEqual(e.state.uncheckedFirstTries, 1)
+        XCTAssertNil(e.state.localLessonCompleted(exerciseCountBySkill: ["s": 1]))
+    }
+
+    func testScoreIsAveragedOverExercisesAnsweredViaLessonScore() {
+        var e = engine(["a", "b"], grader: FakeGrader(["Correct", "Incorrect", "Correct"]))
+        e.submit("a")
+        e.submit("x")
+        e.submit("b")
+        // a = 1, b right on attempt 2 = 0.5.
+        XCTAssertEqual(e.state.score, 0.75)
+
+        // An exercise never answered doesn't dilute the average.
+        let queue = engine(["a", "b"], grader: nil).state.queue
+        let feedback = AnswerFeedback(verdict: .correct, note: nil, xp: 0, separators: nil)
+        let one = LessonState(queue: queue).answer(feedback, submittedText: "a")!.state
+        XCTAssertEqual(one.score, 1)
+    }
+
     func testCorrectedAnswerIsHalfPointAndSevenXpHintHalves() {
         var e = engine(["a", "b"], grader: FakeGrader(["AcceptedWithCorrection", "Correct"]))
         XCTAssertEqual(e.submit("a")?.xpGained, 7)

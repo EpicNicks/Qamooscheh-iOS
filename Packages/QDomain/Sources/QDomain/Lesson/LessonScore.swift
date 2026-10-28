@@ -34,7 +34,7 @@ public func lessonAttemptCredit(_ verdict: AnswerVerdict, attempt: Int) -> Doubl
 }
 
 /// One graded attempt at an exercise; `exerciseKey` is shared by every attempt (and tag) of the same exercise.
-public struct LessonAttempt: Equatable, Sendable {
+public struct LessonAttempt: Codable, Equatable, Sendable {
     public var exerciseKey: String
     public var attempt: Int
     public var verdict: AnswerVerdict

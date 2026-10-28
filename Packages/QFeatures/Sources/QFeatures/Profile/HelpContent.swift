@@ -72,7 +72,7 @@ let helpFaq: [FaqEntry] = [
         id: "passing-a-lesson",
         question: "Why didn't I pass a lesson?",
         paragraphs: [
-            "A lesson needs 75% on your first tries to pass and unlock the next one. A wrong answer comes back later in the lesson, but getting it right the second time doesn't add to the score. An answer accepted with a small typo counts as half.",
+            "A lesson needs 75% to pass and unlock the next one. A wrong answer comes back later in the lesson: getting it right on the second try counts half, on the third try a quarter. An answer accepted with a small typo counts as half.",
             "Your answers still count toward your reviews either way, so take it again to pass.",
         ]),
     FaqEntry(

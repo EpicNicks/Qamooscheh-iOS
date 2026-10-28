@@ -102,7 +102,9 @@ public struct LessonState: Codable, Equatable, Sendable {
     public var firstTryPoints: Double
     /// Credit earned on retries (Backend#86): a wrong first try that is later answered right is worth the verdict weight halved per attempt before it. A retry only follows a wrong answer, so each exercise adds at most once. nil in states saved before retry credit.
     public var retryPoints: Double?
-    /// First attempts the device couldn't check: only the server can say whether they passed.
+    /// Every checked attempt, for the pure `lessonScore`. nil in states saved before this field existed (the totals above are used then).
+    public var scoredAttempts: [LessonAttempt]?
+    /// Answers (first tries or retries) the device couldn't check: only the server can say whether they passed.
     public var uncheckedFirstTries: Int
     public var xp: Int
     /// Local practice: nothing is submitted, so nothing counts toward progress.
@@ -119,6 +121,7 @@ public struct LessonState: Codable, Equatable, Sendable {
         self.firstTryCorrect = firstTryCorrect
         self.firstTryPoints = firstTryPoints
         self.uncheckedFirstTries = uncheckedFirstTries
+        self.scoredAttempts = []
         self.xp = xp
         self.practice = practice
     }
@@ -127,7 +130,10 @@ public struct LessonState: Codable, Equatable, Sendable {
     public var finished: Bool { queue.isEmpty }
     public var completedCount: Int { totalCount - queue.count }
     /// The server's lesson score: first-try points plus retry credit, over the exercises in the lesson.
-    public var score: Double { totalCount == 0 ? 0 : (firstTryPoints + (retryPoints ?? 0)) / Double(totalCount) }
+    public var score: Double {
+        if let attempts = scoredAttempts { return lessonScore(attempts) }
+        return totalCount == 0 ? 0 : (firstTryPoints + (retryPoints ?? 0)) / Double(totalCount)
+    }
 
     /// One more finished play of the current listening exercise, if it is `key` and has plays left; otherwise the same state.
     public func withPlay(key: String) -> LessonState {
@@ -172,7 +178,8 @@ public struct LessonState: Codable, Equatable, Sendable {
         next.items = items + recorded
         if firstTry && !pending && !wrong { next.firstTryCorrect += 1 }
         if firstTry && !pending { next.firstTryPoints += verdictWeight(feedback.verdict) }
-        if firstTry && pending { next.uncheckedFirstTries += 1 }
+        if pending { next.uncheckedFirstTries += 1 }
+        if !pending, let attempts = scoredAttempts { next.scoredAttempts = attempts + [LessonAttempt(exerciseKey: current.key, attempt: attempt, verdict: feedback.verdict)] }
         if !firstTry && !pending && !wrong { next.retryPoints = (retryPoints ?? 0) + lessonAttemptCredit(feedback.verdict, attempt: attempt) }
         next.xp = xp + xpGained
         return AnswerOutcome(state: next, feedback: feedback, attempt: attempt, requeued: requeued, xpGained: xpGained, extraPlays: extraPlays)
