@@ -93,7 +93,7 @@ final class LessonScreenLogicTests: XCTestCase {
         prefs.persianInputMethod = .phonetic
         XCTAssertEqual(
             LessonSettingsRows.rows(courseCode: "fa", prefs: prefs, hasServerPrefs: true),
-            [.textMode, .textAlignment, .romanizationTips, .translationTips, .nativeTips, .vowelMarks, .sentenceRomanization]
+            [.textMode, .textAlignment, .romanizationTips, .translationTips, .nativeTips, .vowelMarks, .sentenceRomanization, .font]
         )
         prefs.persianInputMethod = .layout
         XCTAssertTrue(LessonSettingsRows.rows(courseCode: "fa", prefs: prefs, hasServerPrefs: true).contains(.keyboardMode))
@@ -104,8 +104,47 @@ final class LessonScreenLogicTests: XCTestCase {
     func testSettingsRowsJapanese() {
         XCTAssertEqual(
             LessonSettingsRows.rows(courseCode: "ja", prefs: LocalPrefs(), hasServerPrefs: true),
-            [.textMode, .furigana, .romanizationTips, .translationTips, .nativeTips]
+            [.textMode, .furigana, .romanizationTips, .translationTips, .nativeTips, .font]
         )
+    }
+
+    func testFontGroupPersianOffersFamiliesAndGreysOutMissing() {
+        var prefs = LocalPrefs()
+        prefs.fontFa = ScriptFontPref(family: "Vazirmatn", sizePct: 120)
+        let group = LessonSettingsRows.fontGroup(courseCode: "fa", prefs: prefs, isAvailable: { _ in false })
+        XCTAssertEqual(group?.options.map { $0.label }, ["Default", "Vazirmatn"])
+        XCTAssertEqual(group?.options.map { $0.available }, [true, false])
+        XCTAssertEqual(group?.selectedFamily, "Vazirmatn")
+        XCTAssertEqual(group?.sizePct, 120)
+    }
+
+    func testFontGroupUnknownStoredFamilyFallsBackToDefault() {
+        var prefs = LocalPrefs()
+        prefs.fontFa = ScriptFontPref(family: "Noto Naskh Arabic", sizePct: 100)
+        XCTAssertNil(LessonSettingsRows.fontGroup(courseCode: "fa", prefs: prefs, isAvailable: { _ in true })?.selectedFamily)
+    }
+
+    func testFontGroupJapaneseIsSizeOnly() {
+        let group = LessonSettingsRows.fontGroup(courseCode: "ja", prefs: LocalPrefs(), isAvailable: { _ in true })
+        XCTAssertEqual(group?.options, [])
+        XCTAssertEqual(group?.sizePct, 100)
+    }
+
+    func testSettingFontWritesTheSameStoredPrefAsSettings() {
+        var next = LessonSettingsRows.settingFontFamily("Vazirmatn", courseCode: "fa", in: LocalPrefs())
+        XCTAssertEqual(next.fontFa.family, "Vazirmatn")
+        XCTAssertEqual(next.fontJa, ScriptFontPref())
+        next = LessonSettingsRows.settingFontSize(122, courseCode: "fa", in: next)
+        XCTAssertEqual(next.fontFa.sizePct, 120)
+        XCTAssertEqual(LessonSettingsRows.settingFontSize(500, courseCode: "ja", in: LocalPrefs()).fontJa.sizePct, 150)
+        XCTAssertEqual(LessonSettingsRows.settingFontSize(10, courseCode: "ja", in: LocalPrefs()).fontJa.sizePct, 75)
+    }
+
+    func testFontSizeReachesTheLessonTextLook() {
+        var prefs = LocalPrefs()
+        prefs.fontFa.sizePct = 130
+        let look = LessonScreenLogic.textLook(prefs: prefs, serverPrefs: LessonServerPrefs(), courseCode: "fa", hints: [:])
+        XCTAssertEqual(look.nativeScale, 1.3, accuracy: 0.001)
     }
 
     func testSettingsToggleRoundTrip() {

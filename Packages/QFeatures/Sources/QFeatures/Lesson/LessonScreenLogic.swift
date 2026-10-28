@@ -218,6 +218,24 @@ public enum LessonSettingsRow: Equatable, Sendable {
     case vowelMarks
     case sentenceRomanization
     case keyboardMode
+    /// The course script's font family and size (the same device-local pref as Settings; never synced).
+    case font
+}
+
+/// One font family in the lesson's Font group.
+public struct LessonFontOption: Equatable, Sendable {
+    public let label: String
+    /// The stored value (nil = default).
+    public let family: String?
+    /// False when the face is not installed on this device; the choice is shown greyed out.
+    public let available: Bool
+}
+
+/// The lesson's compact Font group: family choices (Persian only) and the size percentage. No custom-font entry.
+public struct LessonFontGroup: Equatable, Sendable {
+    public let options: [LessonFontOption]
+    public let selectedFamily: String?
+    public let sizePct: Int
 }
 
 public enum LessonSettingsRows {
@@ -237,7 +255,38 @@ public enum LessonSettingsRows {
             rows.append(.sentenceRomanization)
             if hasServerPrefs && prefs.persianInputMethod == .layout { rows.append(.keyboardMode) }
         }
+        if persian || language == "ja" { rows.append(.font) }
         return rows
+    }
+
+    /// The Font group for the course script; nil for a course with no native-script font setting.
+    public static func fontGroup(courseCode: String, prefs: LocalPrefs, isAvailable: (String) -> Bool) -> LessonFontGroup? {
+        guard let language = Languages.languageInfo(courseCode)?.language, language == "fa" || language == "ja" else { return nil }
+        let pref = language == "fa" ? prefs.fontFa : prefs.fontJa
+        var options: [LessonFontOption] = []
+        if language == "fa" {
+            for choice in persianFontChoices {
+                let available = choice.family.map { isAvailable($0) } ?? true
+                options.append(LessonFontOption(label: choice.label, family: choice.family, available: available))
+            }
+        }
+        let selected = options.contains(where: { $0.family == pref.family }) ? pref.family : nil
+        return LessonFontGroup(options: options, selectedFamily: selected, sizePct: min(150, max(75, pref.sizePct)))
+    }
+
+    /// The prefs with the course script's font family set (what Settings stores).
+    public static func settingFontFamily(_ family: String?, courseCode: String, in prefs: LocalPrefs) -> LocalPrefs {
+        var next = prefs
+        if Languages.isPersian(courseCode) { next.fontFa.family = family } else { next.fontJa.family = family }
+        return next
+    }
+
+    /// The prefs with the course script's size set, snapped to 5-point steps within 75...150.
+    public static func settingFontSize(_ value: Double, courseCode: String, in prefs: LocalPrefs) -> LocalPrefs {
+        var next = prefs
+        let pct = snapFontPercent(value)
+        if Languages.isPersian(courseCode) { next.fontFa.sizePct = pct } else { next.fontJa.sizePct = pct }
+        return next
     }
 
     public static func label(_ row: LessonSettingsRow, languageName: String) -> String {
@@ -251,6 +300,7 @@ public enum LessonSettingsRows {
         case .vowelMarks: return "Show vowel marks and the ezafe"
         case .sentenceRomanization: return "Show each sentence romanized above it"
         case .keyboardMode: return "Keyboard letter shapes"
+        case .font: return "Font"
         }
     }
 
@@ -265,7 +315,7 @@ public enum LessonSettingsRows {
         case .nativeTips: return prefs.showNativeHints
         case .vowelMarks: return prefs.showVowelMarks
         case .sentenceRomanization: return prefs.showSentenceRomanization
-        case .textMode, .textAlignment, .keyboardMode: return nil
+        case .textMode, .textAlignment, .keyboardMode, .font: return nil
         }
     }
 
@@ -279,7 +329,7 @@ public enum LessonSettingsRows {
         case .nativeTips: next.showNativeHints = on
         case .vowelMarks: next.showVowelMarks = on
         case .sentenceRomanization: next.showSentenceRomanization = on
-        case .textMode, .textAlignment, .keyboardMode: break
+        case .textMode, .textAlignment, .keyboardMode, .font: break
         }
         return next
     }
