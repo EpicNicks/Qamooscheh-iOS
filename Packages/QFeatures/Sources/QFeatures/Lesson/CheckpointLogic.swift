@@ -100,7 +100,7 @@ public enum CheckpointLogic {
 
     /// The single request that carries every answer, grouped by skill in the order first answered. An exercise that was
     /// not answered contributes nothing (the server scores what was answered); every tag of an exercise gets an item.
-    public static func request(info: CheckpointPlanInfo, instances: [ExerciseInstance], answers: [String: String], submissionId: String, occurredAt: Date) -> SubmitCheckpointRequest {
+    public static func request(info: CheckpointPlanInfo, instances: [ExerciseInstance], answers: [String: String], plays: [String: Int] = [:], submissionId: String, occurredAt: Date) -> SubmitCheckpointRequest {
         var order: [String] = []
         var units: [String: String] = [:]
         var skillKeys: [String: String] = [:]
@@ -118,7 +118,8 @@ public enum CheckpointLogic {
             for tag in instance.exercise.tags {
                 items[key, default: []].append(SubmittedItem(
                     exerciseOrdinal: instance.ordinal, lexemeTag: tag, exerciseType: instance.renderType,
-                    scriptMode: instance.exercise.scriptMode, submittedText: text, usedHint: false, latencyMs: nil, attempt: 1
+                    scriptMode: instance.exercise.scriptMode, submittedText: text, usedHint: false, latencyMs: nil, attempt: 1,
+                    playsUsed: instance.listening ? Listening.playsUsed(plays[instance.key] ?? 0) : nil
                 ))
             }
         }

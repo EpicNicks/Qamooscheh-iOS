@@ -16,7 +16,7 @@ public let retryDepth = 3
 /// ...at most this many attempts in all.
 public let maxAttempts = 2
 
-/// One showing of one exercise. `attempt` counts previous tries, so 0 the first time.
+/// One showing of one exercise. `attempt` counts previous tries, so 0 the first time. `plays` counts the finished plays of a listening exercise's recording in this showing; it lives here so a saved draft keeps it across the app being killed.
 public struct ExerciseInstance: Codable, Equatable, Sendable {
     public var key: String
     public var unitKey: String?
@@ -25,8 +25,9 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
     public var exercise: ExerciseArtifact
     public var renderType: ExerciseType
     public var attempt: Int
+    public var plays: Int
 
-    public init(key: String, unitKey: String?, skillKey: String, ordinal: Int, exercise: ExerciseArtifact, renderType: ExerciseType, attempt: Int = 0) {
+    public init(key: String, unitKey: String?, skillKey: String, ordinal: Int, exercise: ExerciseArtifact, renderType: ExerciseType, attempt: Int = 0, plays: Int = 0) {
         self.key = key
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -34,7 +35,24 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
         self.exercise = exercise
         self.renderType = renderType
         self.attempt = attempt
+        self.plays = plays
     }
+
+    /// Drafts saved before listening exercises existed have no `plays`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try c.decode(String.self, forKey: .key)
+        self.unitKey = try c.decodeIfPresent(String.self, forKey: .unitKey)
+        self.skillKey = try c.decode(String.self, forKey: .skillKey)
+        self.ordinal = try c.decode(Int.self, forKey: .ordinal)
+        self.exercise = try c.decode(ExerciseArtifact.self, forKey: .exercise)
+        self.renderType = try c.decode(ExerciseType.self, forKey: .renderType)
+        self.attempt = try c.decode(Int.self, forKey: .attempt)
+        self.plays = try c.decodeIfPresent(Int.self, forKey: .plays) ?? 0
+    }
+
+    public var listening: Bool { return renderType == .listenType }
+    public var playsLeft: Int { return Listening.playsLeft(plays) }
 }
 
 public struct RecordedItem: Codable, Equatable, Sendable {
@@ -56,6 +74,8 @@ public struct AnswerOutcome: Equatable, Sendable {
     public var attempt: Int
     public var requeued: Bool
     public var xpGained: Int
+    /// A listening answer that extra plays, not a retry, priced down: the line "You played it more than once" explains it.
+    public var extraPlays: Bool = false
 }
 
 /// Cosmetic, client-only XP for the pop animation and the recap; never sent anywhere. `attempt` is 1-based. (Android xpForAnswer.)
@@ -106,6 +126,14 @@ public struct LessonState: Codable, Equatable, Sendable {
     public var completedCount: Int { totalCount - queue.count }
     public var score: Double { totalCount == 0 ? 0 : firstTryPoints / Double(totalCount) }
 
+    /// One more finished play of the current listening exercise, if it is `key` and has plays left; otherwise the same state.
+    public func withPlay(key: String) -> LessonState {
+        guard let current = current, current.key == key, current.listening, current.playsLeft > 0 else { return self }
+        var next = self
+        next.queue[0].plays = current.plays + 1
+        return next
+    }
+
     /// Records an answer to the current exercise. A wrong answer is recorded too (the server's FSRS needs it) and, unless it was the last attempt, comes back `retryDepth` exercises later. An unchecked (pending) answer moves on without a retry: the server decides. Returns nil when the queue is empty.
     public func answer(_ feedback: AnswerFeedback, submittedText: String, usedHint: Bool = false, latencyMs: Int? = nil) -> AnswerOutcome? {
         guard let current = current else { return nil }
@@ -114,11 +142,13 @@ public struct LessonState: Codable, Equatable, Sendable {
         let pending = feedback.verdict == .pending
         let wrong = feedback.verdict == .incorrect
 
+        // A listening answer is priced as if the plays used were the attempt; answering unheard counts as one play.
+        let playsUsed: Int? = current.listening ? Listening.playsUsed(current.plays) : nil
         let recorded = current.exercise.tags.map { tag in
             RecordedItem(
                 unitKey: current.unitKey,
                 skillKey: current.skillKey,
-                item: SubmittedItem(exerciseOrdinal: current.ordinal, lexemeTag: tag, exerciseType: current.renderType, scriptMode: current.exercise.scriptMode, submittedText: submittedText, usedHint: usedHint, latencyMs: latencyMs, attempt: attempt)
+                item: SubmittedItem(exerciseOrdinal: current.ordinal, lexemeTag: tag, exerciseType: current.renderType, scriptMode: current.exercise.scriptMode, submittedText: submittedText, usedHint: usedHint, latencyMs: latencyMs, attempt: attempt, playsUsed: playsUsed)
             )
         }
         var rest = Array(queue.dropFirst())
@@ -126,9 +156,13 @@ public struct LessonState: Codable, Equatable, Sendable {
         if requeued {
             var again = current
             again.attempt = attempt
+            // A retry is a fresh listen: three plays again, priced from its own attempt.
+            again.plays = 0
             rest.insert(again, at: min(retryDepth, rest.count))
         }
-        let xpGained = pending ? 0 : xpForAnswer(feedback.verdict, attempt: attempt, usedHint: usedHint)
+        let priced = current.listening ? Listening.pricedAttempt(attempt: attempt, plays: current.plays) : attempt
+        let xpGained = pending ? 0 : xpForAnswer(feedback.verdict, attempt: priced, usedHint: usedHint)
+        let extraPlays = current.listening && !pending && !wrong && Listening.playedMoreThanOnce(attempt: attempt, plays: current.plays)
 
         var next = self
         next.queue = rest
@@ -137,7 +171,7 @@ public struct LessonState: Codable, Equatable, Sendable {
         if firstTry && !pending { next.firstTryPoints += verdictWeight(feedback.verdict) }
         if firstTry && pending { next.uncheckedFirstTries += 1 }
         next.xp = xp + xpGained
-        return AnswerOutcome(state: next, feedback: feedback, attempt: attempt, requeued: requeued, xpGained: xpGained)
+        return AnswerOutcome(state: next, feedback: feedback, attempt: attempt, requeued: requeued, xpGained: xpGained, extraPlays: extraPlays)
     }
 
     /// The same lesson again from the top: a retake, or practice mode (no credit).
@@ -271,6 +305,11 @@ public struct LessonEngine {
         guard let outcome = state.answer(feedback, submittedText: text, usedHint: usedHint, latencyMs: latencyMs) else { return nil }
         state = outcome.state
         return outcome
+    }
+
+    /// One more finished play of the current listening exercise, if `key` is still the one on screen.
+    public mutating func recordPlay(key: String) {
+        state = state.withPlay(key: key)
     }
 
     /// A story or saved-words round is read once through: a missed exercise is not asked again.

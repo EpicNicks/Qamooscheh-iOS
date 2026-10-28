@@ -40,8 +40,10 @@ public struct SubmittedItem: Codable, Equatable, Sendable {
     public var latencyMs: Int?
     public var attempt: Int
     public var retypeText: String?
+    /// listen_type only, 1 to 3: the recording plays that went into this answer. The server prices the answer as max(attempt, playsUsed) and rejects a value outside 1...3. nil for every other type.
+    public var playsUsed: Int?
 
-    public init(exerciseOrdinal: Int, lexemeTag: String, exerciseType: ExerciseType, scriptMode: ExerciseScriptMode, submittedText: String, usedHint: Bool, latencyMs: Int? = nil, attempt: Int, retypeText: String? = nil) {
+    public init(exerciseOrdinal: Int, lexemeTag: String, exerciseType: ExerciseType, scriptMode: ExerciseScriptMode, submittedText: String, usedHint: Bool, latencyMs: Int? = nil, attempt: Int, retypeText: String? = nil, playsUsed: Int? = nil) {
         self.exerciseOrdinal = exerciseOrdinal
         self.lexemeTag = lexemeTag
         self.exerciseType = exerciseType
@@ -51,6 +53,7 @@ public struct SubmittedItem: Codable, Equatable, Sendable {
         self.latencyMs = latencyMs
         self.attempt = attempt
         self.retypeText = retypeText
+        self.playsUsed = playsUsed
     }
 }
 

@@ -17,12 +17,15 @@ public enum LessonLoadError: Error, Equatable, Sendable {
     case courseVersionMismatch
     /// The plan names a course version the device doesn't have, even after a refresh.
     case courseUpdated
+    /// A lesson, story or checkpoint holds an exercise this build can't play (a type it doesn't know, or a listening exercise with no recording). A submitted lesson needs every ordinal answered, so it is declined, not skipped.
+    case unplayable
 }
 
 extension LessonLoadError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .courseUpdated: return "This Parsle was updated. Reopen it to continue."
+        case .unplayable: return unplayableLessonMessage
         default: return nil
         }
     }

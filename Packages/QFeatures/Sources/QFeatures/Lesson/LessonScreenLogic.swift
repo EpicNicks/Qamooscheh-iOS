@@ -101,9 +101,9 @@ public enum LessonScreenLogic {
     public static let backToPath = "Back to path"
     public static let settingsTitle = "Lesson settings"
 
-    /// Type-in and speak share the typing field and keyboard; word bank and match share the tiles.
+    /// Type-in, speak and listening share the typing field and keyboard; word bank and match share the tiles.
     public static func isTypeIn(_ type: ExerciseType) -> Bool {
-        return type == .typeIn || type == .speak
+        return type == .typeIn || type == .speak || type == .listenType
     }
 
     public static func checkButtonLabel(isCheckpoint: Bool) -> String {

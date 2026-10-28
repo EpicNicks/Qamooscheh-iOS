@@ -182,6 +182,9 @@ private func graderRequest(_ exercise: GradedExercise, _ submittedText: String, 
     case .typeIn: typeName = "TypeIn"
     case .match: typeName = "Match"
     case .speak: typeName = "Speak"
+    // A listening exercise is graded as type_in (the grader has no listen_type of its own).
+    case .listenType: typeName = "TypeIn"
+    case .unknown: typeName = "Unknown"
     }
     return GraderRequest(
         exerciseType: typeName,

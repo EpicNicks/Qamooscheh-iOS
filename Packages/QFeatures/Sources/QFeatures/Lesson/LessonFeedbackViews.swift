@@ -79,12 +79,15 @@ public struct FeedbackReview {
     public var submittedText: String
     /// Cosmetic XP for the pop (0 = none).
     public var xp: Int
+    /// A listening answer that extra plays, not a retry, priced down; the panel says so.
+    public var extraPlays: Bool
 
-    public init(feedback: AnswerFeedback, instance: ExerciseInstance, submittedText: String, xp: Int) {
+    public init(feedback: AnswerFeedback, instance: ExerciseInstance, submittedText: String, xp: Int, extraPlays: Bool = false) {
         self.feedback = feedback
         self.instance = instance
         self.submittedText = submittedText
         self.xp = xp
+        self.extraPlays = extraPlays
     }
 }
 
@@ -167,6 +170,9 @@ private struct AnswerFeedbackContent: View {
                     }
                     playButton(accent)
                 }
+            }
+            if review.extraPlays {
+                Text(Listening.extraPlaysNote).font(.system(size: 15)).foregroundColor(Color(argb: p.textMuted))
             }
             if let note = review.feedback.note {
                 Text(note).font(.system(size: 15)).foregroundColor(Color(argb: p.text))

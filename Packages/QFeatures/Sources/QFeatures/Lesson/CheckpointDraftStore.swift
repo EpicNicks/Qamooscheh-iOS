@@ -7,11 +7,14 @@ public struct CheckpointDraft: Codable, Equatable, Sendable {
     public var occurredAt: Date
     /// Instance key to submitted text.
     public var answers: [String: String]
+    /// Instance key to the plays behind a listening answer (playsUsed); nil in drafts saved before listening exercises existed.
+    public var plays: [String: Int]?
 
-    public init(submissionId: String, occurredAt: Date, answers: [String: String]) {
+    public init(submissionId: String, occurredAt: Date, answers: [String: String], plays: [String: Int]? = nil) {
         self.submissionId = submissionId
         self.occurredAt = occurredAt
         self.answers = answers
+        self.plays = plays
     }
 }
 
