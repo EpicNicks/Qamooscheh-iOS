@@ -83,6 +83,21 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertEqual(e.state.firstTryCorrect, 0)
     }
 
+    func testRetryEarnsHalfCreditTowardTheScoreButNotFirstTryPoints() {
+        var e = engine(["a"], grader: FakeGrader(["Incorrect", "Correct"]))
+        e.submit("x")
+        e.submit("a")
+        XCTAssertEqual(e.state.firstTryPoints, 0)
+        XCTAssertEqual(e.state.score, 0.5)
+    }
+
+    func testCorrectedRetryEarnsQuarterCredit() {
+        var e = engine(["a"], grader: FakeGrader(["Incorrect", "AcceptedWithCorrection"]))
+        e.submit("x")
+        e.submit("a")
+        XCTAssertEqual(e.state.score, 0.25)
+    }
+
     func testCorrectedAnswerIsHalfPointAndSevenXpHintHalves() {
         var e = engine(["a", "b"], grader: FakeGrader(["AcceptedWithCorrection", "Correct"]))
         XCTAssertEqual(e.submit("a")?.xpGained, 7)
@@ -125,7 +140,7 @@ final class LessonEngineTests: XCTestCase {
 
     func testCompletionPayloadAndPassMark() {
         var e = engine(["a", "b", "c", "d"], grader: FakeGrader(["Correct", "Correct", "Correct", "Incorrect", "Correct"]))
-        // d is missed once, requeued, then answered again; first tries: 3 correct of 4.
+        // d is missed once, requeued, then answered again; 3 right first time, d half credit on the retry.
         for text in ["a", "b", "c", "x", "d"] { e.submit(text) }
         XCTAssertTrue(e.state.finished)
         let when = Date(timeIntervalSince1970: 1_000)
@@ -142,7 +157,7 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertTrue(s.completed)
         XCTAssertEqual(s.items.count, 5)
         XCTAssertEqual(done.locallyCompleted, true)
-        XCTAssertEqual(done.score, 0.75)
+        XCTAssertEqual(done.score, 0.875)
     }
 
     func testBelowPassMarkAndUncheckedLeaveCompletion() {
