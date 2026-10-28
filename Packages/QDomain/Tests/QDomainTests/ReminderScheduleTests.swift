@@ -79,11 +79,46 @@ final class ReminderScheduleTests: XCTestCase {
         XCTAssertTrue(streakNudgeApplies(reminderHour: 20, reminderMinute: 29))
     }
 
-    func testSuppression() {
-        XCTAssertFalse(dailyReminderSuppressed(smartSuppression: false, practicedToday: true, goalMet: true))
-        XCTAssertTrue(dailyReminderSuppressed(smartSuppression: true, practicedToday: true, goalMet: false))
-        XCTAssertTrue(dailyReminderSuppressed(smartSuppression: true, practicedToday: false, goalMet: true))
-        XCTAssertFalse(dailyReminderSuppressed(smartSuppression: true, practicedToday: false, goalMet: false))
+    func testNoParsleYetStartsWithStreakOrNot() {
+        let r = dailyReminder(smartSuppression: true, practicedToday: false, xpToday: 0, goalXp: 50, streakDays: 12)
+        XCTAssertEqual(r, .start(streakDays: 12))
+        XCTAssertEqual(r?.text.title, "Time for today's practice")
+        XCTAssertEqual(r?.text.body, "Keep your 12-day streak going.")
+        XCTAssertEqual(DailyReminder.start(streakDays: 0).text.body, "A few minutes is all it takes.")
+    }
+
+    func testPracticedShortOfGoal() {
+        let r = dailyReminder(smartSuppression: true, practicedToday: true, xpToday: 20, goalXp: 50, streakDays: 0)
+        XCTAssertEqual(r, .goal(xpLeft: 30))
+        XCTAssertEqual(r?.text.title, "You're 30 XP from today's goal")
+        XCTAssertEqual(r?.text.body, "Another Parsle gets you there.")
+        // XP alone counts as practiced.
+        XCTAssertEqual(dailyReminder(smartSuppression: true, practicedToday: false, xpToday: 20, goalXp: 50, streakDays: 3), .goal(xpLeft: 30))
+    }
+
+    func testUnreadableXpOrGoalIsPartway() {
+        let practiced = dailyReminder(smartSuppression: true, practicedToday: true, xpToday: nil, goalXp: 50, streakDays: 0)
+        XCTAssertEqual(practiced, .goal(xpLeft: nil))
+        XCTAssertEqual(practiced?.text.title, "You're partway to today's goal")
+        XCTAssertEqual(dailyReminder(smartSuppression: true, practicedToday: true, xpToday: 20, goalXp: nil, streakDays: 0), .goal(xpLeft: nil))
+    }
+
+    func testGoalMetSuppressesOnlyWithSmartSuppression() {
+        XCTAssertNil(dailyReminder(smartSuppression: true, practicedToday: true, xpToday: 50, goalXp: 50, streakDays: 4))
+        let on = dailyReminder(smartSuppression: false, practicedToday: true, xpToday: 60, goalXp: 50, streakDays: 4)
+        XCTAssertEqual(on, .keepGoing)
+        XCTAssertEqual(on?.text.title, "Today's goal is done")
+        XCTAssertEqual(on?.text.body, "On a roll? Another Parsle keeps it going.")
+    }
+
+    func testPracticedButGoalUnmetStillNudges() {
+        XCTAssertNotNil(dailyReminder(smartSuppression: true, practicedToday: true, xpToday: 10, goalXp: 50, streakDays: 4))
+    }
+
+    func testUnreadableGoalIsNeverMet() {
+        XCTAssertEqual(dailyReminder(smartSuppression: true, practicedToday: false, xpToday: 500, goalXp: nil, streakDays: 0), .goal(xpLeft: nil))
+        XCTAssertEqual(dailyReminder(smartSuppression: true, practicedToday: false, xpToday: nil, goalXp: 50, streakDays: 0), .start(streakDays: 0))
+        XCTAssertEqual(dailyReminder(smartSuppression: true, practicedToday: false, xpToday: 0, goalXp: 0, streakDays: 0), .start(streakDays: 0))
     }
 
     func testBackoff() {

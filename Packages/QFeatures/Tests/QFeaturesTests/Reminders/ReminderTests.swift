@@ -68,12 +68,32 @@ final class ReminderPlannerTests: XCTestCase {
         XCTAssertFalse(plan.contains { $0.kind == .streak })
     }
 
-    func testPracticedTodaySkipsTodaysDailyAndNudgeOnly() {
-        let ctx = ReminderContext(practicedToday: true, streakDays: 5)
+    func testPracticedTodaySkipsOnlyTodaysNudgeAndSendsGoalCopy() {
+        let ctx = ReminderContext(practicedToday: true, streakDays: 5, xpToday: 20, goalXp: 50)
         let plan = ReminderPlanner.plan(userId: "u", settings: settings(), context: ctx, now: at(2, 8), calendar: utc)
-        XCTAssertEqual(plan.first?.fireAt, at(3, 19))
+        XCTAssertEqual(plan.first?.fireAt, at(2, 19))
+        XCTAssertEqual(plan.first?.title, "You're 30 XP from today's goal")
+        XCTAssertEqual(plan.first?.body, "Another Parsle gets you there.")
         XCTAssertFalse(plan.contains { $0.fireAt == at(2, 21, 30) })
         XCTAssertTrue(plan.contains { $0.fireAt == at(3, 21, 30) })
+        XCTAssertEqual(plan.first { $0.fireAt == at(3, 19) }?.title, "Time for today's practice")
+    }
+
+    func testPracticedWithUnreadableXpIsPartway() {
+        let plan = ReminderPlanner.plan(userId: "u", settings: settings(nudge: false), context: ReminderContext(practicedToday: true), now: at(2, 8), calendar: utc)
+        XCTAssertEqual(plan.first?.title, "You're partway to today's goal")
+    }
+
+    func testGoalMetWithSuppressionOffSaysGoalDone() {
+        let ctx = ReminderContext(practicedToday: true, xpToday: 60, goalXp: 50)
+        let plan = ReminderPlanner.plan(userId: "u", settings: settings(nudge: false, smart: false), context: ctx, now: at(2, 8), calendar: utc)
+        XCTAssertEqual(plan.first?.title, "Today's goal is done")
+    }
+
+    func testPausedTodayDoesNotPromiseTheStreak() {
+        let ctx = ReminderContext(pausedToday: true, streakDays: 5)
+        let plan = ReminderPlanner.plan(userId: "u", settings: settings(nudge: false), context: ctx, now: at(2, 8), calendar: utc)
+        XCTAssertEqual(plan.first?.body, "A few minutes is all it takes.")
     }
 
     func testSmartSuppressionOffStillSendsToday() {
@@ -171,7 +191,7 @@ final class ReminderServiceTests: XCTestCase {
         let service = makeService(center, defaults: makeDefaults())
         await service.apply(settings(nudge: false), userId: "a")
         XCTAssertEqual(center.scheduled.first?.fireAt, at(2, 19))
-        await service.refresh(userId: "a", context: ReminderContext(practicedToday: true))
+        await service.refresh(userId: "a", context: ReminderContext(practicedToday: true, goalMetToday: true))
         XCTAssertEqual(center.scheduled.first?.fireAt, at(3, 19))
     }
 }

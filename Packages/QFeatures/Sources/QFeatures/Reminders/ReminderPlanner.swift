@@ -7,13 +7,25 @@ public struct ReminderContext: Equatable, Sendable {
     public var pausedToday: Bool
     public var streakDays: Int
     public var goalMetToday: Bool
+    /// Today's XP and the daily goal; nil when they couldn't be read (then the goal never counts as met).
+    public var xpToday: Int?
+    public var goalXp: Int?
 
-    public init(practicedToday: Bool = false, pausedToday: Bool = false, streakDays: Int = 0, goalMetToday: Bool = false) {
+    public init(
+        practicedToday: Bool = false, pausedToday: Bool = false, streakDays: Int = 0, goalMetToday: Bool = false,
+        xpToday: Int? = nil, goalXp: Int? = nil
+    ) {
+        self.xpToday = xpToday
+        self.goalXp = goalXp
         self.practicedToday = practicedToday
         self.pausedToday = pausedToday
         self.streakDays = streakDays
         self.goalMetToday = goalMetToday
     }
+
+    /// XP and goal for the decision. A caller that only knows the goal is met (`goalMetToday`) is honored.
+    var effectiveGoal: Int? { goalMetToday ? (goalXp ?? 1) : goalXp }
+    var effectiveXp: Int? { goalMetToday ? max(xpToday ?? 0, effectiveGoal ?? 1) : xpToday }
 
     /// Practiced or paused: today's streak is safe.
     public var safeToday: Bool { practicedToday || pausedToday }
@@ -74,8 +86,18 @@ public enum ReminderPlanner {
         for slot in slots {
             if planned.count >= maxPlanned { break }
             let today = calendar.isDate(slot.date, inSameDayAs: now)
+            var daily: DailyReminder?
             if slot.kind == .daily {
-                if today && dailyReminderSuppressed(smartSuppression: settings.smartSuppression, practicedToday: known.practicedToday, goalMet: known.goalMetToday) { continue }
+                if today {
+                    daily = dailyReminder(
+                        smartSuppression: settings.smartSuppression, practicedToday: known.practicedToday,
+                        xpToday: known.effectiveXp, goalXp: known.effectiveGoal,
+                        streakDays: known.streakDays > 0 && !known.safeToday ? known.streakDays : 0)
+                    if daily == nil { continue }
+                } else {
+                    // Later days: nothing is practiced yet; the streak carries on if it is alive.
+                    daily = .start(streakDays: known.streakDays)
+                }
             } else {
                 // A zero streak has nothing to keep; a practiced or paused day is already safe.
                 if known.streakDays == 0 || (today && known.safeToday) { continue }
@@ -87,21 +109,19 @@ public enum ReminderPlanner {
                 planned.append(make(userId, .stop, slot.date, "We'll stop reminding you", "Turn reminders back on in Settings whenever you like."))
                 return planned
             case .send:
-                planned.append(content(userId, slot.kind, slot.date, known))
+                planned.append(content(userId, slot.kind, slot.date, known, daily))
                 ignored += 1
             }
         }
         return planned
     }
 
-    private static func content(_ userId: String, _ kind: ReminderKind, _ at: Date, _ ctx: ReminderContext) -> PlannedReminder {
+    private static func content(_ userId: String, _ kind: ReminderKind, _ at: Date, _ ctx: ReminderContext, _ daily: DailyReminder?) -> PlannedReminder {
         if kind == .streak {
             return make(userId, .streak, at, "Keep your \(ctx.streakDays)-day streak going", "One short Parsle today keeps it alive.")
         }
-        let body = ctx.streakDays > 0 && !ctx.safeToday
-            ? "Keep your \(ctx.streakDays)-day streak going."
-            : "A few minutes is all it takes."
-        return make(userId, .daily, at, "Time for today's practice", body)
+        let text = (daily ?? .start(streakDays: 0)).text
+        return make(userId, .daily, at, text.title, text.body)
     }
 
     private static func make(_ userId: String, _ kind: ReminderKind, _ at: Date, _ title: String, _ body: String) -> PlannedReminder {

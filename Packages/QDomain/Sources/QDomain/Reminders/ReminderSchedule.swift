@@ -39,10 +39,38 @@ public func streakNudgeApplies(reminderHour: Int, reminderMinute: Int) -> Bool {
     reminderHour * 60 + reminderMinute < streakNudgeHour * 60 + streakNudgeMinute - 60
 }
 
-/// Whether the daily reminder is pointless now: the learner already practiced today or hit today's XP goal.
-/// Only when `smartSuppression` is on.
-public func dailyReminderSuppressed(smartSuppression: Bool, practicedToday: Bool, goalMet: Bool) -> Bool {
-    smartSuppression && (practicedToday || goalMet)
+/// Which daily reminder to send, from what the learner has done today.
+public enum DailyReminder: Equatable, Sendable {
+    /// Nothing practiced yet today. `streakDays` is a streak today would keep, or 0.
+    case start(streakDays: Int)
+    /// Practiced today, goal not met yet. `xpLeft` is nil when today's XP or the goal couldn't be read.
+    case goal(xpLeft: Int?)
+    /// Today's goal is met: encouragement to keep going.
+    case keepGoing
+
+    /// The notification's title and body.
+    public var text: (title: String, body: String) {
+        switch self {
+        case .start(let streakDays):
+            return ("Time for today's practice", streakDays > 0 ? "Keep your \(streakDays)-day streak going." : "A few minutes is all it takes.")
+        case .goal(let xpLeft):
+            return (xpLeft.map { "You're \($0) XP from today's goal" } ?? "You're partway to today's goal", "Another Parsle gets you there.")
+        case .keepGoing:
+            return ("Today's goal is done", "On a roll? Another Parsle keeps it going.")
+        }
+    }
+}
+
+/// The daily reminder for today, or nil when it is skipped: `smartSuppression` skips it only once today's XP goal is
+/// met. `practicedToday` comes from the streak's own "today" (a streak that failed to refresh is "not practiced");
+/// `xpToday` and `goalXp` are nil when they couldn't be read, and then the goal never counts as met. `streakDays` is the
+/// streak today would keep, or 0.
+public func dailyReminder(smartSuppression: Bool, practicedToday: Bool, xpToday: Int?, goalXp: Int?, streakDays: Int) -> DailyReminder? {
+    var xpLeft: Int?
+    if let xp = xpToday, let goal = goalXp, goal > 0 { xpLeft = max(0, goal - xp) }
+    if xpLeft == 0 { return smartSuppression ? nil : .keepGoing }
+    if practicedToday || (xpToday ?? 0) > 0 { return .goal(xpLeft: xpLeft) }
+    return .start(streakDays: streakDays)
 }
 
 public enum BackoffStep: Equatable, Sendable {
