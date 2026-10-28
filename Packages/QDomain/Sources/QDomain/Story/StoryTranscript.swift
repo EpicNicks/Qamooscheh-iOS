@@ -42,7 +42,7 @@ public enum StoryTranscript {
     public static func answerText(_ exercise: ExerciseArtifact) -> String {
         switch exercise.type {
         case .wordBank, .match: return exercise.answer.joined(separator: " ")
-        case .typeIn, .speak: return exercise.answer.joined(separator: " / ")
+        case .typeIn, .speak, .listenType, .unknown: return exercise.answer.joined(separator: " / ")
         }
     }
 

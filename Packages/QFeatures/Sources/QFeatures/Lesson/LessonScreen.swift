@@ -152,14 +152,24 @@ public struct LessonScreen: View {
                         if let chapter = session.setup.story {
                             StoryTranscriptView(chapter: chapter, upTo: instance.ordinal, results: session.storyResults)
                         }
-                        ExercisePrompt(
-                            exercise: instance.exercise,
-                            courseCode: session.courseCode,
-                            hasVoice: session.hasVoice,
-                            onPlay: { session.playPrompt(slow: false) },
-                            onInstallVoice: { session.installVoice() },
-                            onPlaySlow: { session.playPrompt(slow: true) }
-                        )
+                        if instance.listening && session.review == nil {
+                            ListenPrompt(
+                                playsLeft: instance.playsLeft,
+                                locked: session.listenPlaying,
+                                failed: session.listenFailed,
+                                onPlay: { session.playListening(slow: false) },
+                                onPlaySlow: { session.playListening(slow: true) }
+                            )
+                        } else {
+                            ExercisePrompt(
+                                exercise: instance.exercise,
+                                courseCode: session.courseCode,
+                                hasVoice: session.hasVoice,
+                                onPlay: { session.playPrompt(slow: false) },
+                                onInstallVoice: { session.installVoice() },
+                                onPlaySlow: { session.playPrompt(slow: true) }
+                            )
+                        }
                         exerciseBody(instance)
                     }
                     .padding(.horizontal, Spacing.standard.s3)

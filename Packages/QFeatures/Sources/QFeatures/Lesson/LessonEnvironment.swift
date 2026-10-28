@@ -159,6 +159,8 @@ public struct LessonEnvironment {
     public var grader: Grader?
     public var gradingOnDevice: Bool
     public var speech: SpeechService?
+    /// Plays listening exercises' recordings; nil leaves their play buttons doing nothing.
+    public var recordings: RecordingPlaying?
     public var courseHints: [String: WordHint]
     public var onFeedback: (FeedbackEvent) -> Void
     /// Sounds and haptics for feedback events; nil plays none.
@@ -182,6 +184,7 @@ public struct LessonEnvironment {
         grader: Grader? = PlaceholderGraderSource.grader,
         gradingOnDevice: Bool = PlaceholderGraderSource.gradingOnDevice,
         speech: SpeechService? = nil,
+        recordings: RecordingPlaying? = nil,
         courseHints: [String: WordHint] = emptyHintMap,
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
         effects: FeedbackEffects? = nil,
@@ -203,6 +206,7 @@ public struct LessonEnvironment {
         self.grader = grader
         self.gradingOnDevice = gradingOnDevice
         self.speech = speech
+        self.recordings = recordings
         self.courseHints = courseHints
         self.onFeedback = onFeedback
         self.effects = effects
@@ -232,6 +236,8 @@ public struct LessonEnvironment {
         })
         let submitter = LessonSubmitter(queue: queue, flusher: flusher)
         let checkpoints = CheckpointRepository(client: client)
+        let recordingFiles = FileContentStore(root: support.appendingPathComponent("content", isDirectory: true))
+        let recordingPlayer: RecordingPlaying? = StoreRecordingPlayer(read: { key in try? recordingFiles.read(key) })
         return LessonEnvironment(
             loader: loader,
             userId: { await store.load()?.userId },
@@ -250,6 +256,7 @@ public struct LessonEnvironment {
             },
             draftDirectory: support.appendingPathComponent("lesson-drafts", isDirectory: true),
             speech: speech,
+            recordings: recordingPlayer,
             onFeedback: onFeedback,
             effects: effects,
             onInstallVoice: onInstallVoice,
@@ -258,11 +265,25 @@ public struct LessonEnvironment {
         )
     }
 
+    /// The setup with the exercises this build can't play dealt with. A lesson, story or checkpoint is submitted with an answer for every exercise, so one holding such an exercise is declined (`LessonLoadError.unplayable`); a remix or saved-words practice just leaves it out.
+    static func screened(_ setup: LessonSetup, route: LessonRoute) throws -> LessonSetup {
+        let submitted = !route.isRemix && route.exerciseRefs == nil
+        switch screenUnplayable(setup.instances, submitted: submitted, exercise: { $0.exercise }) {
+        case .decline:
+            throw LessonLoadError.unplayable
+        case .play(let playable):
+            var kept = setup
+            kept.instances = playable
+            return kept
+        }
+    }
+
     /// A ready session for the route, or nil when there is nothing to play. Throws when the lesson can't be set up.
     public func makeSession(for route: LessonRoute) async throws -> LessonSession? {
         // The queue is per user: with nobody signed in the lesson must not start, because its answers would have nowhere to be saved.
         guard let id = await userId(), !id.isEmpty else { throw LessonEnvironmentError.signedOut }
         guard var setup = try await loader.setup(for: route) else { return nil }
+        setup = try Self.screened(setup, route: route)
         // A checkpoint with nothing left to test is still submitted, to move the learner on.
         if setup.instances.isEmpty && setup.checkpoint?.requiresTest != false { return nil }
         if route.practice { setup.practice = true }
@@ -315,6 +336,7 @@ public struct LessonEnvironment {
             effects: effects,
             onInstallVoice: onInstallVoice,
             makeReportModel: makeReportModel,
+            recordings: recordings,
             submitCheckpoint: checkpointSend,
             onRejectionShown: { ids in Task { await dismiss(id, ids) } },
             checkpointDraft: checkpointDraft

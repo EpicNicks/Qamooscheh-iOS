@@ -156,7 +156,7 @@ public struct ExerciseArtifact: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.type = try c.decode(ExerciseType.self, forKey: .type)
+        self.type = try c.decodeIfPresent(ExerciseType.self, forKey: .type) ?? .unknown
         self.scriptMode = try c.decode(ExerciseScriptMode.self, forKey: .scriptMode)
         self.prompt = try c.decode(String.self, forKey: .prompt)
         self.tiles = try c.decodeIfPresent([String].self, forKey: .tiles)

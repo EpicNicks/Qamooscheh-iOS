@@ -36,6 +36,8 @@ public struct LessonDependencies {
     /// Persists the one server pref the lesson changes (text mode).
     public var saveScriptMode: (ScriptMode) -> Void
     public var speech: SpeechService?
+    /// Plays a listening exercise's recording; nil leaves its play buttons doing nothing.
+    public var recordings: RecordingPlaying?
     public var courseHints: [String: WordHint]
     public var onFeedback: (FeedbackEvent) -> Void
     /// Plays each feedback event's sound and haptic as the learner's prefs allow; nil plays nothing (tests).
@@ -71,6 +73,7 @@ public struct LessonDependencies {
         effects: FeedbackEffects? = nil,
         onInstallVoice: @escaping () -> Void = {},
         makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
+        recordings: RecordingPlaying? = nil,
         now: @escaping () -> Date = { Date() },
         submitCheckpoint: CheckpointSubmitFunction? = nil,
         newSubmissionId: @escaping () -> String = { UUID().uuidString.lowercased() },
@@ -90,6 +93,7 @@ public struct LessonDependencies {
         self.savePrefs = savePrefs
         self.saveScriptMode = saveScriptMode
         self.speech = speech
+        self.recordings = recordings
         self.courseHints = courseHints
         self.onFeedback = onFeedback
         self.effects = effects
@@ -145,6 +149,10 @@ public final class LessonSession: ObservableObject {
     /// Word bank / match: the built answer, or nil until every tile is placed.
     @Published public private(set) var tileAnswer: String?
     @Published public private(set) var usedHint = false
+    /// A listening take is running: both play buttons stay locked until it ends, so stopping each play early can't give free plays.
+    @Published public private(set) var listenPlaying = false
+    /// The last listening play could not be loaded or broke off; it was not counted.
+    @Published public private(set) var listenFailed = false
     /// A bumped value re-creates the exercise views, so a retry of the same exercise starts fresh.
     @Published public private(set) var exerciseRound = 0
     /// Each story line's first answer, right or not, by ordinal: the transcript's marks.
@@ -161,6 +169,8 @@ public final class LessonSession: ObservableObject {
     private var deliveryTask: Task<Void, Never>?
     /// A checkpoint's answers by instance key. Not marked and not saved to disk: all sent at the end, or lost on leaving.
     private var checkpointAnswers: [String: String] = [:]
+    /// The plays behind each listening answer of a checkpoint (instance key to playsUsed).
+    private var checkpointPlays: [String: Int] = [:]
     private var checkpointSubmissionId: String
     /// Stamped on the first send and reused by every retry, like the submission id.
     private var checkpointOccurredAt: Date?
@@ -213,6 +223,7 @@ public final class LessonSession: ObservableObject {
         if setup.checkpoint != nil, let saved = dependencies.checkpointDraft.load(),
            !saved.answers.isEmpty, Set(saved.answers.keys) == Set(setup.instances.map { $0.key }) {
             checkpointAnswers = saved.answers
+            checkpointPlays = saved.plays ?? [:]
             checkpointSubmissionId = saved.submissionId
             checkpointOccurredAt = saved.occurredAt
             while !engine.state.finished && !engine.state.queue.isEmpty { engine.advancePastCurrent() }
@@ -326,6 +337,7 @@ public final class LessonSession: ObservableObject {
             recordCheckpointAnswer(current, text)
             return
         }
+        if current.listening { deps.recordings?.stop() }
         let latency = max(0, Int(deps.now().timeIntervalSince(shownAt) * 1000))
         guard let outcome = engine.submit(text, usedHint: usedHint, latencyMs: latency) else { return }
         if setup.story != nil {
@@ -333,7 +345,7 @@ public final class LessonSession: ObservableObject {
             // A story is read once through: a missed line is not asked again.
             engine.dropFromQueue(key: current.key)
         }
-        let shown = FeedbackReview(feedback: outcome.feedback, instance: current, submittedText: text, xp: outcome.xpGained)
+        let shown = FeedbackReview(feedback: outcome.feedback, instance: current, submittedText: text, xp: outcome.xpGained, extraPlays: outcome.extraPlays)
         review = shown
         switch outcome.feedback.verdict {
         case .correct, .acceptedWithCorrection: emit(.correct)
@@ -346,6 +358,8 @@ public final class LessonSession: ObservableObject {
     /// No marking mid-checkpoint (Android submit): record the answer and move straight on.
     private func recordCheckpointAnswer(_ current: ExerciseInstance, _ text: String) {
         checkpointAnswers[current.key] = text
+        if current.listening { deps.recordings?.stop() }
+        if current.listening { checkpointPlays[current.key] = Listening.playsUsed(current.plays) }
         engine.advancePastCurrent()
         resetAnswer()
         if engine.state.finished {
@@ -353,7 +367,7 @@ public final class LessonSession: ObservableObject {
             let occurredAt = checkpointOccurredAt ?? deps.now()
             checkpointOccurredAt = occurredAt
             deps.checkpointDraft.save(CheckpointDraft(
-                submissionId: checkpointSubmissionId, occurredAt: occurredAt, answers: checkpointAnswers))
+                submissionId: checkpointSubmissionId, occurredAt: occurredAt, answers: checkpointAnswers, plays: checkpointPlays))
         } else {
             rebuildKeyboard()
             exerciseShown()
@@ -371,7 +385,7 @@ public final class LessonSession: ObservableObject {
         let occurredAt = checkpointOccurredAt ?? deps.now()
         checkpointOccurredAt = occurredAt
         let request = CheckpointLogic.request(
-            info: info, instances: setup.instances, answers: checkpointAnswers,
+            info: info, instances: setup.instances, answers: checkpointAnswers, plays: checkpointPlays,
             submissionId: checkpointSubmissionId, occurredAt: occurredAt
         )
         let send = deps.submitCheckpoint
@@ -416,7 +430,7 @@ public final class LessonSession: ObservableObject {
 
     /// Autoplay of the prompt, once per exercise shown (Android LaunchedEffect on instance.key).
     public func exerciseShown() {
-        guard serverPrefs.autoplayAudio, let current = engine.state.current, review == nil else { return }
+        guard serverPrefs.autoplayAudio, let current = engine.state.current, review == nil, !current.listening else { return }
         if Languages.isNativeText(setup.courseCode, current.exercise.prompt) { playPrompt(slow: false) }
     }
 
@@ -531,6 +545,7 @@ public final class LessonSession: ObservableObject {
     /// Leaving the lesson: stops speech, and drops the draft of a lesson abandoned part way.
     public func leave() {
         deps.speech?.stop()
+        deps.recordings?.stop()
         if phase == .active || phase == .checkpointReady { deps.checkpointDraft.clear() }
         if phase == .active {
             deps.draft.clear()
@@ -604,6 +619,39 @@ public final class LessonSession: ObservableObject {
     }
 
     // MARK: Audio
+
+    /// Plays the current listening exercise's recording (Backend#44): only the recording, never speech, and slow replays count too.
+    /// A play is charged when the take finishes; one that fails or is cut off costs nothing. Does nothing while a take runs or once the three are used.
+    public func playListening(slow: Bool) {
+        guard review == nil, phase == .active, let current = engine.state.current, current.listening, let player = deps.recordings else { return }
+        let keys = Listening.candidates(current.exercise.promptAudio).compactMap {
+            RecordingKeys.storeKey(courseCode: setup.courseCode, version: setup.courseVersion, path: $0)
+        }
+        var plays = ListeningPlays(finished: current.plays, playing: listenPlaying)
+        if keys.isEmpty || !plays.begin() { return }
+        listenPlaying = true
+        listenFailed = false
+        let key = current.key
+        player.play(keys: keys, rate: slow ? SpeechService.slowRate : 1) { [weak self] end in
+            self?.listenEnded(end, key: key)
+        }
+    }
+
+    private func listenEnded(_ end: PlayEnd, key: String) {
+        listenPlaying = false
+        listenFailed = end == .failed
+        var plays = ListeningPlays(finished: engine.state.current?.plays ?? 0, playing: true)
+        let before = plays.finished
+        plays.end(end)
+        if plays.finished > before {
+            engine.recordPlay(key: key)
+            // The count survives the app being killed mid-exercise.
+            if setup.checkpoint == nil { activeDraft.save(engine.state) }
+        }
+    }
+
+    /// Ends a running recording (leaving the lesson); the take is not charged.
+    public func stopListening() { deps.recordings?.stop() }
 
     public func playPrompt(slow: Bool) {
         guard let current = instance else { return }

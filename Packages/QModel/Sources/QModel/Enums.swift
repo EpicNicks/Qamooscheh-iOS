@@ -28,6 +28,16 @@ public enum ExerciseType: String, Codable, Equatable, Hashable, Sendable, CaseIt
     case typeIn = "type_in"
     case match = "match"
     case speak = "speak"
+    /// Type what you hear (Backend#44): the prompt's recording with its text hidden, up to three plays, graded as type_in.
+    case listenType = "listen_type"
+    /// A type this build doesn't know (one added after the release). Any unrecognised name decodes to it, so a newer skill
+    /// still loads; it is never shown or submitted, and a lesson holding one is declined (see `isPlayable` in QDomain).
+    case unknown = "unknown"
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ExerciseType(rawValue: raw) ?? .unknown
+    }
 }
 
 /// Qamooscheh.Domain.ExerciseScriptMode.
