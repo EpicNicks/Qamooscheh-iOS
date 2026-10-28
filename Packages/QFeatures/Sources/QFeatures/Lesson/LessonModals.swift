@@ -200,6 +200,7 @@ public struct LanguageSettingsPopover: View {
     private let onScriptModeChange: (ScriptMode) -> Void
     private let onKeyboardModeChange: (KeyboardMode) -> Void
     private let onDismiss: () -> Void
+    private let fontAvailable: (String) -> Bool
     @Environment(\.colorScheme) private var colorScheme
 
     public init(
@@ -209,8 +210,10 @@ public struct LanguageSettingsPopover: View {
         onPrefsChange: @escaping (LocalPrefs) -> Void,
         onScriptModeChange: @escaping (ScriptMode) -> Void,
         onKeyboardModeChange: @escaping (KeyboardMode) -> Void,
-        onDismiss: @escaping () -> Void
+        onDismiss: @escaping () -> Void,
+        fontAvailable: @escaping (String) -> Bool = ScriptFonts.systemHasFamily
     ) {
+        self.fontAvailable = fontAvailable
         self.courseCode = courseCode
         self.prefs = prefs
         self.serverPrefs = serverPrefs
@@ -264,10 +267,45 @@ public struct LanguageSettingsPopover: View {
         case .keyboardMode:
             heading(LessonSettingsRows.label(row, languageName: languageName), p)
             LessonSegmented(options: LessonSettingsRows.keyboardModes.map { (value: $0.mode, label: $0.label) }, selected: serverPrefs?.keyboardMode ?? .contextual, palette: p, onSelect: onKeyboardModeChange)
+        case .font:
+            fontGroup(row, languageName: languageName, p: p)
         default:
             LessonToggleRow(label: LessonSettingsRows.label(row, languageName: languageName), isOn: LessonSettingsRows.isOn(row, prefs: prefs) ?? false, palette: p) { on in
                 onPrefsChange(LessonSettingsRows.setting(row, to: on, in: prefs))
             }
+        }
+    }
+
+    @ViewBuilder
+    private func fontGroup(_ row: LessonSettingsRow, languageName: String, p: AppPalette) -> some View {
+        if let group = LessonSettingsRows.fontGroup(courseCode: courseCode, prefs: prefs, isAvailable: fontAvailable) {
+            heading(LessonSettingsRows.label(row, languageName: languageName), p)
+            if !group.options.isEmpty {
+                HStack(spacing: Spacing.standard.s2) {
+                    ForEach(Array(group.options.enumerated()), id: \.offset) { _, option in
+                        let selected = option.family == group.selectedFamily
+                        Button(action: { onPrefsChange(LessonSettingsRows.settingFontFamily(option.family, courseCode: courseCode, in: prefs)) }) {
+                            Text(option.label)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(Color(argb: selected ? p.primaryContrast : p.text))
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(Capsule().fill(Color(argb: selected ? p.primary : p.bg)))
+                                .overlay(Capsule().stroke(Color(argb: p.border)))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!option.available)
+                        .opacity(option.available ? 1 : 0.4)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                    }
+                }
+            }
+            Text("\(languageName) text size (\(group.sizePct)%)")
+                .font(.system(size: 13))
+                .foregroundColor(Color(argb: p.textMuted))
+            Slider(value: Binding(get: { Double(group.sizePct) }, set: { v in
+                onPrefsChange(LessonSettingsRows.settingFontSize(v, courseCode: courseCode, in: prefs))
+            }), in: 75...150, step: 5)
         }
     }
 
