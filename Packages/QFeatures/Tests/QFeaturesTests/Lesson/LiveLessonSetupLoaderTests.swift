@@ -316,6 +316,15 @@ final class SavedPracticeRouteTests: XCTestCase {
         XCTAssertNil(setup?.story)
     }
 
+    func testSavedPracticeExercisesCarryTheFormTheyPractise() async throws {
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0"), bank("a1")])
+        let loader = makeLoader(skills: ["u1/a": a])
+        let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/1,u1/a/0", count: 2, forms: ["u1/a/1": "khordam<v>"])
+        XCTAssertEqual(picked.refs.map { $0.form }, ["khordam<v>", nil])
+        let setup = try await loader.setup(for: LessonRoute.forSavedPractice(picked))
+        XCTAssertEqual(setup?.instances.map { $0.focusTag }, ["khordam<v>", nil])
+    }
+
     func testSavedPracticeWithNothingFoundIsNil() async throws {
         let loader = makeLoader()
         let picked = SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/0", count: 1)

@@ -36,16 +36,19 @@ public struct BatchSetStarredRequest: Codable, Equatable, Sendable {
     }
 }
 
-/// An exercise by skill keys and ordinal.
+/// An exercise by skill keys and ordinal. `form` is the tag it practises: the saved word's own, or for a saved
+/// verb (an infinitive) the form of it the exercise uses.
 public struct StarredPracticeExercise: Codable, Equatable, Sendable {
     public var unitKey: String
     public var skillKey: String
     public var ordinal: Int
+    public var form: String?
 
-    public init(unitKey: String, skillKey: String, ordinal: Int) {
+    public init(unitKey: String, skillKey: String, ordinal: Int, form: String? = nil) {
         self.unitKey = unitKey
         self.skillKey = skillKey
         self.ordinal = ordinal
+        self.form = form
     }
 }
 

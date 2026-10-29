@@ -177,10 +177,19 @@ public func buildClozeCard(
 public struct ClozeSource: Equatable, Sendable {
     public var tag: String
     public var exercises: [ExerciseArtifact]
+    /// The tag each exercise blanks, beside `exercises`, when it isn't `tag`: a saved verb's exercises use its forms.
+    public var forms: [String]?
 
-    public init(tag: String, exercises: [ExerciseArtifact]) {
+    public init(tag: String, exercises: [ExerciseArtifact], forms: [String]? = nil) {
         self.tag = tag
         self.exercises = exercises
+        self.forms = forms
+    }
+
+    /// The tag exercise `index` blanks.
+    public func form(at index: Int) -> String {
+        guard let forms = forms, index < forms.count else { return tag }
+        return forms[index]
     }
 }
 
@@ -191,8 +200,8 @@ public func buildClozeDeck(
     pick: (_ count: Int) -> Int = { _ in 0 }
 ) -> [ClozeCard] {
     return sources.compactMap { source in
-        let cards = source.exercises.compactMap {
-            buildClozeCard(exercise: $0, tag: source.tag, hintMap: hintMap, lexemeIndex: lexemeIndex)
+        let cards = source.exercises.indices.compactMap {
+            buildClozeCard(exercise: source.exercises[$0], tag: source.form(at: $0), hintMap: hintMap, lexemeIndex: lexemeIndex)
         }
         return cards.isEmpty ? nil : cards[min(max(pick(cards.count), 0), cards.count - 1)]
     }
@@ -216,9 +225,13 @@ public func practiceExerciseKey(_ ref: StarredPracticeExercise) -> String {
 }
 
 /// The sources for the saved-words round: one per practice word, with the exercises the server named that were found on disk.
+/// Each blanks the form the server says it practises, so a saved verb's card blanks the form in its sentence and is
+/// submitted under that form (the infinitive itself is in no sentence and has no card to move).
 public func clozeSourcesFromPractice(_ words: [StarredPracticeWord], exercises: [String: ExerciseArtifact]) -> [ClozeSource] {
     return words.map { word in
-        ClozeSource(tag: word.tag, exercises: word.exercises.compactMap { exercises[practiceExerciseKey($0)] })
+        let found = word.exercises.compactMap { ref in exercises[practiceExerciseKey(ref)].map { (exercise: $0, form: ref.form ?? word.tag) } }
+        let forms = found.map { $0.form }
+        return ClozeSource(tag: word.tag, exercises: found.map { $0.exercise }, forms: forms.allSatisfy { $0 == word.tag } ? nil : forms)
     }
 }
 

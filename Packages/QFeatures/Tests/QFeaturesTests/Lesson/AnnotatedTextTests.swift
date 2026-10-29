@@ -60,6 +60,21 @@ final class AnnotatedTextTests: XCTestCase {
         XCTAssertEqual(plan.runs.filter { $0.isTappable }.count, 2)
     }
 
+    func testFocusTagMarksOnlyTheWordsWrittenWithIt() {
+        let khordam = "خوردم<v>"
+        let chai = "چای<n>"
+        let courseHints = buildLexemeHintMap([
+            (tag: khordam, entry: LexemeIndexEntry(gloss: "I ate", pos: "verb", verbForm: "conjugated", lemma: "خوردن", romanizationIsAuthored: false)),
+            (tag: chai, entry: LexemeIndexEntry(gloss: "tea", pos: "noun", romanizationIsAuthored: false)),
+        ])
+        var focused = look(display: .native)
+        focused.courseHints = courseHints
+        let plan = planAnnotatedText("چای خوردم", scriptMode: .native, tags: [chai, khordam], look: focused, focusTag: khordam)
+        XCTAssertEqual(plan.runs.filter { $0.isFocus }.map { $0.source }, ["خوردم"])
+        let unfocused = planAnnotatedText("چای خوردم", scriptMode: .native, tags: [chai, khordam], look: focused)
+        XCTAssertTrue(unfocused.runs.allSatisfy { !$0.isFocus })
+    }
+
     func testBothDisplayIsRubyWithBlankReadingWhereNone() {
         let plan = planAnnotatedText("کتاب سلام", scriptMode: .native, tags: [], look: look(display: .both))
         XCTAssertEqual(plan.kind, .ruby)

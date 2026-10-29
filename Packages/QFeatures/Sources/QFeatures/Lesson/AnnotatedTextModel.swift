@@ -93,6 +93,8 @@ public struct AnnotatedRun: Equatable {
     /// The reading above the word (ruby kind only); "" is a blank one so lines don't jump, nil is not a word.
     public var reading: String?
     public var tip: [String]
+    /// The word saved-words practice is drilling here (the exercise's `focusTag`): drawn highlighted.
+    public var isFocus: Bool = false
 
     public var isTappable: Bool { return !tip.isEmpty }
 }
@@ -115,7 +117,7 @@ private func isBlank(_ s: String) -> Bool {
     return !s.isEmpty && s.unicodeScalars.allSatisfy { CharacterSet.whitespacesAndNewlines.contains($0) }
 }
 
-public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, tags: [String], look: LessonTextLook) -> AnnotatedPlan {
+public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, tags: [String], look: LessonTextLook, focusTag: String? = nil) -> AnnotatedPlan {
     let settings = look.settings
     let hints = gatedHints(look, scriptMode: scriptMode)
     let segments = segmentAnnotatedText(text, hints, tags: tags)
@@ -133,6 +135,7 @@ public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, ta
         var tip: [String] = []
         if segment.isWord, let h = hint { tip = tipLines(h, settings: settings) }
         let gap = !segment.isWord && isBlank(segment.text)
+        let focus = segment.isWord && focusTag != nil && (hint?.senses ?? []).contains { $0.tag == focusTag }
         if ruby {
             var reading: String?
             if segment.isWord {
@@ -142,13 +145,13 @@ public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, ta
                     reading = ""
                 }
             }
-            runs.append(AnnotatedRun(index: index, text: plain(segment.text), source: segment.text, isWord: segment.isWord, isGap: gap, reading: reading, tip: tip))
+            runs.append(AnnotatedRun(index: index, text: plain(segment.text), source: segment.text, isWord: segment.isWord, isGap: gap, reading: reading, tip: tip, isFocus: focus))
         } else {
             var base = plain(segment.text)
             if settings.display == .romanized, let h = hint, let r = h.romanization {
                 base = r + (h.ezafe?.text ?? "")
             }
-            runs.append(AnnotatedRun(index: index, text: base, source: segment.text, isWord: segment.isWord, isGap: gap, reading: nil, tip: tip))
+            runs.append(AnnotatedRun(index: index, text: base, source: segment.text, isWord: segment.isWord, isGap: gap, reading: nil, tip: tip, isFocus: focus))
         }
     }
     return AnnotatedPlan(

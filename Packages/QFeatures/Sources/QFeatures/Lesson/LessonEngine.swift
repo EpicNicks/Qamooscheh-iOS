@@ -26,8 +26,10 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
     public var renderType: ExerciseType
     public var attempt: Int
     public var plays: Int
+    /// The word this exercise practises in saved-words practice (for a saved verb, the form it uses), highlighted where it's written.
+    public var focusTag: String?
 
-    public init(key: String, unitKey: String?, skillKey: String, ordinal: Int, exercise: ExerciseArtifact, renderType: ExerciseType, attempt: Int = 0, plays: Int = 0) {
+    public init(key: String, unitKey: String?, skillKey: String, ordinal: Int, exercise: ExerciseArtifact, renderType: ExerciseType, attempt: Int = 0, plays: Int = 0, focusTag: String? = nil) {
         self.key = key
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -36,6 +38,7 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
         self.renderType = renderType
         self.attempt = attempt
         self.plays = plays
+        self.focusTag = focusTag
     }
 
     /// Drafts saved before listening exercises existed have no `plays`.
@@ -49,6 +52,7 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
         self.renderType = try c.decode(ExerciseType.self, forKey: .renderType)
         self.attempt = try c.decode(Int.self, forKey: .attempt)
         self.plays = try c.decodeIfPresent(Int.self, forKey: .plays) ?? 0
+        self.focusTag = try c.decodeIfPresent(String.self, forKey: .focusTag)
     }
 
     public var listening: Bool { return renderType == .listenType }

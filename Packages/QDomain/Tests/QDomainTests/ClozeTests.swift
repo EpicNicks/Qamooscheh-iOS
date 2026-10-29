@@ -190,6 +190,23 @@ final class ClozeTests: XCTestCase {
         XCTAssertEqual(sources, [ClozeSource(tag: chai, exercises: [a]), ClozeSource(tag: khaneh, exercises: [])])
     }
 
+    func testSavedVerbCardBlanksTheFormItsExercisePractises() {
+        let khordan = "\u{062E}\u{0648}\u{0631}\u{062F}\u{0646}<v>"
+        let khordam = "\u{062E}\u{0648}\u{0631}\u{062F}\u{0645}<v>"
+        let entries = lexemes + [
+            (tag: khordan, entry: LexemeIndexEntry(gloss: "to eat", pos: "verb", verbForm: "infinitive", lemma: "\u{062E}\u{0648}\u{0631}\u{062F}\u{0646}", romanizationIsAuthored: false)),
+            (tag: khordam, entry: LexemeIndexEntry(gloss: "I ate", pos: "verb", verbForm: "conjugated", lemma: "\u{062E}\u{0648}\u{0631}\u{062F}\u{0646}", romanizationIsAuthored: false)),
+        ]
+        let byTag = Dictionary(uniqueKeysWithValues: entries.map { ($0.tag, $0.entry) })
+        let a = typeIn("I ate tea", "\u{0686}\u{0627}\u{06CC} \u{062E}\u{0648}\u{0631}\u{062F}\u{0645}", tags: [chai, khordam])
+        let words = [StarredPracticeWord(tag: khordan, exercises: [StarredPracticeExercise(unitKey: "u1", skillKey: "s1", ordinal: 0, form: khordam)])]
+        let sources = clozeSourcesFromPractice(words, exercises: ["u1/s1/0": a])
+        XCTAssertEqual(sources, [ClozeSource(tag: khordan, exercises: [a], forms: [khordam])])
+        let deck = buildClozeDeck(sources: sources, hintMap: buildLexemeHintMap(entries), lexemeIndex: byTag)
+        XCTAssertEqual(deck.map { $0.tag }, [khordam])
+        XCTAssertEqual(deck.first?.blankText, "\u{062E}\u{0648}\u{0631}\u{062F}\u{0645}")
+    }
+
     // MARK: Results
 
     func testSummaryCountsCardsByAttemptAndTotalsTheMostItCouldPay() {

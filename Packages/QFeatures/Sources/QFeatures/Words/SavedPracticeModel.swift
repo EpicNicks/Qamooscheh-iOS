@@ -15,20 +15,23 @@ public struct SavedPracticeExercises: Equatable, Sendable {
     public var courseVersion: Int
     public var exercises: String
     public var count: Int
+    /// The tag each exercise practises, by "unitKey/skillKey/ordinal", for the lesson screen to highlight.
+    public var forms: [String: String]
 
-    public init(courseVersion: Int, exercises: String, count: Int) {
+    public init(courseVersion: Int, exercises: String, count: Int, forms: [String: String] = [:]) {
         self.courseVersion = courseVersion
         self.exercises = exercises
         self.count = count
+        self.forms = forms
     }
 
-    /// `exercises` parsed back into references; malformed entries are skipped.
+    /// `exercises` parsed back into references, each with its form; malformed entries are skipped.
     public var refs: [StarredPracticeExercise] {
         var result: [StarredPracticeExercise] = []
         for part in exercises.split(separator: ",") {
             let pieces = part.split(separator: "/", omittingEmptySubsequences: false)
             guard pieces.count == 3, !pieces[0].isEmpty, !pieces[1].isEmpty, let ordinal = Int(pieces[2]) else { continue }
-            result.append(StarredPracticeExercise(unitKey: String(pieces[0]), skillKey: String(pieces[1]), ordinal: ordinal))
+            result.append(StarredPracticeExercise(unitKey: String(pieces[0]), skillKey: String(pieces[1]), ordinal: ordinal, form: forms[String(part)]))
         }
         return result
     }
@@ -188,10 +191,12 @@ public final class SavedPracticeModel: ObservableObject {
             state = .choosing(options: options, selected: selected, noneOfThat: true, hardcore: hardcore)
             return
         }
+        var forms: [String: String] = [:]
+        for ref in kept.exercises { forms[practiceExerciseKey(ref)] = ref.form }
         exercises = kept.exercises.isEmpty ? nil : SavedPracticeExercises(
             courseVersion: courseVersion,
-            exercises: kept.exercises.map { "\($0.unitKey)/\($0.skillKey)/\($0.ordinal)" }.joined(separator: ","),
-            count: kept.exercises.count)
+            exercises: kept.exercises.map { practiceExerciseKey($0) }.joined(separator: ","),
+            count: kept.exercises.count, forms: forms)
         if kept.cards.isEmpty {
             state = .cardsDone(known: 0, total: 0, xp: 0, exercises: exercises)
         } else {
@@ -275,10 +280,10 @@ public final class SavedPracticeModel: ObservableObject {
         return "Couldn't put together your saved-words practice."
     }
 
+    /// Each exercise once, keeping the form of the first word that brought it.
     static func distinctRefs(_ refs: [StarredPracticeExercise]) -> [StarredPracticeExercise] {
-        var seen: [StarredPracticeExercise] = []
-        for ref in refs where !seen.contains(ref) { seen.append(ref) }
-        return seen
+        var keys = Set<String>()
+        return refs.filter { keys.insert(practiceExerciseKey($0)).inserted }
     }
 
     public static func preview(store: VocabularyStore, state: SavedPracticeState) -> SavedPracticeModel {

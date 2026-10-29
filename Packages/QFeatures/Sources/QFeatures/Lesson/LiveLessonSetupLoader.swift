@@ -182,7 +182,8 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
                 built[skillId] = buildInstances(skills: [(ref: SkillRef(unitKey: ref.unitKey, skillKey: ref.skillKey), skill: skill)], cards: held)
                 counts[skillId] = skill.exercises.count
             }
-            guard let instance = built[skillId]?.first(where: { $0.ordinal == ref.ordinal }) else { continue }
+            guard var instance = built[skillId]?.first(where: { $0.ordinal == ref.ordinal }) else { continue }
+            instance.focusTag = ref.form
             if seen.insert(instance.key).inserted { instances.append(instance) }
         }
         if instances.isEmpty { return nil }

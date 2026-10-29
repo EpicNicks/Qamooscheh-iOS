@@ -40,6 +40,26 @@ final class VocabTermsTests: XCTestCase {
         XCTAssertTrue(terms[1].starred)
     }
 
+    func testVerbFormOffersItsInfinitiveAndTheInfinitiveIsABaseVerb() {
+        let lexemes = [
+            "kharidam<v>": LexemeIndexEntry(gloss: "I bought", pos: "verb", verbForm: "conjugated", lemma: "kharidan", romanizationIsAuthored: false),
+            "kharidan<v>": LexemeIndexEntry(gloss: "to buy", register: .standard, pos: "verb", verbForm: "infinitive", lemma: "kharidan", romanizationIsAuthored: false),
+            "raftam<v>": LexemeIndexEntry(gloss: "I went", pos: "verb", verbForm: "conjugated", lemma: "raftan", romanizationIsAuthored: false),
+            "ketab<n>": LexemeIndexEntry(gloss: "book", pos: "noun", romanizationIsAuthored: false),
+        ]
+        let terms = vocabTerms(
+            tags: ["kharidam<v>", "kharidan<v>", "raftam<v>", "ketab<n>"], lexemes: lexemes, cards: [:], starred: ["kharidan<v>"], now: now)
+        XCTAssertEqual(terms[0].baseVerb, BaseVerbTerm(tag: "kharidan<v>", surface: "kharidan", gloss: "to buy", starred: true))
+        XCTAssertFalse(terms[0].isBaseVerb)
+        // The infinitive is the verb itself: highlighted when saved, with nothing further to offer.
+        XCTAssertNil(terms[1].baseVerb)
+        XCTAssertTrue(terms[1].isBaseVerb)
+        // No infinitive entry for the lemma, and not a verb at all.
+        XCTAssertNil(terms[2].baseVerb)
+        XCTAssertNil(terms[3].baseVerb)
+        XCTAssertFalse(terms[3].isBaseVerb)
+    }
+
     func testFoldIgnoresCaseAccentsAndArabicLetters() {
         XCTAssertEqual(foldForSearch("  Caf\u{00E9}   AU  Lait "), "cafe au lait")
         XCTAssertEqual(foldForSearch("\u{0643}\u{062A}\u{0627}\u{0628}"), foldForSearch("\u{06A9}\u{062A}\u{0627}\u{0628}"))
