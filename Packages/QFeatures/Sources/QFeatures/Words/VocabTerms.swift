@@ -32,14 +32,35 @@ public struct VocabTerm: Equatable, Sendable {
     public var romanization: String?
     public var starred: Bool
     public var strength: VocabStrength
+    /// The word is a verb's base form: saved, its practice pulls in sentences with any form of the verb.
+    public var isBaseVerb: Bool
+    /// The verb this form belongs to, offered to save beside the form itself; nil when it isn't a verb form.
+    public var baseVerb: BaseVerbTerm?
 
-    public init(tag: String, surface: String, gloss: String, romanization: String?, starred: Bool, strength: VocabStrength) {
+    public init(tag: String, surface: String, gloss: String, romanization: String?, starred: Bool, strength: VocabStrength, isBaseVerb: Bool = false, baseVerb: BaseVerbTerm? = nil) {
         self.tag = tag
         self.surface = surface
         self.gloss = gloss
         self.romanization = romanization
         self.starred = starred
         self.strength = strength
+        self.isBaseVerb = isBaseVerb
+        self.baseVerb = baseVerb
+    }
+}
+
+/// A verb form's infinitive, as its row offers it (API_SPEC 2.4, Qamooscheh-Backend#102).
+public struct BaseVerbTerm: Equatable, Sendable {
+    public var tag: String
+    public var surface: String
+    public var gloss: String
+    public var starred: Bool
+
+    public init(tag: String, surface: String, gloss: String, starred: Bool) {
+        self.tag = tag
+        self.surface = surface
+        self.gloss = gloss
+        self.starred = starred
     }
 }
 
@@ -47,12 +68,19 @@ public struct VocabTerm: Equatable, Sendable {
 public func vocabTerms(
     tags: [String], lexemes: [String: LexemeIndexEntry], cards: [String: CardState], starred: Set<String>, now: Date
 ) -> [VocabTerm] {
+    let verbs = baseVerbIndex(lexemes)
     var terms: [VocabTerm] = []
     for tag in tags {
         guard let entry = lexemes[tag] else { continue }
+        let base = baseVerbTag(of: tag, lexemes: lexemes, index: verbs).flatMap { baseTag in
+            lexemes[baseTag].map {
+                BaseVerbTerm(tag: baseTag, surface: parseLexemeTag(baseTag).surface, gloss: $0.gloss, starred: starred.contains(baseTag))
+            }
+        }
         terms.append(VocabTerm(
             tag: tag, surface: parseLexemeTag(tag).surface, gloss: entry.gloss, romanization: entry.romanization,
-            starred: starred.contains(tag), strength: vocabStrength(cards[tag], now: now)))
+            starred: starred.contains(tag), strength: vocabStrength(cards[tag], now: now),
+            isBaseVerb: isBaseVerb(entry), baseVerb: base))
     }
     return terms
 }

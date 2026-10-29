@@ -27,22 +27,54 @@ func vocabCourseText(_ text: String, courseCode: String?, size: CGFloat, weight:
         .multilineTextAlignment(rtl ? .trailing : .leading)
 }
 
-/// Grey outline star to gold fill (web StarButton).
+/// Grey outline star to gold fill (web StarButton). A saved base verb fills in the info colour instead, since its
+/// practice brings in every form of the verb.
 struct StarButton: View {
     let starred: Bool
     let p: AppPalette
+    var baseVerb = false
+    var label: String?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: starred ? "star.fill" : "star")
                 .font(.title2)
-                .foregroundColor(starred ? starGold : Color(argb: p.border))
+                .foregroundColor(starred ? (baseVerb ? Color(argb: p.info) : starGold) : Color(argb: p.border))
                 .frame(minWidth: 48, minHeight: 48)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(starred ? "Unstar this word" : "Star this word for review")
+        .accessibilityLabel(label ?? (starred ? "Unstar this word" : "Star this word for review"))
         .accessibilityAddTraits(starred ? .isSelected : [])
+    }
+}
+
+/// A verb form's infinitive with its own star (verb-base-form-saveable): saving it practises every form of the verb.
+struct BaseVerbRow: View {
+    let verb: BaseVerbTerm
+    let courseCode: String?
+    let p: AppPalette
+    let onToggleStar: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Verb").font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.textMuted))
+                    vocabCourseText(verb.surface, courseCode: courseCode, size: 15, weight: .semibold, color: Color(argb: p.text))
+                }
+                Text(verb.starred ? "Saved \u{2014} practice uses every form" : verb.gloss)
+                    .font(.caption)
+                    .foregroundColor(Color(argb: verb.starred ? p.info : p.textMuted))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            StarButton(
+                starred: verb.starred, p: p, baseVerb: true,
+                label: verb.starred ? "Unsave the verb \(verb.surface)" : "Save the verb \(verb.surface) to practise all its forms",
+                action: onToggleStar)
+        }
+        .padding(.leading, 10)
+        .background(RoundedRectangle(cornerRadius: Radii.standard.md).fill(Color(argb: verb.starred ? p.infoBg : p.bg)))
     }
 }
 
@@ -78,32 +110,44 @@ struct StrengthMeter: View {
 }
 
 /// One rounded box in a vocabulary list (web VocabTermCard): the word, its gloss and romanization,
-/// its strength and a star toggle. Playing the word is a follow-up.
+/// its strength and a star toggle; a verb form also offers its base verb to save (`onToggleBaseStar`), and a saved
+/// base verb is outlined in the info colour (verb-base-form-highlight). Playing the word is a follow-up.
 struct VocabTermCard: View {
     let term: VocabTerm
     let courseCode: String?
     let p: AppPalette
     let onToggleStar: () -> Void
+    var onToggleBaseStar: (String) -> Void = { _ in }
     @ScaledMetric(relativeTo: .body) private var surfaceSize: CGFloat = 18
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Radii.standard.lg)
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                vocabCourseText(term.surface, courseCode: courseCode, size: surfaceSize, weight: .bold, color: Color(argb: p.text))
-                Text(term.gloss).font(.subheadline).foregroundColor(Color(argb: p.text))
-                if let roman = term.romanization {
-                    Text(roman).font(.footnote.italic()).foregroundColor(Color(argb: p.textMuted))
+        let savedVerb = term.isBaseVerb && term.starred
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    vocabCourseText(term.surface, courseCode: courseCode, size: surfaceSize, weight: .bold, color: Color(argb: p.text))
+                    Text(term.gloss).font(.subheadline).foregroundColor(Color(argb: p.text))
+                    if let roman = term.romanization {
+                        Text(roman).font(.footnote.italic()).foregroundColor(Color(argb: p.textMuted))
+                    }
+                    if savedVerb {
+                        Text("Saved verb \u{2014} practice uses every form")
+                            .font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.info))
+                    }
+                    StrengthMeter(strength: term.strength, p: p).padding(.top, 2)
                 }
-                StrengthMeter(strength: term.strength, p: p).padding(.top, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                StarButton(starred: term.starred, p: p, baseVerb: term.isBaseVerb, action: onToggleStar)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            StarButton(starred: term.starred, p: p, action: onToggleStar)
+            if let verb = term.baseVerb {
+                BaseVerbRow(verb: verb, courseCode: courseCode, p: p) { onToggleBaseStar(verb.tag) }
+            }
         }
         .padding(.leading, 24).padding(.trailing, 8).padding(.vertical, 16)
-        .background(Color(argb: p.surface))
+        .background(Color(argb: savedVerb ? p.infoBg : p.surface))
         .clipShape(shape)
-        .overlay(shape.stroke(Color(argb: p.border), lineWidth: 2))
+        .overlay(shape.stroke(Color(argb: savedVerb ? p.info : p.border), lineWidth: 2))
     }
 }
 
@@ -179,9 +223,10 @@ struct SkillVocabularyContent: View {
                     Text(model.emptyText).font(.subheadline).foregroundColor(Color(argb: p.textMuted))
                 }
                 ForEach(terms, id: \.tag) { term in
-                    VocabTermCard(term: term, courseCode: model.store.content?.courseCode, p: p) {
-                        Task { await model.store.toggleStar(term.tag) }
-                    }
+                    VocabTermCard(
+                        term: term, courseCode: model.store.content?.courseCode, p: p,
+                        onToggleStar: { Task { await model.store.toggleStar(term.tag) } },
+                        onToggleBaseStar: { tag in Task { await model.store.toggleStar(tag) } })
                 }
             } else {
                 VocabStatusView(status: status, p: p) { Task { await model.refresh() } }

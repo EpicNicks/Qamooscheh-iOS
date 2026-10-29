@@ -302,6 +302,11 @@ final class GoldenTests: XCTestCase {
         {"courseVersion":3,"words":[{"tag":"a","exercises":[{"unitKey":"u1","skillKey":"s1","ordinal":4}]}]}
         """)
         XCTAssertEqual(p.words[0].exercises[0].ordinal, 4)
+        XCTAssertNil(p.words[0].exercises[0].form)
+        let verb = try golden(StarredPracticeResponse.self, """
+        {"courseVersion":45,"words":[{"tag":"خریدن<v>","exercises":[{"unitKey":"u1","skillKey":"s1","ordinal":4,"form":"خریدم<v>"}]}]}
+        """)
+        XCTAssertEqual(verb.words[0].exercises[0].form, "خریدم<v>")
         let f = try golden(SubmitFlashcardsRequest.self, """
         {"submissionId":"66666666-6666-6666-6666-666666666666","courseCode":"fa","occurredAt":"2026-03-01T12:30:45.000Z",
          "inRemix":false,"cards":[{"tag":"a","kind":"self_rated","correct":true},{"tag":"b","kind":"translation","correct":false}]}

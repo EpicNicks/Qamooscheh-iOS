@@ -166,7 +166,11 @@ struct FlashcardView: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Radii.standard.lg)
+        let baseVerb = isBaseVerb(word.entry)
         VStack(spacing: 16) {
+            if baseVerb {
+                Text("Saved verb \u{2014} every form").font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.info))
+            }
             vocabCourseText(word.surface, courseCode: courseCode, size: surfaceSize, weight: .bold, color: Color(argb: p.text))
             if flipped {
                 Text(word.entry.gloss).font(.title3).multilineTextAlignment(.center).foregroundColor(Color(argb: p.text))
@@ -203,7 +207,7 @@ struct FlashcardView: View {
         .frame(maxWidth: .infinity)
         .background(Color(argb: p.surface))
         .clipShape(shape)
-        .overlay(shape.stroke(Color(argb: p.border), lineWidth: 2))
+        .overlay(shape.stroke(Color(argb: baseVerb ? p.info : p.border), lineWidth: 2))
     }
 
     private func check() {
