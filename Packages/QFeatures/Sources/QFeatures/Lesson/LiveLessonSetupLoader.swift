@@ -216,11 +216,11 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
 
     private func remixSetup(_ route: LessonRoute, contents: RemixContents) async throws -> LessonSetup? {
         let pick = try await pickRemix(route)
-        // A Deep Dive plays its lessons themselves and keeps their new words; a repack of topics is review and marks none.
-        let deepDive = route.deepDiveLessonKey != nil
+        // A Deep Dive marks only the new words of the lesson it was started from, not of lessons blended in; a repack of topics marks none.
+        let source = route.deepDiveLessonKey
         let built = buildInstances(skills: pick.picked, cards: pick.held).map { instance -> ExerciseInstance in
             var played = instance
-            if !deepDive { played.newLexemes = [] }
+            if instance.skillKey != source { played.newLexemes = [] }
             return played
         }
         let instances = filterRemixExercises(built, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
