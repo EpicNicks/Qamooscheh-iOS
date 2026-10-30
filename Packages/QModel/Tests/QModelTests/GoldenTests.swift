@@ -393,6 +393,7 @@ final class GoldenTests: XCTestCase {
     func testSkillArtifact() throws {
         let s = try golden(SkillArtifact.self, """
         {"id":"s1","title":"Greetings","category":"story","arc":"intro","themes":["social"],"commonUsageScore":5,
+         "newLexemes":["salam<interj>"],
          "exercises":[
           {"type":"word_bank","scriptMode":"native","prompt":"Hello","tiles":["سلام","خوبی"],"answer":["سلام"],
            "tags":["salam<interj>"],"alternativeAnswers":[["خوبی"]],"promptRomanization":"salam","answerRomanization":"salam",
@@ -405,10 +406,12 @@ final class GoldenTests: XCTestCase {
         XCTAssertEqual(s.exercises[0].answerVariantAudio?.count, 2)
         XCTAssertNil(s.exercises[0].answerVariantAudio?[1])
         XCTAssertNil(s.exercises[1].tiles)
-        // Older artifacts omit category, exercises' tags, themes.
+        XCTAssertEqual(s.newLexemes, ["salam<interj>"])
+        // Older artifacts omit category, exercises' tags, themes, newLexemes.
         let old = try decode(SkillArtifact.self, #"{"id":"s0","title":"Old"}"#)
         XCTAssertEqual(old.category, .standard)
         XCTAssertEqual(old.exercises, [])
+        XCTAssertEqual(old.newLexemes, [])
     }
 
     func testAudioIndex() throws {

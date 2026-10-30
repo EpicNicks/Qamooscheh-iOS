@@ -212,6 +212,20 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         XCTAssertEqual(setup?.instances.map { $0.key }, ["_/src/0"])
     }
 
+    func testNewWordsShowInADeepDiveButNotARepackOrACheckpoint() async throws {
+        let library = ThemeLibraryData(
+            index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "src", path: "themes/src.json")])]),
+            headers: ["src": ThemeLessonHeader(title: "Src", category: .standard)])
+        let fresh = SkillArtifact(id: "src", title: "Src", exercises: [bank("s"), bank("x")], newLexemes: ["s"])
+        let loader = makeLoader(skills: ["u1/a": fresh], paths: ["themes/src.json": fresh], themes: library)
+        let dive = try await loader.setup(for: LessonRoute.forDeepDive(lessonKey: "src", contents: .all))
+        XCTAssertEqual(dive?.instances.map { $0.newLexemes }, [["s"], ["s"]])
+        let repack = try await loader.setup(for: LessonRoute.forRemix(themeIds: ["food"]).choosing(.all, hardcore: false))
+        XCTAssertEqual(repack?.instances.map { $0.newLexemes }, [[], []])
+        let checkpoint = try await loader.setup(for: LessonRoute.forCheckpoint(unitKey: "u2", skillKey: "t"))
+        XCTAssertEqual(checkpoint?.instances.map { $0.newLexemes }, [[]])
+    }
+
     private func foodLoader() -> LiveLessonSetupLoader {
         let library = ThemeLibraryData(
             index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "l1", path: "themes/l1.json")])]),

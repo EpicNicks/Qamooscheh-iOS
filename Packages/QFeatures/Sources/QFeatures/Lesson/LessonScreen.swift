@@ -87,6 +87,7 @@ public struct LessonScreen: View {
         }
         .environment(\.lessonTextLook, session.textLook)
         .environment(\.practiceFocusTag, session.instance?.focusTag)
+        .environment(\.lessonNewLexemes, Set(session.instance?.newLexemes ?? []))
         .sheet(isPresented: $session.showingSettings) {
             LanguageSettingsPopover(
                 courseCode: session.courseCode,

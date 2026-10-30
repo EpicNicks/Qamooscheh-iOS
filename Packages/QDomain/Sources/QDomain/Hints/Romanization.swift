@@ -28,6 +28,8 @@ public struct WordHint: Equatable, Sendable {
     public var senses: [WordSense]?
     /// The infinitive to look up in the verb index, when a verb lexeme is written this way.
     public var verbLemma: String?
+    /// For a word read as a stem plus attached endings (سرم = سر + ـم), the stem's senses; its endings' are left out.
+    public var stemSenses: [WordSense]?
 
     public init(
         translation: String,
@@ -36,7 +38,8 @@ public struct WordHint: Equatable, Sendable {
         register: Register? = nil,
         ezafe: Ezafe? = nil,
         senses: [WordSense]? = nil,
-        verbLemma: String? = nil
+        verbLemma: String? = nil,
+        stemSenses: [WordSense]? = nil
     ) {
         self.translation = translation
         self.romanization = romanization
@@ -45,6 +48,7 @@ public struct WordHint: Equatable, Sendable {
         self.ezafe = ezafe
         self.senses = senses
         self.verbLemma = verbLemma
+        self.stemSenses = stemSenses
     }
 }
 

@@ -75,6 +75,73 @@ final class AnnotatedTextTests: XCTestCase {
         XCTAssertTrue(unfocused.runs.allSatisfy { !$0.isFocus })
     }
 
+    private let chai = "چای<n>"
+    private let khordam = "خوردم<v>"
+
+    private func newWordLook(translation: Bool = true, romanization: Bool = true) -> LessonTextLook {
+        var l = look(display: .native, translation: translation, romanization: romanization)
+        l.courseHints = buildLexemeHintMap([
+            (tag: khordam, entry: LexemeIndexEntry(gloss: "I ate", pos: "verb", verbForm: "conjugated", lemma: "خوردن", romanization: "khordam", romanizationIsAuthored: false)),
+            (tag: chai, entry: LexemeIndexEntry(gloss: "tea", pos: "noun", romanization: "chāy", romanizationIsAuthored: false)),
+        ])
+        return l
+    }
+
+    func testNewLexemesMarkOnlyTheirWords() {
+        let plan = planAnnotatedText("چای خوردم", scriptMode: .native, tags: [chai, khordam], look: newWordLook(), newLexemes: [khordam])
+        XCTAssertEqual(plan.runs.filter { $0.isNew }.map { $0.source }, ["خوردم"])
+        let none = planAnnotatedText("چای خوردم", scriptMode: .native, tags: [chai, khordam], look: newWordLook())
+        XCTAssertTrue(none.runs.allSatisfy { !$0.isNew })
+    }
+
+    func testNewWordRevealsWithHintsOff() {
+        let plan = planAnnotatedText("چای خوردم", scriptMode: .native, tags: [chai, khordam], look: newWordLook(translation: false, romanization: false), newLexemes: [khordam])
+        XCTAssertEqual(plan.runs.filter { $0.isTappable }.map { $0.source }, ["خوردم"])
+        XCTAssertEqual(plan.runs.first { $0.isNew }?.tip, ["I ate", "[khordam]"])
+    }
+
+    func testNewWordKeepsTheLearnersTipWhenHintsAreOn() {
+        let plan = planAnnotatedText("چای خوردم", scriptMode: .native, tags: [chai, khordam], look: newWordLook(romanization: false), newLexemes: [khordam])
+        XCTAssertEqual(plan.runs.first { $0.isNew }?.tip, ["I ate"])
+    }
+
+    func testNewWordRevealsWhenTheGateDropsEveryHint() {
+        // English-side hints off and nothing to show: the gate empties the map for a romanized exercise.
+        let plan = planAnnotatedText("چای خوردم", scriptMode: .romanized, tags: [chai, khordam], look: newWordLook(translation: false, romanization: false), newLexemes: [khordam])
+        XCTAssertEqual(plan.runs.filter { $0.isTappable }.map { $0.source }, ["خوردم"])
+        XCTAssertEqual(plan.runs.filter { $0.isNew }.map { $0.source }, ["خوردم"])
+    }
+
+    func testAStemWithAnEndingIsNewWhenTheStemIsButNotForTheEndingAlone() {
+        let sar = "سر<n>"
+        let madar = "مادر<n>"
+        let my = "ـم<poss>"
+        var l = look(display: .native)
+        l.courseHints = buildLexemeHintMap([
+            (tag: sar, entry: LexemeIndexEntry(gloss: "head", pos: "noun", romanizationIsAuthored: false)),
+            (tag: madar, entry: LexemeIndexEntry(gloss: "mother", pos: "noun", romanizationIsAuthored: false)),
+            (tag: my, entry: LexemeIndexEntry(gloss: "my", pos: "poss", romanizationIsAuthored: false)),
+        ])
+        let head = planAnnotatedText("سرم", scriptMode: .native, tags: [sar, my], look: l, newLexemes: [sar])
+        XCTAssertEqual(head.runs.filter { $0.isNew }.map { $0.source }, ["سرم"])
+        let mother = planAnnotatedText("مادرم", scriptMode: .native, tags: [madar, my], look: l, newLexemes: [my])
+        XCTAssertTrue(mother.runs.allSatisfy { !$0.isNew })
+    }
+
+    func testHomographIsNewOnlyForTheTaggedLexeme() {
+        let noun = "شیر<n>"
+        let other = "شیر<n><lion>"
+        var l = look(display: .native)
+        l.courseHints = buildLexemeHintMap([
+            (tag: noun, entry: LexemeIndexEntry(gloss: "milk", pos: "noun", romanizationIsAuthored: false)),
+            (tag: other, entry: LexemeIndexEntry(gloss: "lion", pos: "noun", romanizationIsAuthored: false)),
+        ])
+        let milk = planAnnotatedText("شیر", scriptMode: .native, tags: [noun], look: l, newLexemes: [other])
+        XCTAssertTrue(milk.runs.allSatisfy { !$0.isNew })
+        let lion = planAnnotatedText("شیر", scriptMode: .native, tags: [other], look: l, newLexemes: [other])
+        XCTAssertEqual(lion.runs.filter { $0.isNew }.count, 1)
+    }
+
     func testBothDisplayIsRubyWithBlankReadingWhereNone() {
         let plan = planAnnotatedText("کتاب سلام", scriptMode: .native, tags: [], look: look(display: .both))
         XCTAssertEqual(plan.kind, .ruby)

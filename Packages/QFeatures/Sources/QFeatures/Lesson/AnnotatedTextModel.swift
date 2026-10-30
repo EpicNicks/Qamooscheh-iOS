@@ -95,6 +95,8 @@ public struct AnnotatedRun: Equatable {
     public var tip: [String]
     /// The word saved-words practice is drilling here (the exercise's `focusTag`): drawn highlighted.
     public var isFocus: Bool = false
+    /// A word this lesson introduces (`newLexemes`): drawn highlighted, and tappable even with hints off.
+    public var isNew: Bool = false
 
     public var isTappable: Bool { return !tip.isEmpty }
 }
@@ -117,10 +119,29 @@ private func isBlank(_ s: String) -> Bool {
     return !s.isEmpty && s.unicodeScalars.allSatisfy { CharacterSet.whitespacesAndNewlines.contains($0) }
 }
 
-public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, tags: [String], look: LessonTextLook, focusTag: String? = nil) -> AnnotatedPlan {
+/// Whether a word written with `hint` is one of `newLexemes`: its whole tag, or for a stem with endings attached the
+/// stem's (سرم when سر is new; a new ending alone doesn't count). Of those senses, the ones the exercise is tagged
+/// with when it names any (so a homograph's other lexeme doesn't count), else all of them.
+public func isNewWord(_ hint: WordHint?, tags: [String], newLexemes: Set<String>) -> Bool {
+    guard !newLexemes.isEmpty, let senses = hint?.senses ?? hint?.stemSenses, !senses.isEmpty else { return false }
+    let tagged = senses.filter { tags.contains($0.tag) }
+    return (tagged.isEmpty ? senses : tagged).contains { newLexemes.contains($0.tag) }
+}
+
+/// The settings a new word's tip is read with: translation and romanization on, whatever the learner chose.
+private func revealing(_ settings: TextDisplaySettings) -> TextDisplaySettings {
+    var on = settings
+    on.translationEnabled = true
+    on.romanizationEnabled = true
+    return on
+}
+
+public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, tags: [String], look: LessonTextLook, focusTag: String? = nil, newLexemes: Set<String> = []) -> AnnotatedPlan {
     let settings = look.settings
     let hints = gatedHints(look, scriptMode: scriptMode)
-    let segments = segmentAnnotatedText(text, hints, tags: tags)
+    // With hints gated off, new words are still looked up in the whole course map; every other word stays bare.
+    let lookupAll = hints.isEmpty && !newLexemes.isEmpty
+    let segments = segmentAnnotatedText(text, lookupAll ? look.courseHints : hints, tags: tags)
     let rtl = displayDirection(text, display: settings.display) == .rtl
     let native = rtl || (settings.display != .romanized && !hints.isEmpty)
     let ruby = settings.display == .both && !hints.isEmpty
@@ -131,9 +152,12 @@ public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, ta
 
     var runs: [AnnotatedRun] = []
     for (index, segment) in segments.enumerated() {
-        let hint = segment.hint
+        let new = segment.isWord && isNewWord(segment.hint, tags: tags, newLexemes: newLexemes)
+        // A new word's hint only serves its tip when the gate would have dropped it.
+        let hint = lookupAll ? nil : segment.hint
         var tip: [String] = []
         if segment.isWord, let h = hint { tip = tipLines(h, settings: settings) }
+        if new && tip.isEmpty, let h = segment.hint { tip = tipLines(h, settings: revealing(settings)) }
         let gap = !segment.isWord && isBlank(segment.text)
         let focus = segment.isWord && focusTag != nil && (hint?.senses ?? []).contains { $0.tag == focusTag }
         if ruby {
@@ -145,13 +169,13 @@ public func planAnnotatedText(_ text: String, scriptMode: ExerciseScriptMode, ta
                     reading = ""
                 }
             }
-            runs.append(AnnotatedRun(index: index, text: plain(segment.text), source: segment.text, isWord: segment.isWord, isGap: gap, reading: reading, tip: tip, isFocus: focus))
+            runs.append(AnnotatedRun(index: index, text: plain(segment.text), source: segment.text, isWord: segment.isWord, isGap: gap, reading: reading, tip: tip, isFocus: focus, isNew: new))
         } else {
             var base = plain(segment.text)
             if settings.display == .romanized, let h = hint, let r = h.romanization {
                 base = r + (h.ezafe?.text ?? "")
             }
-            runs.append(AnnotatedRun(index: index, text: base, source: segment.text, isWord: segment.isWord, isGap: gap, reading: nil, tip: tip, isFocus: focus))
+            runs.append(AnnotatedRun(index: index, text: base, source: segment.text, isWord: segment.isWord, isGap: gap, reading: nil, tip: tip, isFocus: focus, isNew: new))
         }
     }
     return AnnotatedPlan(

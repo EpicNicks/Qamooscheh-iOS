@@ -150,7 +150,10 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             skills.append((ref: SkillRef(unitKey: entry.unitKey, skillKey: entry.skillKey), skill: skill))
         }
         let held = await cardsForUser()
-        return CheckpointLogic.setup(courseCode: found.code, plan: response, skills: skills, cards: held)
+        // Testing out never comes with free hints: a checkpoint marks no new words.
+        var setup = CheckpointLogic.setup(courseCode: found.code, plan: response, skills: skills, cards: held)
+        for i in setup.instances.indices { setup.instances[i].newLexemes = [] }
+        return setup
     }
 
     private func storySetup(course found: CourseRef, unitKey: String, skillKey: String, skill: SkillArtifact) async -> LessonSetup {
@@ -184,6 +187,8 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             }
             guard var instance = built[skillId]?.first(where: { $0.ordinal == ref.ordinal }) else { continue }
             instance.focusTag = ref.form
+            // Practice is review: nothing in it is a new word.
+            instance.newLexemes = []
             if seen.insert(instance.key).inserted { instances.append(instance) }
         }
         if instances.isEmpty { return nil }
@@ -211,7 +216,13 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
 
     private func remixSetup(_ route: LessonRoute, contents: RemixContents) async throws -> LessonSetup? {
         let pick = try await pickRemix(route)
-        let built = buildInstances(skills: pick.picked, cards: pick.held)
+        // A Deep Dive plays its lessons themselves and keeps their new words; a repack of topics is review and marks none.
+        let deepDive = route.deepDiveLessonKey != nil
+        let built = buildInstances(skills: pick.picked, cards: pick.held).map { instance -> ExerciseInstance in
+            var played = instance
+            if !deepDive { played.newLexemes = [] }
+            return played
+        }
         let instances = filterRemixExercises(built, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
         if instances.isEmpty { return nil }
         return LessonSetup(courseCode: pick.found.code, courseVersion: pick.found.version, instances: instances, exerciseCountBySkill: pick.counts)

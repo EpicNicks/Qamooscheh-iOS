@@ -291,6 +291,19 @@ final class LessonEngineTests: XCTestCase {
         XCTAssertEqual(back, e.state)
     }
 
+    func testInstancesCarryTheirSkillsNewLexemes() throws {
+        let fresh = SkillArtifact(id: "s", title: "S", exercises: [exercise("a")], newLexemes: ["a<n>"])
+        let old = SkillArtifact(id: "t", title: "T", exercises: [exercise("b")])
+        let built = buildInstances(skills: [(ref: SkillRef(unitKey: "u", skillKey: "s"), skill: fresh), (ref: SkillRef(unitKey: "u", skillKey: "t"), skill: old)], cards: [:])
+        XCTAssertEqual(built.map { $0.newLexemes }, [["a<n>"], []])
+
+        // A draft saved before new words has no `newLexemes`.
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(built[0])) as! [String: Any]
+        json.removeValue(forKey: "newLexemes")
+        let draft = try JSONDecoder().decode(ExerciseInstance.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(draft.newLexemes, [])
+    }
+
     func testDropFromQueueForStory() {
         var e = engine(["a", "b"], grader: FakeGrader(["Incorrect"]))
         e.submit("x")

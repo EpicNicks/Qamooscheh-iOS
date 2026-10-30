@@ -181,8 +181,10 @@ public struct SkillArtifact: Codable, Equatable, Sendable {
     public var exercises: [ExerciseArtifact]
     public var themes: [String]
     public var commonUsageScore: Int?
+    /// The lexeme tags this lesson uses that no earlier main-path lesson did, in order of first appearance; [] for stories, conversations, songs and listening.
+    public var newLexemes: [String]
 
-    public init(id: String, title: String, category: SkillCategory = .standard, arc: String? = nil, exercises: [ExerciseArtifact] = [], themes: [String] = [], commonUsageScore: Int? = nil) {
+    public init(id: String, title: String, category: SkillCategory = .standard, arc: String? = nil, exercises: [ExerciseArtifact] = [], themes: [String] = [], commonUsageScore: Int? = nil, newLexemes: [String] = []) {
         self.id = id
         self.title = title
         self.category = category
@@ -190,6 +192,7 @@ public struct SkillArtifact: Codable, Equatable, Sendable {
         self.exercises = exercises
         self.themes = themes
         self.commonUsageScore = commonUsageScore
+        self.newLexemes = newLexemes
     }
 
     public init(from decoder: Decoder) throws {
@@ -201,6 +204,7 @@ public struct SkillArtifact: Codable, Equatable, Sendable {
         self.exercises = try c.decodeIfPresent([ExerciseArtifact].self, forKey: .exercises) ?? []
         self.themes = try c.decodeIfPresent([String].self, forKey: .themes) ?? []
         self.commonUsageScore = try c.decodeIfPresent(Int.self, forKey: .commonUsageScore)
+        self.newLexemes = try c.decodeIfPresent([String].self, forKey: .newLexemes) ?? []
     }
 }
 

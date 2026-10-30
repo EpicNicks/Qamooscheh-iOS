@@ -26,10 +26,20 @@ public extension EnvironmentValues {
         get { self[PracticeFocusTagKey.self] }
         set { self[PracticeFocusTagKey.self] = newValue }
     }
+
+    /// The current exercise's lesson's new words (`ExerciseInstance.newLexemes`), highlighted and free to reveal.
+    var lessonNewLexemes: Set<String> {
+        get { self[LessonNewLexemesKey.self] }
+        set { self[LessonNewLexemesKey.self] = newValue }
+    }
 }
 
 private struct PracticeFocusTagKey: EnvironmentKey {
     static let defaultValue: String? = nil
+}
+
+private struct LessonNewLexemesKey: EnvironmentKey {
+    static let defaultValue: Set<String> = []
 }
 
 private struct WordFramesKey: PreferenceKey {
@@ -89,6 +99,7 @@ public struct AnnotatedText: View {
 
     @Environment(\.lessonTextLook) private var look
     @Environment(\.practiceFocusTag) private var focusTag
+    @Environment(\.lessonNewLexemes) private var newLexemes
     @Environment(\.colorScheme) private var colorScheme
     @State private var frames: [Int: CGRect] = [:]
 
@@ -110,24 +121,32 @@ public struct AnnotatedText: View {
     }
 
     public var body: some View {
-        let plan = planAnnotatedText(text, scriptMode: scriptMode, tags: tags, look: look, focusTag: focusTag)
+        // New words are marked on prompt words, not on word-bank tiles (no onTip).
+        let plan = planAnnotatedText(text, scriptMode: scriptMode, tags: tags, look: look, focusTag: focusTag, newLexemes: onTip == nil ? [] : newLexemes)
         let palette = colorScheme == .dark ? AppPalette.dark : AppPalette.light
         let ink = Color(argb: palette.text)
         let muted = Color(argb: palette.textMuted)
         let marker = Color(argb: palette.warningBg)
+        let fresh = Color(argb: palette.infoBg)
         let font = DirectionalText.font(size: fontSize * plan.fontScale, rtl: plan.rtl, family: persianFamily)
         Group {
             if plan.kind == .ruby {
-                rubyBody(plan, font: font, ink: ink, muted: muted, marker: marker)
+                rubyBody(plan, font: font, ink: ink, muted: muted, marker: marker, fresh: fresh)
             } else {
-                inlineBody(plan, font: font, ink: ink, marker: marker)
+                inlineBody(plan, font: font, ink: ink, marker: marker, fresh: fresh)
             }
         }
         .directionalText(rtl: plan.rtl)
     }
 
+    /// The practice word's marker, else a new word's blue, behind the word.
+    private func highlight(_ run: AnnotatedRun, marker: Color, fresh: Color) -> Color? {
+        if run.isFocus { return marker }
+        return run.isNew ? fresh : nil
+    }
+
     // One Text, so Persian letters still join across the tappable words.
-    private func inlineBody(_ plan: AnnotatedPlan, font: Font, ink: Color, marker: Color) -> some View {
+    private func inlineBody(_ plan: AnnotatedPlan, font: Font, ink: Color, marker: Color, fresh: Color) -> some View {
         var attributed = AttributedString()
         for run in plan.runs {
             var piece = AttributedString(run.text)
@@ -136,7 +155,7 @@ public struct AnnotatedText: View {
                 piece.underlineStyle = .single
                 piece.foregroundColor = ink
             }
-            if run.isFocus { piece.backgroundColor = marker }
+            if let color = highlight(run, marker: marker, fresh: fresh) { piece.backgroundColor = color }
             attributed.append(piece)
         }
         let alignment: Alignment = plan.centered ? .center : .leading
@@ -155,10 +174,10 @@ public struct AnnotatedText: View {
     }
 
     // A reading over every word, a blank one where there's none, so the line doesn't jump.
-    private func rubyBody(_ plan: AnnotatedPlan, font: Font, ink: Color, muted: Color, marker: Color) -> some View {
+    private func rubyBody(_ plan: AnnotatedPlan, font: Font, ink: Color, muted: Color, marker: Color, fresh: Color) -> some View {
         WordFlowLayout(rtl: plan.rtl, centered: plan.centered) {
             ForEach(plan.runs, id: \.index) { run in
-                runView(run, font: font, ink: ink, muted: muted, marker: marker)
+                runView(run, font: font, ink: ink, muted: muted, marker: marker, fresh: fresh)
             }
         }
         .frame(maxWidth: .infinity)
@@ -166,7 +185,7 @@ public struct AnnotatedText: View {
     }
 
     @ViewBuilder
-    private func runView(_ run: AnnotatedRun, font: Font, ink: Color, muted: Color, marker: Color) -> some View {
+    private func runView(_ run: AnnotatedRun, font: Font, ink: Color, muted: Color, marker: Color, fresh: Color) -> some View {
         if !run.isWord {
             Text(run.text).font(font).foregroundStyle(ink).flowGap(run.isGap)
         } else {
@@ -175,7 +194,7 @@ public struct AnnotatedText: View {
                     .font(.system(size: 11))
                     .foregroundStyle(muted)
                 Text(run.text).font(font).foregroundStyle(ink)
-                    .background(run.isFocus ? marker : Color.clear)
+                    .background(highlight(run, marker: marker, fresh: fresh) ?? Color.clear)
             }
             if onTip != nil && run.isTappable {
                 cell

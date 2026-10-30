@@ -286,6 +286,7 @@ public func attachedEndingsHint(_ word: String, _ hintMap: [String: WordHint], t
         translation: glosses.joined(separator: " + "),
         romanization: romanization,
         ruby: romanization,
-        register: split.stem.hint.register
+        register: split.stem.hint.register,
+        stemSenses: split.stem.senses
     )
 }
