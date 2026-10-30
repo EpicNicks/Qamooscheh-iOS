@@ -43,8 +43,8 @@ public struct LessonDependencies {
     /// Plays each feedback event's sound and haptic as the learner's prefs allow; nil plays nothing (tests).
     public var effects: FeedbackEffects?
     public var onInstallVoice: () -> Void
-    /// Builds the report form for the answer under review; nil hides "Report".
-    public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
+    /// Sends a learner's exercise report (POST /v1/exercise-reports); nil hides "Report".
+    public var sendReport: ((SubmitExerciseReportRequest) async throws -> Void)?
     /// The clock (latency, session timestamps).
     public var now: () -> Date
     /// Sends a checkpoint; nil (or a throw) leaves the answers in place with a retry.
@@ -72,7 +72,7 @@ public struct LessonDependencies {
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
         effects: FeedbackEffects? = nil,
         onInstallVoice: @escaping () -> Void = {},
-        makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
+        sendReport: ((SubmitExerciseReportRequest) async throws -> Void)? = nil,
         recordings: RecordingPlaying? = nil,
         now: @escaping () -> Date = { Date() },
         submitCheckpoint: CheckpointSubmitFunction? = nil,
@@ -98,7 +98,7 @@ public struct LessonDependencies {
         self.onFeedback = onFeedback
         self.effects = effects
         self.onInstallVoice = onInstallVoice
-        self.makeReportModel = makeReportModel
+        self.sendReport = sendReport
         self.now = now
         self.submitCheckpoint = submitCheckpoint
         self.newSubmissionId = newSubmissionId
@@ -171,6 +171,9 @@ public final class LessonSession: ObservableObject {
     private var checkpointAnswers: [String: String] = [:]
     /// The plays behind each listening answer of a checkpoint (instance key to playsUsed).
     private var checkpointPlays: [String: Int] = [:]
+    /// The prompt recordings each exercise has played so far (instance key to version-root-relative paths), for a report.
+    /// Only listening prompts play a recording; every other prompt and every answer is spoken by the voice, so cites no file.
+    private var playedPromptTakes: [String: [String]] = [:]
     private var checkpointSubmissionId: String
     /// Stamped on the first send and reused by every retry, like the submission id.
     private var checkpointOccurredAt: Date?
@@ -280,10 +283,30 @@ public final class LessonSession: ObservableObject {
         LessonScreenLogic.textLook(prefs: prefs, serverPrefs: serverPrefs, courseCode: setup.courseCode, hints: deps.courseHints)
     }
     public var canPlayAnswer: Bool { review != nil && deps.speech != nil }
-    /// The report form for the answer under review; nil when there is nothing to report on or no report channel is wired.
-    public var reportModelFactory: (() -> ReportIssueModel)? {
-        guard let make = deps.makeReportModel, let shown = review else { return nil }
-        return { make(shown) }
+    /// The report form for the answer under review (its stage from the verdict); nil when there is nothing to report on or no report channel is wired.
+    public var reportForm: ExerciseReportForm? {
+        guard let shown = review else { return nil }
+        return reportForm(shown.instance, submittedText: shown.submittedText, stage: reportStage(feedbackKind(shown.feedback.verdict)))
+    }
+
+    /// The report form for the exercise still being asked; nil once it's answered or when no report channel is wired.
+    public var askedReportForm: ExerciseReportForm? {
+        guard review == nil, phase == .active, let current = engine.state.current else { return nil }
+        return reportForm(current, submittedText: nil, stage: .unanswered)
+    }
+
+    private func reportForm(_ reported: ExerciseInstance, submittedText: String?, stage: ExerciseReportStage) -> ExerciseReportForm? {
+        guard let send = deps.sendReport, !reported.exercise.tags.isEmpty else { return nil }
+        // The answer is spoken by the voice, never a recording, so an answered report adds no answer takes.
+        let audio = reportPlayedPaths(promptTakes: playedPromptTakes[reported.key] ?? [], answerTakes: [], answered: submittedText != nil)
+        let version = setup.courseVersion
+        return ExerciseReportForm(
+            stage: stage,
+            build: { reasons, details in
+                exerciseReportRequest(instance: reported, submittedText: submittedText, reasons: reasons, details: details, courseVersion: version, audioFiles: audio)
+            },
+            submit: { request in try await send(request) }
+        )
     }
 
     /// Tells the host a feedback event happened and plays its sound and haptic.
@@ -624,7 +647,10 @@ public final class LessonSession: ObservableObject {
     /// A play is charged when the take finishes; one that fails or is cut off costs nothing. Does nothing while a take runs or once the three are used.
     public func playListening(slow: Bool) {
         guard review == nil, phase == .active, let current = engine.state.current, current.listening, let player = deps.recordings else { return }
-        let keys = Listening.candidates(current.exercise.promptAudio).compactMap {
+        let paths = Listening.candidates(current.exercise.promptAudio).filter {
+            RecordingKeys.storeKey(courseCode: setup.courseCode, version: setup.courseVersion, path: $0) != nil
+        }
+        let keys = paths.compactMap {
             RecordingKeys.storeKey(courseCode: setup.courseCode, version: setup.courseVersion, path: $0)
         }
         var plays = ListeningPlays(finished: current.plays, playing: listenPlaying)
@@ -632,13 +658,18 @@ public final class LessonSession: ObservableObject {
         listenPlaying = true
         listenFailed = false
         let key = current.key
+        let take = paths.first
         player.play(keys: keys, rate: slow ? SpeechService.slowRate : 1) { [weak self] end in
-            self?.listenEnded(end, key: key)
+            self?.listenEnded(end, key: key, take: take)
         }
     }
 
-    private func listenEnded(_ end: PlayEnd, key: String) {
+    private func listenEnded(_ end: PlayEnd, key: String, take: String?) {
         listenPlaying = false
+        // A take that was heard, even cut off, is one the learner may report. The player takes the first candidate it holds.
+        if end != .failed, let take = take, !(playedPromptTakes[key] ?? []).contains(take) {
+            playedPromptTakes[key, default: []].append(take)
+        }
         listenFailed = end == .failed
         var plays = ListeningPlays(finished: engine.state.current?.plays ?? 0, playing: true)
         let before = plays.finished

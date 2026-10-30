@@ -19,9 +19,12 @@ public let exerciseReportReasons: [ExerciseReportReasonOption] = [
 
 /// Where the exercise stands when the learner opens the report.
 public enum ExerciseReportStage: Equatable, Sendable {
+    /// Still being asked: no answer yet.
     case unanswered
     case correct
     case incorrect
+    /// Answered, but saved to be checked at sync: not marked wrong, so it reports like a correct one.
+    case pending
 }
 
 /// The reasons worth offering at that stage: an answer can only "should be accepted" once it's been marked wrong.
@@ -65,6 +68,12 @@ public struct ExerciseReportContext: Equatable, Sendable {
         self.location = location
         self.audioFiles = audioFiles
     }
+}
+
+/// The takes a report cites: while the exercise is still asked only the prompt's, once answered the prompt's then
+/// the answer's (Android LessonViewModel.report).
+public func reportPlayedPaths(promptTakes: [String], answerTakes: [String], answered: Bool) -> [String] {
+    return answered ? promptTakes + answerTakes : promptTakes
 }
 
 /// The parts of a session's queue item a report can cite.

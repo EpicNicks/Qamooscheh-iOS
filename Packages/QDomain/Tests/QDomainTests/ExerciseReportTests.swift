@@ -54,4 +54,16 @@ final class ExerciseReportTests: XCTestCase {
         XCTAssertEqual(reportReasonsFor(.unanswered).map { $0.value }, [.audioWrong, .other])
         XCTAssertEqual(reportReasonsFor(.correct).map { $0.value }, [.audioWrong, .other])
     }
+
+    func testPendingAnswerReportsLikeACorrectOne() {
+        XCTAssertEqual(reportReasonsFor(.pending).map { $0.value }, [.audioWrong, .other])
+    }
+
+    func testUnansweredCitesOnlyThePromptsTakes() {
+        XCTAssertEqual(reportPlayedPaths(promptTakes: ["p.mp3"], answerTakes: ["a.mp3"], answered: false), ["p.mp3"])
+    }
+
+    func testAnsweredCitesThePromptsThenTheAnswersTakes() {
+        XCTAssertEqual(reportPlayedPaths(promptTakes: ["p.mp3"], answerTakes: ["a.mp3"], answered: true), ["p.mp3", "a.mp3"])
+    }
 }

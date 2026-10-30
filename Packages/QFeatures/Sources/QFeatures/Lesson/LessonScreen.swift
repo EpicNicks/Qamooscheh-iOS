@@ -27,6 +27,8 @@ public struct LessonScreen: View {
     @ObservedObject private var session: LessonSession
     private let onExit: () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    /// The report form for the exercise still being asked is open.
+    @State private var reportingAsked = false
 
     public init(session: LessonSession, onExit: @escaping () -> Void) {
         self.session = session
@@ -153,6 +155,14 @@ public struct LessonScreen: View {
                         if let chapter = session.setup.story {
                             StoryTranscriptView(chapter: chapter, upTo: instance.ordinal, results: session.storyResults)
                         }
+                        // Report the exercise still being asked (Android Session's "Report"): a bad recording shows before any answer.
+                        if session.askedReportForm != nil {
+                            HStack {
+                                Spacer()
+                                Button("Report") { reportingAsked = true }
+                                    .foregroundColor(Color(argb: p.textMuted))
+                            }
+                        }
                         if instance.listening && session.review == nil {
                             ListenPrompt(
                                 playsLeft: instance.playsLeft,
@@ -178,6 +188,11 @@ public struct LessonScreen: View {
                     .frame(maxWidth: .infinity)
                 }
                 bottomArea(p)
+            }
+            .sheet(isPresented: $reportingAsked) {
+                if let form = session.askedReportForm {
+                    ReportIssueHost(form: form, onClose: { reportingAsked = false })
+                }
             }
         }
     }
@@ -263,7 +278,7 @@ public struct LessonScreen: View {
                 review: review,
                 onContinue: { session.continueOn() },
                 onPlayAnswer: session.canPlayAnswer ? { session.playAnswer() } : nil,
-                makeReportModel: session.reportModelFactory
+                reportForm: session.reportForm
             )
         } else if let keyboard = session.keyboard, session.inAppKeyboard {
             PendingObserver(keyboard: keyboard) { pending in
