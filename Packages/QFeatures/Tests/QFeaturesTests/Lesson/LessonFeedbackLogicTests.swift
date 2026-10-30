@@ -83,6 +83,7 @@ final class LessonFeedbackLogicTests: XCTestCase {
         let inst = instance()
         let box = ReportBox()
         let model = ReportIssueModel(
+            stage: .incorrect,
             build: { reasons, details in exerciseReportRequest(instance: inst, submittedText: "x", reasons: reasons, details: details, courseVersion: 1, audioFiles: []) },
             submit: { request in
                 if await box.shouldFail { throw URLError(.notConnectedToInternet) }

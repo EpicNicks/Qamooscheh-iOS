@@ -67,12 +67,21 @@ public func canSendReport(reasons: Set<ExerciseReportReason>, details: String) -
     return true
 }
 
-/// The report for the answer under review (Android exerciseReport): the exercise and its tags, the
-/// reasons in the form's order, what was graded, how it was shown, its location (all or nothing,
-/// needs a course version >= 1) and the recordings it played. Details go only with "Something else".
+/// The report stage for a verdict shown in the feedback panel: an answer waiting on sync hasn't been marked wrong.
+public func reportStage(_ kind: FeedbackKind) -> ExerciseReportStage {
+    switch kind {
+    case .pending: return .pending
+    case .correct: return .correct
+    case .incorrect: return .incorrect
+    }
+}
+
+/// The report for an exercise, asked or answered (Android exerciseReport): the exercise and its tags, the
+/// reasons in the form's order, what was graded (nil while still asked), how it was shown, its location (all or
+/// nothing, needs a course version >= 1) and the recordings it played. Details go only with "Something else".
 public func exerciseReportRequest(
     instance: ExerciseInstance,
-    submittedText: String,
+    submittedText: String?,
     reasons: Set<ExerciseReportReason>,
     details: String,
     courseVersion: Int?,
@@ -80,33 +89,50 @@ public func exerciseReportRequest(
 ) -> SubmitExerciseReportRequest {
     var located: Int? = nil
     if let version = courseVersion, version >= 1 { located = version }
+    let item = ReportableItem(
+        prompt: instance.exercise.prompt, tags: instance.exercise.tags, renderType: instance.renderType,
+        unitKey: instance.unitKey, skillKey: instance.skillKey, ordinal: instance.ordinal
+    )
+    let context = reportContextFor(item, submittedText: submittedText, courseVersion: located, playedPaths: audioFiles.map { Optional($0) })
     let trimmed = details.trimmingCharacters(in: .whitespacesAndNewlines)
     var detailText: String? = nil
     if reasons.contains(.other) && !trimmed.isEmpty { detailText = String(trimmed.prefix(maxReportDetails)) }
     var answerText: String? = nil
-    if !submittedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        answerText = String(submittedText.prefix(maxReportAnswer))
+    if let text = context.submittedText, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        answerText = String(text.prefix(maxReportAnswer))
     }
-    var seen = Set<String>()
-    var audio: [String] = []
-    for file in audioFiles where !seen.contains(file) {
-        seen.insert(file)
-        audio.append(file)
-    }
-    let limitedAudio = Array(audio.prefix(maxReportAudioFiles))
+    let limitedAudio = Array(context.audioFiles.prefix(maxReportAudioFiles))
     return SubmitExerciseReportRequest(
-        exercisePrompt: instance.exercise.prompt,
-        exerciseTags: instance.exercise.tags,
+        exercisePrompt: context.prompt,
+        exerciseTags: context.exerciseTags,
         reasons: exerciseReportReasons.map { $0.value }.filter { reasons.contains($0) },
         details: detailText,
         submittedAnswer: answerText,
-        renderType: instance.renderType,
-        courseVersion: located,
-        unitKey: located == nil ? nil : instance.unitKey,
-        skillKey: located == nil ? nil : instance.skillKey,
-        exerciseOrdinal: located == nil ? nil : instance.ordinal,
+        renderType: context.renderType,
+        courseVersion: context.location?.courseVersion,
+        unitKey: context.location?.unitKey,
+        skillKey: context.location?.skillKey,
+        exerciseOrdinal: context.location?.exerciseOrdinal,
         audioFiles: limitedAudio.isEmpty ? nil : limitedAudio
     )
+}
+
+/// What a report form needs: where the exercise stood, how to build the report from the form, and how to send it.
+/// A plain value so the session can hand it out anywhere; the sheet makes its `ReportIssueModel` from it.
+public struct ExerciseReportForm {
+    public let stage: ExerciseReportStage
+    public let build: (Set<ExerciseReportReason>, String) -> SubmitExerciseReportRequest
+    public let submit: (SubmitExerciseReportRequest) async throws -> Void
+
+    public init(
+        stage: ExerciseReportStage,
+        build: @escaping (Set<ExerciseReportReason>, String) -> SubmitExerciseReportRequest,
+        submit: @escaping (SubmitExerciseReportRequest) async throws -> Void
+    ) {
+        self.stage = stage
+        self.build = build
+        self.submit = submit
+    }
 }
 
 public enum ReportStatus: Equatable, Sendable {
@@ -122,17 +148,28 @@ public final class ReportIssueModel: ObservableObject {
     @Published public var reasons: Set<ExerciseReportReason> = []
     @Published public var details: String = ""
     @Published public private(set) var status: ReportStatus = .idle
+    /// Where the exercise stood when the form opened; picks the reasons offered.
+    public let stage: ExerciseReportStage
 
     private let build: (Set<ExerciseReportReason>, String) -> SubmitExerciseReportRequest
     private let submit: (SubmitExerciseReportRequest) async throws -> Void
 
     public init(
+        stage: ExerciseReportStage,
         build: @escaping (Set<ExerciseReportReason>, String) -> SubmitExerciseReportRequest,
         submit: @escaping (SubmitExerciseReportRequest) async throws -> Void
     ) {
+        self.stage = stage
         self.build = build
         self.submit = submit
     }
+
+    public convenience init(form: ExerciseReportForm) {
+        self.init(stage: form.stage, build: form.build, submit: form.submit)
+    }
+
+    /// The reasons the form lists, in order.
+    public var reasonOptions: [ExerciseReportReasonOption] { reportReasonsFor(stage) }
 
     public var canSend: Bool {
         return status != .sending && status != .sent && canSendReport(reasons: reasons, details: details)

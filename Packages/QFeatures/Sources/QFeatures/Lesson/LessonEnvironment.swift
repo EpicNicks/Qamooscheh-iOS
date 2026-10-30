@@ -166,7 +166,8 @@ public struct LessonEnvironment {
     /// Sounds and haptics for feedback events; nil plays none.
     public var effects: FeedbackEffects?
     public var onInstallVoice: () -> Void
-    public var makeReportModel: ((FeedbackReview) -> ReportIssueModel)?
+    /// Sends a learner's exercise report; nil hides "Report".
+    public var sendReport: ((SubmitExerciseReportRequest) async throws -> Void)?
     /// Dismisses rejections a lesson's end screen has shown (user, submission ids).
     public var dismissRejections: @Sendable (String, [String]) async -> Void
     /// The background rejections for the banner; nil shows none.
@@ -189,7 +190,7 @@ public struct LessonEnvironment {
         onFeedback: @escaping (FeedbackEvent) -> Void = { _ in },
         effects: FeedbackEffects? = nil,
         onInstallVoice: @escaping () -> Void = {},
-        makeReportModel: ((FeedbackReview) -> ReportIssueModel)? = nil,
+        sendReport: ((SubmitExerciseReportRequest) async throws -> Void)? = nil,
         dismissRejections: @escaping @Sendable (String, [String]) async -> Void = { _, _ in },
         rejections: RejectionSource? = nil
     ) {
@@ -211,7 +212,7 @@ public struct LessonEnvironment {
         self.onFeedback = onFeedback
         self.effects = effects
         self.onInstallVoice = onInstallVoice
-        self.makeReportModel = makeReportModel
+        self.sendReport = sendReport
     }
 
     /// The real submit pipeline: each finished session is written to the offline queue first, then every unsent session is flushed (Android order), and the server's cards are merged into the device's card store.
@@ -236,6 +237,7 @@ public struct LessonEnvironment {
         })
         let submitter = LessonSubmitter(queue: queue, flusher: flusher)
         let checkpoints = CheckpointRepository(client: client)
+        let reports = ExerciseReportRepository(client: client)
         let recordingFiles = FileContentStore(root: support.appendingPathComponent("content", isDirectory: true))
         let recordingPlayer: RecordingPlaying? = StoreRecordingPlayer(read: { key in try? recordingFiles.read(key) })
         return LessonEnvironment(
@@ -260,6 +262,7 @@ public struct LessonEnvironment {
             onFeedback: onFeedback,
             effects: effects,
             onInstallVoice: onInstallVoice,
+            sendReport: { request in _ = try await reports.submit(request) },
             dismissRejections: { userId, ids in try? await queue.dismissRejected(userId: userId, submissionIds: ids) },
             rejections: QueueRejectionSource(queue: queue, userId: { await store.load()?.userId })
         )
@@ -335,7 +338,7 @@ public struct LessonEnvironment {
             onFeedback: onFeedback,
             effects: effects,
             onInstallVoice: onInstallVoice,
-            makeReportModel: makeReportModel,
+            sendReport: sendReport,
             recordings: recordings,
             submitCheckpoint: checkpointSend,
             onRejectionShown: { ids in Task { await dismiss(id, ids) } },

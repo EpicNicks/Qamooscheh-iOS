@@ -97,7 +97,7 @@ public struct AnswerFeedbackView: View {
     private let review: FeedbackReview
     private let onContinue: () -> Void
     private let onPlayAnswer: (() -> Void)?
-    private let makeReportModel: (() -> ReportIssueModel)?
+    private let reportForm: ExerciseReportForm?
     private let startRevealed: Bool
     private let animated: Bool
 
@@ -105,14 +105,14 @@ public struct AnswerFeedbackView: View {
         review: FeedbackReview,
         onContinue: @escaping () -> Void,
         onPlayAnswer: (() -> Void)? = nil,
-        makeReportModel: (() -> ReportIssueModel)? = nil,
+        reportForm: ExerciseReportForm? = nil,
         startRevealed: Bool = false,
         animated: Bool = true
     ) {
         self.review = review
         self.onContinue = onContinue
         self.onPlayAnswer = onPlayAnswer
-        self.makeReportModel = makeReportModel
+        self.reportForm = reportForm
         self.startRevealed = startRevealed
         self.animated = animated
     }
@@ -120,7 +120,7 @@ public struct AnswerFeedbackView: View {
     public var body: some View {
         AnswerFeedbackContent(
             review: review, onContinue: onContinue, onPlayAnswer: onPlayAnswer,
-            makeReportModel: makeReportModel, startRevealed: startRevealed, animated: animated
+            reportForm: reportForm, startRevealed: startRevealed, animated: animated
         )
         .id(feedbackResetKey(instanceKey: review.instance.key, submittedText: review.submittedText))
     }
@@ -131,7 +131,7 @@ private struct AnswerFeedbackContent: View {
     let review: FeedbackReview
     let onContinue: () -> Void
     let onPlayAnswer: (() -> Void)?
-    let makeReportModel: (() -> ReportIssueModel)?
+    let reportForm: ExerciseReportForm?
     let startRevealed: Bool
     let animated: Bool
 
@@ -150,24 +150,26 @@ private struct AnswerFeedbackContent: View {
         VStack(alignment: .leading, spacing: Spacing.standard.s2) {
             switch kind {
             case .pending:
-                Text("Answer saved \u{2014} it'll be checked when you sync.")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Color(argb: p.text))
+                HStack {
+                    Text("Answer saved \u{2014} it'll be checked when you sync.")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color(argb: p.text))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    reportButton(p)
+                }
             case .correct:
                 HStack(spacing: Spacing.standard.s2) {
                     Text("Correct!").font(.system(size: 20, weight: .heavy)).foregroundColor(Color(argb: accent))
                     XpBurst(amount: review.xp, animated: animated)
                     Spacer()
+                    reportButton(p)
                     playButton(accent)
                 }
             case .incorrect:
                 HStack {
                     Text("Not quite.").font(.system(size: 20, weight: .heavy)).foregroundColor(Color(argb: accent))
                     Spacer()
-                    if makeReportModel != nil && !review.instance.exercise.tags.isEmpty {
-                        Button("Report") { reporting = true }
-                            .foregroundColor(Color(argb: p.textMuted))
-                    }
+                    reportButton(p)
                     playButton(accent)
                 }
             }
@@ -213,9 +215,18 @@ private struct AnswerFeedbackContent: View {
             AlsoAcceptedSheet(lines: others, exercise: review.instance.exercise)
         }
         .sheet(isPresented: $reporting) {
-            if let make = makeReportModel {
-                ReportIssueHost(make: make, onClose: { reporting = false })
+            if let form = reportForm {
+                ReportIssueHost(form: form, onClose: { reporting = false })
             }
+        }
+    }
+
+    /// Any answer can be reported (Android FeedbackPanel), when the exercise has tags and a report channel is wired.
+    @ViewBuilder
+    private func reportButton(_ p: AppPalette) -> some View {
+        if reportForm != nil && !review.instance.exercise.tags.isEmpty {
+            Button("Report") { reporting = true }
+                .foregroundColor(Color(argb: p.textMuted))
         }
     }
 
@@ -258,12 +269,12 @@ private struct AlsoAcceptedSheet: View {
 }
 
 /// Creates the report model once per sheet presentation so parent re-renders cannot reset the form.
-private struct ReportIssueHost: View {
+struct ReportIssueHost: View {
     @StateObject private var model: ReportIssueModel
     private let onClose: () -> Void
 
-    init(make: @escaping () -> ReportIssueModel, onClose: @escaping () -> Void) {
-        _model = StateObject(wrappedValue: make())
+    init(form: ExerciseReportForm, onClose: @escaping () -> Void) {
+        _model = StateObject(wrappedValue: ReportIssueModel(form: form))
         self.onClose = onClose
     }
 
@@ -295,7 +306,7 @@ public struct ReportIssueSheet: View {
             Text("Report an issue with this exercise")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(Color(argb: p.text))
-            ForEach(exerciseReportReasons, id: \.value) { option in
+            ForEach(model.reasonOptions, id: \.value) { option in
                 let checked = model.reasons.contains(option.value)
                 Button(action: { model.toggle(option.value) }) {
                     HStack(spacing: Spacing.standard.s3) {
