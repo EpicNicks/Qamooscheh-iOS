@@ -1,6 +1,7 @@
 import XCTest
 import QModel
 import QDomain
+import QData
 @testable import QFeatures
 
 private final class FinishingPlayer: RecordingPlaying {
