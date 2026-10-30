@@ -121,7 +121,8 @@ public struct AnnotatedText: View {
     }
 
     public var body: some View {
-        let plan = planAnnotatedText(text, scriptMode: scriptMode, tags: tags, look: look, focusTag: focusTag, newLexemes: newLexemes)
+        // New words are marked on prompt words, not on word-bank tiles (no onTip).
+        let plan = planAnnotatedText(text, scriptMode: scriptMode, tags: tags, look: look, focusTag: focusTag, newLexemes: onTip == nil ? [] : newLexemes)
         let palette = colorScheme == .dark ? AppPalette.dark : AppPalette.light
         let ink = Color(argb: palette.text)
         let muted = Color(argb: palette.textMuted)

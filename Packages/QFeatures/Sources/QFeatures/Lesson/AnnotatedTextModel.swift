@@ -119,10 +119,11 @@ private func isBlank(_ s: String) -> Bool {
     return !s.isEmpty && s.unicodeScalars.allSatisfy { CharacterSet.whitespacesAndNewlines.contains($0) }
 }
 
-/// Whether a word written with `hint` is one of `newLexemes`: of its senses, the ones the exercise is tagged with
-/// when it names any (so a homograph's other lexeme doesn't count), else all of them.
+/// Whether a word written with `hint` is one of `newLexemes`: its whole tag, or for a stem with endings attached the
+/// stem's (سرم when سر is new; a new ending alone doesn't count). Of those senses, the ones the exercise is tagged
+/// with when it names any (so a homograph's other lexeme doesn't count), else all of them.
 public func isNewWord(_ hint: WordHint?, tags: [String], newLexemes: Set<String>) -> Bool {
-    guard !newLexemes.isEmpty, let senses = hint?.senses, !senses.isEmpty else { return false }
+    guard !newLexemes.isEmpty, let senses = hint?.senses ?? hint?.stemSenses, !senses.isEmpty else { return false }
     let tagged = senses.filter { tags.contains($0.tag) }
     return (tagged.isEmpty ? senses : tagged).contains { newLexemes.contains($0.tag) }
 }

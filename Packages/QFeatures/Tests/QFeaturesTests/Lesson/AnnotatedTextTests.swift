@@ -112,6 +112,22 @@ final class AnnotatedTextTests: XCTestCase {
         XCTAssertEqual(plan.runs.filter { $0.isNew }.map { $0.source }, ["خوردم"])
     }
 
+    func testAStemWithAnEndingIsNewWhenTheStemIsButNotForTheEndingAlone() {
+        let sar = "سر<n>"
+        let madar = "مادر<n>"
+        let my = "ـم<poss>"
+        var l = look(display: .native)
+        l.courseHints = buildLexemeHintMap([
+            (tag: sar, entry: LexemeIndexEntry(gloss: "head", pos: "noun", romanizationIsAuthored: false)),
+            (tag: madar, entry: LexemeIndexEntry(gloss: "mother", pos: "noun", romanizationIsAuthored: false)),
+            (tag: my, entry: LexemeIndexEntry(gloss: "my", pos: "poss", romanizationIsAuthored: false)),
+        ])
+        let head = planAnnotatedText("سرم", scriptMode: .native, tags: [sar, my], look: l, newLexemes: [sar])
+        XCTAssertEqual(head.runs.filter { $0.isNew }.map { $0.source }, ["سرم"])
+        let mother = planAnnotatedText("مادرم", scriptMode: .native, tags: [madar, my], look: l, newLexemes: [my])
+        XCTAssertTrue(mother.runs.allSatisfy { !$0.isNew })
+    }
+
     func testHomographIsNewOnlyForTheTaggedLexeme() {
         let noun = "شیر<n>"
         let other = "شیر<n><lion>"
