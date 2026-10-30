@@ -28,8 +28,10 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
     public var plays: Int
     /// The word this exercise practises in saved-words practice (for a saved verb, the form it uses), highlighted where it's written.
     public var focusTag: String?
+    /// Its lesson's new words (`SkillArtifact.newLexemes`): highlighted, and free to reveal even with hints off.
+    public var newLexemes: [String]
 
-    public init(key: String, unitKey: String?, skillKey: String, ordinal: Int, exercise: ExerciseArtifact, renderType: ExerciseType, attempt: Int = 0, plays: Int = 0, focusTag: String? = nil) {
+    public init(key: String, unitKey: String?, skillKey: String, ordinal: Int, exercise: ExerciseArtifact, renderType: ExerciseType, attempt: Int = 0, plays: Int = 0, focusTag: String? = nil, newLexemes: [String] = []) {
         self.key = key
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -39,9 +41,10 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
         self.attempt = attempt
         self.plays = plays
         self.focusTag = focusTag
+        self.newLexemes = newLexemes
     }
 
-    /// Drafts saved before listening exercises existed have no `plays`.
+    /// Drafts saved before listening exercises existed have no `plays`, nor before new words had `newLexemes`.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.key = try c.decode(String.self, forKey: .key)
@@ -53,6 +56,7 @@ public struct ExerciseInstance: Codable, Equatable, Sendable {
         self.attempt = try c.decode(Int.self, forKey: .attempt)
         self.plays = try c.decodeIfPresent(Int.self, forKey: .plays) ?? 0
         self.focusTag = try c.decodeIfPresent(String.self, forKey: .focusTag)
+        self.newLexemes = try c.decodeIfPresent([String].self, forKey: .newLexemes) ?? []
     }
 
     public var listening: Bool { return renderType == .listenType }
@@ -268,7 +272,8 @@ public func buildInstances(skills: [(ref: SkillRef, skill: SkillArtifact)], card
                 skillKey: entry.ref.skillKey,
                 ordinal: ordinal,
                 exercise: exercise,
-                renderType: resolveExerciseType(exercise, cardState: card)
+                renderType: resolveExerciseType(exercise, cardState: card),
+                newLexemes: entry.skill.newLexemes
             ))
         }
     }

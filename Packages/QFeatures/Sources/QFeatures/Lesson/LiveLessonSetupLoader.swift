@@ -184,6 +184,8 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             }
             guard var instance = built[skillId]?.first(where: { $0.ordinal == ref.ordinal }) else { continue }
             instance.focusTag = ref.form
+            // Practice is review: nothing in it is a new word.
+            instance.newLexemes = []
             if seen.insert(instance.key).inserted { instances.append(instance) }
         }
         if instances.isEmpty { return nil }
@@ -211,7 +213,12 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
 
     private func remixSetup(_ route: LessonRoute, contents: RemixContents) async throws -> LessonSetup? {
         let pick = try await pickRemix(route)
-        let built = buildInstances(skills: pick.picked, cards: pick.held)
+        // A remix is review: nothing in it is a new word.
+        let built = buildInstances(skills: pick.picked, cards: pick.held).map { instance -> ExerciseInstance in
+            var reviewed = instance
+            reviewed.newLexemes = []
+            return reviewed
+        }
         let instances = filterRemixExercises(built, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
         if instances.isEmpty { return nil }
         return LessonSetup(courseCode: pick.found.code, courseVersion: pick.found.version, instances: instances, exerciseCountBySkill: pick.counts)
