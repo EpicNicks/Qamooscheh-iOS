@@ -226,6 +226,25 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         XCTAssertEqual(checkpoint?.instances.map { $0.newLexemes }, [[]])
     }
 
+    func testABlendedDeepDiveMarksItsSourceLessonsNewWordsNotTheBlendedOnes() async throws {
+        let library = ThemeLibraryData(
+            index: ThemeIndexArtifact(themes: [
+                ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "src", path: "themes/src.json"), ThemeLessonRef(id: "l2", path: "themes/l2.json")]),
+            ]),
+            headers: [
+                "src": ThemeLessonHeader(title: "Src", category: .standard),
+                "l2": ThemeLessonHeader(title: "Two", category: .standard),
+            ])
+        let paths = [
+            "themes/src.json": SkillArtifact(id: "src", title: "Src", exercises: [bank("s")], newLexemes: ["s"]),
+            "themes/l2.json": SkillArtifact(id: "l2", title: "Two", exercises: [bank("b")], newLexemes: ["b"]),
+        ]
+        let loader = makeLoader(paths: paths, themes: library)
+        let setup = try await loader.setup(for: LessonRoute.forDeepDive(lessonKey: "src", contents: .all))
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["_/l2/0"])
+        XCTAssertEqual(setup?.instances.map { $0.newLexemes }, [["s"]])
+    }
+
     private func foodLoader() -> LiveLessonSetupLoader {
         let library = ThemeLibraryData(
             index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "l1", path: "themes/l1.json")])]),
