@@ -201,6 +201,8 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         var picked: [(ref: SkillRef, skill: SkillArtifact)]
         var counts: [String: Int]
         var held: [String: CardState]
+        /// The Deep Dive's own lesson's new words, read even when the blend leaves that lesson out; [] for a repack.
+        var sourceNewLexemes: [String] = []
     }
 
     public func remixCloze(for route: LessonRoute) async throws -> RemixClozePool? {
@@ -216,11 +218,11 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
 
     private func remixSetup(_ route: LessonRoute, contents: RemixContents) async throws -> LessonSetup? {
         let pick = try await pickRemix(route)
-        // A Deep Dive marks only the new words of the lesson it was started from, not of lessons blended in; a repack of topics marks none.
-        let source = route.deepDiveLessonKey
+        // A Deep Dive marks the new words of the lesson it was started from, wherever they're written, and not the blended-in
+        // lessons' own; a repack of topics marks none.
         let built = buildInstances(skills: pick.picked, cards: pick.held).map { instance -> ExerciseInstance in
             var played = instance
-            if instance.skillKey != source { played.newLexemes = [] }
+            played.newLexemes = pick.sourceNewLexemes
             return played
         }
         let instances = filterRemixExercises(built, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
@@ -273,6 +275,7 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             picked.append((ref: SkillRef(unitKey: nil, skillKey: lesson.id), skill: skill))
             counts[lesson.id] = skill.exercises.count
         }
-        return RemixPick(found: found, picked: picked, counts: counts, held: held)
+        let sourceNewLexemes = sourceRef.flatMap { skills[$0.id]?.newLexemes } ?? []
+        return RemixPick(found: found, picked: picked, counts: counts, held: held, sourceNewLexemes: sourceNewLexemes)
     }
 }

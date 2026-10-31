@@ -226,7 +226,7 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         XCTAssertEqual(checkpoint?.instances.map { $0.newLexemes }, [[]])
     }
 
-    func testABlendedDeepDiveMarksNoBlendedInLessonsNewWords() async throws {
+    func testABlendedDeepDiveMarksItsSourceLessonsNewWordsNotTheBlendedOnes() async throws {
         let library = ThemeLibraryData(
             index: ThemeIndexArtifact(themes: [
                 ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "src", path: "themes/src.json"), ThemeLessonRef(id: "l2", path: "themes/l2.json")]),
@@ -242,7 +242,7 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         let loader = makeLoader(paths: paths, themes: library)
         let setup = try await loader.setup(for: LessonRoute.forDeepDive(lessonKey: "src", contents: .all))
         XCTAssertEqual(setup?.instances.map { $0.key }, ["_/l2/0"])
-        XCTAssertEqual(setup?.instances.map { $0.newLexemes }, [[]])
+        XCTAssertEqual(setup?.instances.map { $0.newLexemes }, [["s"]])
     }
 
     private func foodLoader() -> LiveLessonSetupLoader {
