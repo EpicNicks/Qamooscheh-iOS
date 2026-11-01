@@ -114,13 +114,19 @@ public struct PathUnit: Equatable, Sendable {
     public var title: String
     public var standardPositions: [PathPosition]
     public var otherSkills: [PathSkill]
+    /// 1-based position of the unit in the course.
+    public var number: Int
 
-    public init(unitKey: String, title: String, standardPositions: [PathPosition], otherSkills: [PathSkill]) {
+    public init(unitKey: String, title: String, standardPositions: [PathPosition], otherSkills: [PathSkill], number: Int = 0) {
         self.unitKey = unitKey
         self.title = title
         self.standardPositions = standardPositions
         self.otherSkills = otherSkills
+        self.number = number
     }
+
+    /// How a unit is named as a heading (unit-heading-format): "3: At the Market".
+    public var heading: String { "\(number): \(title)" }
 
     /// A unit with a live stowed lesson is never complete, however far the cursor has moved past it.
     public var deferred: Bool {
@@ -240,7 +246,8 @@ public func computePathProgress(
             unitKey: unit.unitKey,
             title: unit.title,
             standardPositions: standardPositions,
-            otherSkills: otherSkills
+            otherSkills: otherSkills,
+            number: unitIndex + 1
         ))
     }
     return result
