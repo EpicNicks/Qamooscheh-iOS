@@ -179,7 +179,7 @@ private struct PathUnitTitleView: View {
         let shape = RoundedRectangle(cornerRadius: Radii.standard.md)
         let style = StowedUnitStyle.style(for: unit)
         HStack(spacing: Spacing.standard.s2) {
-            Text(unit.title)
+            Text(unit.heading)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Color(argb: palette.textMuted))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -193,7 +193,7 @@ private struct PathUnitTitleView: View {
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(PathScreenCopy.reviewUnitVocabulary(unit.title))
+            .accessibilityLabel(PathScreenCopy.reviewUnitVocabulary(unit.heading))
         }
         .padding(.leading, Spacing.standard.s3)
         .background(shape.fill(Color(argb: palette.surface)))

@@ -56,6 +56,12 @@ final class PathProgressTests: XCTestCase {
 
     // MARK: computePathProgress
 
+    func testUnitsAreNumberedFromOneAndHeadedWithTheirNumber() {
+        let path = computePathProgress(courseFixture(), position: key("u1", "a1"))
+        XCTAssertEqual(path.map { $0.number }, [1, 2])
+        XCTAssertEqual(path.map { $0.heading }, path.enumerated().map { "\($0.offset + 1): \($0.element.title)" })
+    }
+
     func testMarksCursorPositionCurrentEarlierUnlockedLaterLocked() {
         let path = computePathProgress(courseFixture(), position: key("u1", "a1"))
         XCTAssertEqual(statusGrid(path), [[.current, .locked, .locked], [.locked, .locked]])

@@ -49,7 +49,7 @@ public func stowageGroups(_ stowage: [StowageUnit], path: [PathUnit]) -> [Stowag
         let skills = unit.standardPositions.flatMap { $0.skills }
         let lessons = stowed.lessons.compactMap { entry in skills.first(where: { $0.skillKey == entry.lessonKey }) }
         if !lessons.isEmpty {
-            groups.append(StowageGroup(unitKey: unit.unitKey, unitTitle: unit.title, lessons: lessons))
+            groups.append(StowageGroup(unitKey: unit.unitKey, unitTitle: unit.heading, lessons: lessons))
         }
     }
     return groups
