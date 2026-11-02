@@ -399,7 +399,7 @@ final class StowReminderModelTests: XCTestCase {
         let path = readyState(bootstrap(stowage: stowage)).units
         let groups = model.groups(path: path)
         XCTAssertEqual(groups.map { $0.unitKey }, ["u2", "u1"])
-        XCTAssertEqual(groups.map { $0.unitTitle }, ["2: Unit 2", "1: Unit 1"])
+        XCTAssertEqual(groups.map { $0.unitTitle }, ["Unit 2: Unit 2", "Unit 1: Unit 1"])
         XCTAssertEqual(groups[0].lessons.map { $0.skillKey }, ["e", "d"])
         XCTAssertEqual(groups[1].lessons.map { $0.skillKey }, ["a", "c"])
     }
