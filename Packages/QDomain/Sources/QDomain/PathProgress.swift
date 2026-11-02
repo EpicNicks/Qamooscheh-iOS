@@ -126,7 +126,7 @@ public struct PathUnit: Equatable, Sendable {
     }
 
     /// How a unit is named as a heading (unit-heading-format): "3: At the Market".
-    public var heading: String { "\(number): \(title)" }
+    public var heading: String { "Unit \(number): \(title)" }
 
     /// A unit with a live stowed lesson is never complete, however far the cursor has moved past it.
     public var deferred: Bool {
