@@ -37,6 +37,7 @@ struct RootTabView: View {
     private let app: AppEnvironment?
     @StateObject private var shell: SignedInShell
     @StateObject private var rejections: RejectionBannerModel
+    @StateObject private var connectivity = ConnectivityModel(source: NetworkPathSource())
     @State private var selection: AppTab
     @State private var lessonRoute: LessonRoute?
     @Environment(\.scenePhase) private var scenePhase
@@ -74,6 +75,7 @@ struct RootTabView: View {
         TabView(selection: $selection) {
             ForEach(AppTab.allCases) { tab in
                 content(for: tab)
+                    .offlineStrip(connectivity)
                     .tabItem { Label(tab.title, systemImage: tab.systemImage) }
                     .tag(tab)
             }
@@ -81,6 +83,7 @@ struct RootTabView: View {
         .environment(\.startLesson, { lessonRoute = $0 })
         .safeAreaInset(edge: .top) { RejectionBannerView(model: rejections) }
         .task { await rejections.watch() }
+        .task { await connectivity.watch() }
         .task { await shell.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: CheckpointRefresh.notification)) { _ in
             Task { await shell.refresh() }
@@ -96,7 +99,7 @@ struct RootTabView: View {
     var body: some View {
         ReenablePromptHost(app: app) {
             if let lessons = lessons {
-                tabs.lessonCover(route: $lessonRoute, environment: lessons, remixHost: { shell.makeRemixHost(route: $0, environment: lessons) })
+                tabs.lessonCover(route: $lessonRoute, environment: lessons, remixHost: { shell.makeRemixHost(route: $0, environment: lessons) }, connectivity: connectivity)
             } else {
                 tabs
             }

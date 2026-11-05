@@ -368,16 +368,20 @@ public extension EnvironmentValues {
 public extension View {
     /// Presents the lesson for `route` full screen; clearing the route (leave, or back to path) dismisses it.
     /// A remix asks what it should hold first, through the model `remixHost` makes for it.
-    func lessonCover(route: Binding<LessonRoute?>, environment: LessonEnvironment, remixHost: ((LessonRoute) -> RemixHostModel)? = nil) -> some View {
+    func lessonCover(route: Binding<LessonRoute?>, environment: LessonEnvironment, remixHost: ((LessonRoute) -> RemixHostModel)? = nil, connectivity: ConnectivityModel? = nil) -> some View {
         fullScreenCover(item: route) { current in
-            if current.needsContentsChoice, let make = remixHost {
-                RemixHostView(model: make(current), onExit: { route.wrappedValue = nil })
-            } else {
-                LessonHostView(
-                    load: { try await environment.makeSession(for: current) },
-                    onExit: { route.wrappedValue = nil }
-                )
+            Group {
+                if current.needsContentsChoice, let make = remixHost {
+                    RemixHostView(model: make(current), onExit: { route.wrappedValue = nil })
+                } else {
+                    LessonHostView(
+                        load: { try await environment.makeSession(for: current) },
+                        onExit: { route.wrappedValue = nil }
+                    )
+                }
             }
+            // A cover is its own hierarchy, so the shell's strip does not reach it.
+            .offlineStrip(connectivity)
         }
     }
 }
