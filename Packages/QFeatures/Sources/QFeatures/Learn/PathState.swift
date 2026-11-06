@@ -355,6 +355,14 @@ public final class PathModel: ObservableObject {
     private let calendar: Calendar
     private var generation = 0
     private var lastBootstrap: BootstrapResponse?
+    /// The path before the latest change to it: the `before` of a completion's transition.
+    private var previousUnits: [PathUnit] = []
+    /// A finished lesson waiting for the path to show it. A finish arrives as two pieces, the lesson
+    /// result and the reloaded path, in either order; this holds the first until the second lands.
+    private var pendingFinish: (skillKey: String, at: Date)?
+    private static let finishSettle: TimeInterval = 30
+    /// What the Journey plays once on return. In memory only: `consumeTransition` clears it.
+    @Published public private(set) var transition: JourneyTransition?
 
     public init(repository: PathRepository, dailyGoalSource: DailyGoalSource? = nil, now: @escaping () -> Date = { Date() }, calendar: Calendar = .current) {
         self.repository = repository
@@ -379,6 +387,8 @@ public final class PathModel: ObservableObject {
         let activity = await capturePathResult { try await goalSource.activity(courseCode: course.code) }
         guard mine == generation else { return }
 
+        let unitsBefore = state.units
+        defer { trackChange(from: unitsBefore) }
         if case let .success(keys) = completed { state.setCompleted(keys) }
         switch content {
         case let .success(value):
@@ -397,6 +407,32 @@ public final class PathModel: ObservableObject {
         guard var bootstrap = lastBootstrap else { return }
         bootstrap.stowage = state.stowage
         await refresh(bootstrap: bootstrap)
+    }
+
+    /// A graded lesson finished (the submit was answered). The transition is computed once the path shows it.
+    public func noteFinished(skillKey: String) {
+        pendingFinish = (skillKey, now())
+        evaluateFinish()
+    }
+
+    /// The pending transition, handed out once.
+    public func consumeTransition() -> JourneyTransition? {
+        defer { transition = nil }
+        return transition
+    }
+
+    private func trackChange(from before: [PathUnit]) {
+        if before != state.units { previousUnits = before }
+        evaluateFinish()
+    }
+
+    private func evaluateFinish() {
+        guard let pending = pendingFinish else { return }
+        if now().timeIntervalSince(pending.at) > PathModel.finishSettle { pendingFinish = nil; return }
+        if let found = diffPathProgress(before: previousUnits, after: state.units, completedSkillKey: pending.skillKey) {
+            transition = found
+            pendingFinish = nil
+        }
     }
 
     public func openPopover(_ id: String) { state.openPopover(id) }

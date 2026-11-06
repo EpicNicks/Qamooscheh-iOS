@@ -39,7 +39,7 @@ struct QamooschehApp: App {
         let submitLesson = lessonEnvironment.submit
         lessonEnvironment.submit = { userId, session in
             let result = try await submitLesson(userId, session)
-            LessonSubmitRefresh.announce(result)
+            LessonSubmitRefresh.announce(result, session: session)
             return result
         }
         self.lessons = lessonEnvironment

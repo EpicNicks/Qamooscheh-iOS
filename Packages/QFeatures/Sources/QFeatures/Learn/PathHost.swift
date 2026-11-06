@@ -136,6 +136,11 @@ public final class PathHostModel: ObservableObject {
         stowReminder = StowReminderModel(service: services.stow, prefs: reminderPrefs, host: path)
     }
 
+    /// A graded lesson finished: the Journey animates it once the path reflects it.
+    public func lessonFinished(_ skillKey: String) {
+        path.noteFinished(skillKey: skillKey)
+    }
+
     /// A submit result's `stowCleared`: the lesson was passed, so it leaves the Stowage now.
     public func stowCleared(_ lessonKey: String) async {
         await path.applyStowCleared(lessonKey)
