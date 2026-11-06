@@ -236,6 +236,7 @@ public struct LessonEnvironment {
             _ = try? await cards.merge(userId: userId, cards: results.flatMap { $0.cards })
         })
         let submitter = LessonSubmitter(queue: queue, flusher: flusher)
+        let completedLessons = CompletedLessonsStore(store: FileContentStore(root: support.appendingPathComponent("content", isDirectory: true)))
         let checkpoints = CheckpointRepository(client: client)
         let reports = ExerciseReportRepository(client: client)
         let recordingFiles = FileContentStore(root: support.appendingPathComponent("content", isDirectory: true))
@@ -244,10 +245,23 @@ public struct LessonEnvironment {
             loader: loader,
             userId: { await store.load()?.userId },
             submit: { userId, session in
-                try await submitter.submit(userId: userId, session: session)
+                let result = try await submitter.submit(userId: userId, session: session)
+                switch result {
+                case .queued, .queuedPermanentFailure:
+                    // Offline: the lesson counts as completed on this device now (Android #132).
+                    if session.completed {
+                        try? await completedLessons.recordLocalCompletion(userId: userId, courseCode: session.courseCode, skillKey: session.skillKey)
+                    }
+                case .submitted, .rejected:
+                    break
+                }
+                return result
             },
             enqueue: { userId, session in
                 _ = try await queue.enqueue(userId: userId, session: session)
+                if session.completed {
+                    try? await completedLessons.recordLocalCompletion(userId: userId, courseCode: session.courseCode, skillKey: session.skillKey)
+                }
             },
             submitCheckpoint: { userId, request in
                 let response = try await checkpoints.submit(request)

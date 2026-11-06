@@ -193,12 +193,14 @@ public struct AppEnvironment: @unchecked Sendable {
             }
         }
         let cardStore = CardStateStore(store: contentStore)
+        let completedStore = CompletedLessonsStore(store: contentStore)
         let prefsProvider = PrefsSyncProvider(api: PrefsRepository(client: client))
         let forget: @Sendable (String) async -> Void = { uid in
             guard !uid.isEmpty else { return }
             await reminders?.cancelAll()
             await prefsProvider.clear(userId: uid)
             try? await cardStore.clear(userId: uid)
+            try? await completedStore.clear(userId: uid)
         }
         return AppEnvironment(
             profile: LiveProfileService(client: client),
@@ -249,7 +251,9 @@ public struct AppEnvironment: @unchecked Sendable {
             clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned),
             race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit),
             reminders: reminders,
-            path: PathServices.live(client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushQueue))
+            path: PathServices.live(
+                client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushQueue,
+                completedStore: completedStore, userId: userId))
     }
 }
 

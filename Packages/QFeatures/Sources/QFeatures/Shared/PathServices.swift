@@ -53,13 +53,20 @@ public struct PathServices: @unchecked Sendable {
     /// Without one the Stow flow skips its pre-flush (the lesson submit already flushes).
     public static func live(
         client: ApiClient, contentStore: ContentFileStore, cdnBaseURL: URL,
-        flushQueue: (@Sendable (String) async -> Void)? = nil
+        flushQueue: (@Sendable (String) async -> Void)? = nil,
+        completedStore: CompletedLessonsStore? = nil,
+        userId: @escaping @Sendable () async -> String? = { nil }
     ) -> PathServices {
         let reader = CourseContentReader(store: contentStore)
         let lessons = LessonRepository(client: client)
         let repository = LivePathRepository(
             reader: reader,
-            completed: { code in try await lessons.completedLessons(courseCode: code).completedLessonKeys },
+            completed: { code in
+                let fetch: @Sendable () async throws -> [String] = { try await lessons.completedLessons(courseCode: code).completedLessonKeys }
+                guard let completedStore else { return try await fetch() }
+                // Server keys fold into the per-user file; offline, the held keys stand in (Android #132).
+                return Array(try await completedStore.resolve(userId: await userId(), courseCode: code, fetch: fetch))
+            },
             prefs: { try await PrefsRepository(client: client).fetch() },
             activity: { code in
                 guard PathServices.isSafeCode(code) else { throw URLError(.badURL) }
