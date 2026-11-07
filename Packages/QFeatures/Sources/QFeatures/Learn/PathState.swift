@@ -357,6 +357,8 @@ public final class PathModel: ObservableObject {
     private var lastBootstrap: BootstrapResponse?
     /// The path before the latest change to it: the `before` of a completion's transition.
     private var previousUnits: [PathUnit] = []
+    /// The path as it stood when the last reload finished (not mid-reload, when the cursor has already moved).
+    private var settledUnits: [PathUnit] = []
     /// A finished lesson waiting for the path to show it. A finish arrives as two pieces, the lesson
     /// result and the reloaded path, in either order; this holds the first until the second lands.
     private var pendingFinish: (skillKey: String, at: Date)?
@@ -387,8 +389,7 @@ public final class PathModel: ObservableObject {
         let activity = await capturePathResult { try await goalSource.activity(courseCode: course.code) }
         guard mine == generation else { return }
 
-        let unitsBefore = state.units
-        defer { trackChange(from: unitsBefore) }
+        defer { trackChange() }
         if case let .success(keys) = completed { state.setCompleted(keys) }
         switch content {
         case let .success(value):
@@ -421,8 +422,11 @@ public final class PathModel: ObservableObject {
         return transition
     }
 
-    private func trackChange(from before: [PathUnit]) {
-        if before != state.units { previousUnits = before }
+    private func trackChange() {
+        if settledUnits != state.units {
+            previousUnits = settledUnits
+            settledUnits = state.units
+        }
         evaluateFinish()
     }
 
