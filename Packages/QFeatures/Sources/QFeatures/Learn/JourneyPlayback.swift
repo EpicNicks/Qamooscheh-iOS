@@ -6,7 +6,7 @@ import QDomain
 /// behind `JourneyAnimator`.
 @MainActor
 public struct NoopJourneyAnimator: JourneyAnimator {
-    public init() {}
+    public nonisolated init() {}
     public func drawEdges(_ edges: [JourneyEdge]) async {}
     public func playUnlock(_ skillKeys: [String]) async {}
 }
