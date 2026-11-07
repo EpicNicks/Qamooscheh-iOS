@@ -563,9 +563,11 @@ public struct PathScreen: View {
     private let onPickCourse: () -> Void
     private let onUpdate: () -> Void
     private let onConfirmUpdate: () -> Void
+    private let journeyAnimator: JourneyAnimator
 
     public init(
         model: PathModel,
+        journeyAnimator: JourneyAnimator = NoopJourneyAnimator(),
         download: CourseDownloadPhase? = nil,
         themeIndex: ThemeIndexArtifact? = nil,
         header: PathHeaderInfo,
@@ -579,6 +581,7 @@ public struct PathScreen: View {
         onConfirmUpdate: @escaping () -> Void = {}
     ) {
         self.model = model
+        self.journeyAnimator = journeyAnimator
         self.download = download
         self.themeIndex = themeIndex
         self.header = header
@@ -592,8 +595,12 @@ public struct PathScreen: View {
         self.onConfirmUpdate = onConfirmUpdate
     }
 
-    @ViewBuilder
     public var body: some View {
+        content.modifier(JourneyPlayback(model: model, animator: journeyAnimator))
+    }
+
+    @ViewBuilder
+    private var content: some View {
         let state = model.state
         let screen = PathScreenView(
             state: state,
