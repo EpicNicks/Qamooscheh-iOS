@@ -18,6 +18,7 @@ public struct SkillRoadView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.journeyReveal) private var reveal
 
     public init(
         road: UnitRoad,
@@ -63,9 +64,13 @@ public struct SkillRoadView: View {
             Canvas { context, _ in
                 for edge in road.edgesInPaintOrder {
                     let startX = mirrored(CGFloat(edge.fromX) * scale, width: width)
-                    let endX = mirrored(CGFloat(edge.toX) * scale, width: width)
+                    let drawn = CGFloat(road.journeyProgress(edge, reveal: reveal))
+                    if drawn <= 0 { continue }
+                    let fullEndX = mirrored(CGFloat(edge.toX) * scale, width: width)
+                    // A connector still being drawn stops short, partway along its line.
+                    let endX = startX + (fullEndX - startX) * drawn
                     let startY = CGFloat(edge.fromY)
-                    let endY = CGFloat(edge.toY)
+                    let endY = startY + (CGFloat(edge.toY) - startY) * drawn
                     if let branches = road.collapsedBranches(edge) {
                         // Side by side in variant order; a finished variant's line runs green.
                         let pitch = theme.strokeWidth + 3
@@ -98,10 +103,20 @@ public struct SkillRoadView: View {
                 let centre = mirrored(CGFloat(node.x) * scale, width: width)
                 let left = min(max(centre - side / 2, 0), max(width - side, 0))
                 nodeView(position: position, skillIndex: node.skillIndex, palette: p)
+                    .scaleEffect(1 + 0.12 * pulseAmount(position: position, skillIndex: node.skillIndex))
                     .offset(x: left, y: CGFloat(node.y) - side / 2)
             }
         }
         .frame(width: width, height: CGFloat(road.layout.totalHeight), alignment: .topLeading)
+    }
+
+    /// How strongly the node is pulsing because its skill just unlocked (0 at rest).
+    private func pulseAmount(position: PathPosition, skillIndex: Int) -> Double {
+        if reveal.pulse.isEmpty { return 0 }
+        if road.collapseForks && position.skills.count > 1 {
+            return position.skills.compactMap { reveal.pulse[$0.skillKey] }.max() ?? 0
+        }
+        return reveal.pulse[position.skills[skillIndex].skillKey] ?? 0
     }
 
     @ViewBuilder
