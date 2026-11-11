@@ -47,7 +47,8 @@ public struct StoryReaderServices: @unchecked Sendable {
         course: @escaping @Sendable () async throws -> CourseRef?,
         preferredVoice: @escaping @Sendable (_ courseCode: String) async -> String?,
         files: ContentFileStore,
-        speech: SpeechService? = nil
+        speech: SpeechService? = nil,
+        submitter: StoryReaderCompletionSubmitting = RecordingStoryReaderCompletionSubmitter()
     ) -> StoryReaderServices {
         return StoryReaderServices(
             load: { unitKey, skillKey in
@@ -70,6 +71,7 @@ public struct StoryReaderServices: @unchecked Sendable {
                 return nil
                 #endif
             },
+            submitter: submitter,
             speakWord: { code, text in
                 guard let speech = speech, let tag = LessonScreenLogic.speechTag(courseCode: code, text: text) else { return }
                 _ = speech.speak(text, languageTag: tag, rate: 1)
