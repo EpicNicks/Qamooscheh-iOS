@@ -18,7 +18,7 @@ private final class FakeCompleter: ReadingCompleting, @unchecked Sendable {
     }
 }
 
-private final class Flag: @unchecked Sendable {
+private final class RecordedCount: @unchecked Sendable {
     private let lock = NSLock()
     private var count = 0
     func bump() { lock.lock(); count += 1; lock.unlock() }
@@ -33,7 +33,7 @@ final class QueuedStoryReaderCompletionSubmitterTests: XCTestCase {
     }
 
     private func make(
-        _ completer: FakeCompleter, user: String? = "me", recorded: Flag = Flag()
+        _ completer: FakeCompleter, user: String? = "me", recorded: RecordedCount = RecordedCount()
     ) -> (QueuedStoryReaderCompletionSubmitter, ReadingCompletionQueue) {
         let queue = ReadingCompletionQueue(
             storage: InMemoryOfflineQueueStorage(), completer: completer, onRecorded: { _, _ in recorded.bump() })
@@ -48,7 +48,7 @@ final class QueuedStoryReaderCompletionSubmitterTests: XCTestCase {
 
     func testSubmitSendsOnceAndAnnouncesRecorded() async throws {
         let completer = FakeCompleter(.success(ReadingCompletionResponse(outcome: .recorded)))
-        let recorded = Flag()
+        let recorded = RecordedCount()
         let (submitter, queue) = make(completer, recorded: recorded)
         await submitter.submit(completion())
         let left = try await queue.records(userId: "me")
