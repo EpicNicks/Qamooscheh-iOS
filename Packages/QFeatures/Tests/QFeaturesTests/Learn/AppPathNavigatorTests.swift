@@ -28,13 +28,23 @@ private enum Opened: Equatable {
 
 final class AppPathNavigatorTests: XCTestCase {
     func testStartMapsEveryCategoryToTheLessonRouteByName() {
-        let categories: [QDomain.SkillCategory] = [.standard, .story, .conversation, .song]
+        let categories: [QDomain.SkillCategory] = [.standard, .conversation, .song]
         for category in categories {
             XCTAssertEqual(
                 Opened(AppPathNavigator.start(skill("s1", unit: "u2", category: category))),
                 .lesson(unitKey: "u2", skillKey: "s1", practice: false, checkpoint: false, deepDive: nil),
                 "\(category)")
         }
+    }
+
+    func testAStoryOpensTheReaderDirectly() {
+        let story = skill("s1", unit: "u2", category: .story)
+        XCTAssertEqual(Opened(AppPathNavigator.start(story)), .push(.storyReader(unitKey: "u2", skillKey: "s1")))
+        XCTAssertEqual(Opened(AppPathNavigator.practice(story)), .push(.storyReader(unitKey: "u2", skillKey: "s1")))
+        // A stowed story is retried through its lesson so a pass clears the stow.
+        XCTAssertEqual(
+            Opened(AppPathNavigator.retryStowed(skill("s1", unit: "u2", category: .story, stowed: true))),
+            .lesson(unitKey: "u2", skillKey: "s1", practice: false, checkpoint: false, deepDive: nil))
     }
 
     func testPracticeIsALocalPracticeRoute() {

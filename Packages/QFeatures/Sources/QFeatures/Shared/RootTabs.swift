@@ -183,6 +183,8 @@ struct AppRouteDestination: View {
             HelpView()
         case .about:
             AboutView(version: appVersion())
+        case .storyReader(let unitKey, let skillKey):
+            StoryReaderDestination(shell: shell, unitKey: unitKey, skillKey: skillKey)
         case .shareStreak:
             ShareCardPreview(content: ShareCardContent(kind: .streak, streakDays: shell.streakDays))
                 .navigationTitle(route.title)
@@ -191,6 +193,27 @@ struct AppRouteDestination: View {
 
     private func appVersion() -> String? {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    }
+}
+
+/// The story reader; its button opens the story's existing cloze lessons through the root's lesson cover.
+struct StoryReaderDestination: View {
+    @StateObject private var model: StoryReaderModel
+    private let unitKey: String
+    private let skillKey: String
+    @Environment(\.startLesson) private var startLesson
+
+    init(shell: SignedInShell, unitKey: String, skillKey: String) {
+        self.unitKey = unitKey
+        self.skillKey = skillKey
+        let app = shell.app
+        _model = StateObject(wrappedValue: StoryReaderModel(
+            unitKey: unitKey, skillKey: skillKey, services: app?.storyReader, starred: shell.vocabulary,
+            userId: { await app?.currentUserId() }))
+    }
+
+    var body: some View {
+        StoryReaderScreen(model: model, onCloze: { startLesson(LessonRoute(unitKey: unitKey, skillKey: skillKey)) })
     }
 }
 

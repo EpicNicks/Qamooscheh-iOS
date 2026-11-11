@@ -40,12 +40,19 @@ public struct AppPathNavigator: PathNavigator {
     /// Standard skills play from the cursor's plan; stories, conversations and songs are played by name. Both are the
     /// same route on iOS: the loader reads the skill's category from the course and picks the story setup itself.
     public static func start(_ skill: PathSkill) -> PathDestination {
-        .lesson(LessonRoute(unitKey: skill.unitKey, skillKey: skill.skillKey))
+        if skill.category == .story { return storyReader(skill) }
+        return .lesson(LessonRoute(unitKey: skill.unitKey, skillKey: skill.skillKey))
+    }
+
+    /// A story opens its reader directly; the reader's button leads on to the story's cloze lessons.
+    public static func storyReader(_ skill: PathSkill) -> PathDestination {
+        .push(.storyReader(unitKey: skill.unitKey, skillKey: skill.skillKey))
     }
 
     /// A completed lesson, played locally: nothing is submitted.
     public static func practice(_ skill: PathSkill) -> PathDestination {
-        .lesson(LessonRoute(unitKey: skill.unitKey, skillKey: skill.skillKey, practice: true))
+        if skill.category == .story { return storyReader(skill) }
+        return .lesson(LessonRoute(unitKey: skill.unitKey, skillKey: skill.skillKey, practice: true))
     }
 
     /// A stowed lesson through the ordinary route, so a pass is submitted and the server clears the stow.

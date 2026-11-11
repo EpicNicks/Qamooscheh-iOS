@@ -14,6 +14,7 @@ final class AppRouteTests: XCTestCase {
         XCTAssertEqual(AppRoute.help.title, "Help & FAQ")
         XCTAssertEqual(AppRoute.about.title, "About")
         XCTAssertEqual(AppRoute.shareStreak.title, "Share your streak")
+        XCTAssertEqual(AppRoute.storyReader(unitKey: "u1", skillKey: "s1").title, "Story")
     }
 
     func testTabEntries() {

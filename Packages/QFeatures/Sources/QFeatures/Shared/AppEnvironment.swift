@@ -53,6 +53,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let reminders: ReminderService?
     /// The Learn tab's content, download, Stow and roll-forward services; nil in tests and previews.
     public let path: PathServices?
+    /// The story reader's chapter, clips and completion hand-off; nil in tests and previews.
+    public let storyReader: StoryReaderServices?
 
     public init(
         profile: ProfileService,
@@ -78,8 +80,10 @@ public struct AppEnvironment: @unchecked Sendable {
         clozeSentences: ClozeSentenceSource? = nil,
         race: RaceService? = nil,
         reminders: ReminderService? = nil,
-        path: PathServices? = nil
+        path: PathServices? = nil,
+        storyReader: StoryReaderServices? = nil
     ) {
+        self.storyReader = storyReader
         self.path = path
         self.reminders = reminders
         self.clozeSentences = clozeSentences
@@ -253,7 +257,14 @@ public struct AppEnvironment: @unchecked Sendable {
             reminders: reminders,
             path: PathServices.live(
                 client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushQueue,
-                completedStore: completedStore, userId: userId))
+                completedStore: completedStore, userId: userId),
+            storyReader: StoryReaderServices.live(
+                reader: reader, course: pinned,
+                preferredVoice: { code in
+                    guard let uid = await userId() else { return nil }
+                    return await prefsProvider.sync(userId: uid, courseCode: code).prefs?.preferredVoice
+                },
+                files: contentStore))
     }
 }
 
