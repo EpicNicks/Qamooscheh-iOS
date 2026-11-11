@@ -43,6 +43,7 @@ public struct StoryReaderScreen: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Toggle("Follow the playing line", isOn: $model.autoscroll)
+                    Toggle("Speak tapped words", isOn: $model.speakHoveredWords)
                 } label: {
                     Image(systemName: "ellipsis.circle").accessibilityLabel("Reader options")
                 }
