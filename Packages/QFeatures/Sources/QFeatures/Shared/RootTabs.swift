@@ -183,8 +183,8 @@ struct AppRouteDestination: View {
             HelpView()
         case .about:
             AboutView(version: appVersion())
-        case .storyReader(let unitKey, let skillKey):
-            StoryReaderDestination(shell: shell, unitKey: unitKey, skillKey: skillKey)
+        case .storyReader(let unitKey, let skillKey, let practice):
+            StoryReaderDestination(shell: shell, unitKey: unitKey, skillKey: skillKey, practice: practice)
         case .shareStreak:
             ShareCardPreview(content: ShareCardContent(kind: .streak, streakDays: shell.streakDays))
                 .navigationTitle(route.title)
@@ -201,9 +201,11 @@ struct StoryReaderDestination: View {
     @StateObject private var model: StoryReaderModel
     private let unitKey: String
     private let skillKey: String
+    private let practice: Bool
     @Environment(\.startLesson) private var startLesson
 
-    init(shell: SignedInShell, unitKey: String, skillKey: String) {
+    init(shell: SignedInShell, unitKey: String, skillKey: String, practice: Bool = false) {
+        self.practice = practice
         self.unitKey = unitKey
         self.skillKey = skillKey
         let app = shell.app
@@ -213,7 +215,7 @@ struct StoryReaderDestination: View {
     }
 
     var body: some View {
-        StoryReaderScreen(model: model, onCloze: { startLesson(LessonRoute(unitKey: unitKey, skillKey: skillKey)) })
+        StoryReaderScreen(model: model, onCloze: { startLesson(LessonRoute(unitKey: unitKey, skillKey: skillKey, practice: practice)) })
     }
 }
 

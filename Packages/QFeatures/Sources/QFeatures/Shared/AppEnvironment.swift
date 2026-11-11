@@ -206,6 +206,11 @@ public struct AppEnvironment: @unchecked Sendable {
             try? await cardStore.clear(userId: uid)
             try? await completedStore.clear(userId: uid)
         }
+        #if canImport(AVFoundation)
+        let storySpeech: SpeechService? = SpeechService(synthesizer: AVSpeechSynthesizerAdapter())
+        #else
+        let storySpeech: SpeechService? = nil
+        #endif
         return AppEnvironment(
             profile: LiveProfileService(client: client),
             streak: StreakRepository(client: client),
@@ -264,7 +269,7 @@ public struct AppEnvironment: @unchecked Sendable {
                     guard let uid = await userId() else { return nil }
                     return await prefsProvider.sync(userId: uid, courseCode: code).prefs?.preferredVoice
                 },
-                files: contentStore))
+                files: contentStore, speech: storySpeech))
     }
 }
 

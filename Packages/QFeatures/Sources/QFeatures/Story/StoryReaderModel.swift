@@ -22,6 +22,12 @@ public final class StoryReaderModel: ObservableObject {
     @Published public private(set) var playingLine: Int?
     @Published public private(set) var savedTags: Set<String> = []
     @Published public private(set) var tip: StoryWordTap?
+    /// Whether tapping a word speaks it (the speakHoveredWords setting); the card shows either way.
+    @Published public var speakHoveredWords = true {
+        didSet {
+            if speakHoveredWords != oldValue, let user = userId { prefs.setSpeakHoveredWords(speakHoveredWords, userId: user) }
+        }
+    }
     @Published public var autoscroll = true {
         didSet {
             if autoscroll != oldValue, let user = userId { prefs.setAutoscroll(autoscroll, userId: user) }
@@ -35,6 +41,7 @@ public final class StoryReaderModel: ObservableObject {
     private let userIdSource: @Sendable () async -> String?
     private let prefs: StoryReaderPrefs
     private var userId: String?
+    private var courseCode = ""
     private var lexemes: [String: LexemeIndexEntry] = [:]
     private var playback: StoryReaderPlayback?
     private var trigger: StoryReaderCompletionTrigger?
@@ -66,7 +73,11 @@ public final class StoryReaderModel: ObservableObject {
         }
         let user = await userIdSource()
         userId = user
-        if let user = user { autoscroll = prefs.autoscroll(userId: user) }
+        if let user = user {
+            autoscroll = prefs.autoscroll(userId: user)
+            speakHoveredWords = prefs.speakHoveredWords(userId: user)
+        }
+        courseCode = content.courseCode
         title = content.title
         lines = content.lines
         lexemes = content.lexemes
@@ -132,9 +143,12 @@ public final class StoryReaderModel: ObservableObject {
         return StoryWords.highlight(tag: tag, saved: savedTags, lexemes: lexemes)
     }
 
-    /// Tapping a word shows its card. It does not speak the word and never marks it seen.
+    /// Tapping a word shows its card and speaks it when the setting is on and the main audio is not playing.
     public func tapWord(_ word: StoryLineWord) {
         guard word.isTappable, let hint = word.hint else { return }
+        if StoryWords.canSpeakWord(speakHoveredWords: speakHoveredWords, mainPlaying: isPlaying) {
+            services?.speakWord(courseCode, word.text)
+        }
         if let tag = word.tag {
             tip = StoryWordTap.make(tag: tag, lexemes: lexemes, starred: starred)
             if tip?.hint.isEmpty == true { tip?.hint = hint }

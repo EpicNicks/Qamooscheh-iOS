@@ -17,6 +17,19 @@ public final class StoryReaderPrefs: @unchecked Sendable {
         return defaults.bool(forKey: k)
     }
 
+    private func speakKey(_ userId: String) -> String { "qamooscheh.storySpeakWords.\(userId)" }
+
+    /// Whether tapping a word speaks it (web speakHoveredWords): on by default.
+    public func speakHoveredWords(userId: String) -> Bool {
+        let k = speakKey(userId)
+        if defaults.object(forKey: k) == nil { return true }
+        return defaults.bool(forKey: k)
+    }
+
+    public func setSpeakHoveredWords(_ on: Bool, userId: String) {
+        defaults.set(on, forKey: speakKey(userId))
+    }
+
     public func setAutoscroll(_ on: Bool, userId: String) {
         defaults.set(on, forKey: key(userId))
     }

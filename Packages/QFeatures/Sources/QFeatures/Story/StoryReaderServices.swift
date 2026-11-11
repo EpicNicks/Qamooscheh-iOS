@@ -26,15 +26,19 @@ public struct StoryReaderServices: @unchecked Sendable {
     public var load: @Sendable (_ unitKey: String, _ skillKey: String) async -> StoryReaderContent?
     public var makePlayer: @Sendable (_ courseCode: String, _ version: Int) -> StoryClipPlayer?
     public var submitter: StoryReaderCompletionSubmitting
+    /// Speaks a tapped word (course code, word as written); a no-op where there is no speech.
+    public var speakWord: @Sendable (_ courseCode: String, _ text: String) -> Void
 
     public init(
         load: @escaping @Sendable (String, String) async -> StoryReaderContent?,
         makePlayer: @escaping @Sendable (String, Int) -> StoryClipPlayer? = { _, _ in nil },
-        submitter: StoryReaderCompletionSubmitting = RecordingStoryReaderCompletionSubmitter()
+        submitter: StoryReaderCompletionSubmitting = RecordingStoryReaderCompletionSubmitter(),
+        speakWord: @escaping @Sendable (String, String) -> Void = { _, _ in }
     ) {
         self.load = load
         self.makePlayer = makePlayer
         self.submitter = submitter
+        self.speakWord = speakWord
     }
 
     /// Production wiring: the chapter from the pinned course on disk, takes chosen by the learner's voice, clips from the content store.
@@ -42,7 +46,8 @@ public struct StoryReaderServices: @unchecked Sendable {
         reader: CourseContentReader,
         course: @escaping @Sendable () async throws -> CourseRef?,
         preferredVoice: @escaping @Sendable (_ courseCode: String) async -> String?,
-        files: ContentFileStore
+        files: ContentFileStore,
+        speech: SpeechService? = nil
     ) -> StoryReaderServices {
         return StoryReaderServices(
             load: { unitKey, skillKey in
@@ -64,6 +69,10 @@ public struct StoryReaderServices: @unchecked Sendable {
                 #else
                 return nil
                 #endif
+            },
+            speakWord: { code, text in
+                guard let speech = speech, let tag = LessonScreenLogic.speechTag(courseCode: code, text: text) else { return }
+                _ = speech.speak(text, languageTag: tag, rate: 1)
             })
     }
 }

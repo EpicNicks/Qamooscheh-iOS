@@ -91,6 +91,46 @@ final class StoryReaderScreenModelTests: XCTestCase {
         XCTAssertEqual(model.tip?.isSaved, true)
     }
 
+    private final class SpokenBox: @unchecked Sendable {
+        var spoken: [String] = []
+    }
+
+    @MainActor
+    private func speakingModel(box: PlayerBox, spoken: SpokenBox) -> StoryReaderModel {
+        let content = StoryReaderContent(
+            title: "Tea", courseCode: "fa", courseVersion: 1,
+            lines: [line(0, "one tea", clip: "a.mp3", tags: ["tea"])],
+            lexemes: ["tea": LexemeIndexEntry(gloss: "a drink", romanizationIsAuthored: false)])
+        let services = StoryReaderServices(
+            load: { _, _ in content }, makePlayer: { _, _ in box.player },
+            speakWord: { code, text in spoken.spoken.append("\(code):\(text)") })
+        let defaults = UserDefaults(suiteName: "storyspeak-\(UUID().uuidString)") ?? .standard
+        return StoryReaderModel(
+            unitKey: "u1", skillKey: "s1", services: services, starred: ScreenStars(),
+            userId: { "user" }, prefs: StoryReaderPrefs(defaults: defaults))
+    }
+
+    @MainActor
+    func testTappingAWordSpeaksItOnlyWithTheSettingOnAndTheMainAudioSilent() async {
+        let box = PlayerBox()
+        let spoken = SpokenBox()
+        let model = speakingModel(box: box, spoken: spoken)
+        await model.load()
+        guard let word = model.words[0].first(where: { $0.isTappable }) else { return XCTFail("no tappable word") }
+        model.tapWord(word)
+        XCTAssertEqual(spoken.spoken, ["fa:tea"])
+        XCTAssertEqual(model.tip?.hint, "a drink")
+        model.speakHoveredWords = false
+        model.tapWord(word)
+        XCTAssertEqual(spoken.spoken, ["fa:tea"])
+        XCTAssertEqual(model.tip?.hint, "a drink")
+        model.speakHoveredWords = true
+        model.toggleMain()
+        XCTAssertTrue(model.isPlaying)
+        model.tapWord(word)
+        XCTAssertEqual(spoken.spoken, ["fa:tea"])
+    }
+
     @MainActor
     func testChainReachingTheEndRecordsOneCompletion() async {
         let box = PlayerBox()

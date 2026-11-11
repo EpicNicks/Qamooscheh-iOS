@@ -45,13 +45,13 @@ public struct AppPathNavigator: PathNavigator {
     }
 
     /// A story opens its reader directly; the reader's button leads on to the story's cloze lessons.
-    public static func storyReader(_ skill: PathSkill) -> PathDestination {
-        .push(.storyReader(unitKey: skill.unitKey, skillKey: skill.skillKey))
+    public static func storyReader(_ skill: PathSkill, practice: Bool = false) -> PathDestination {
+        .push(.storyReader(unitKey: skill.unitKey, skillKey: skill.skillKey, practice: practice))
     }
 
     /// A completed lesson, played locally: nothing is submitted.
     public static func practice(_ skill: PathSkill) -> PathDestination {
-        if skill.category == .story { return storyReader(skill) }
+        if skill.category == .story { return storyReader(skill, practice: true) }
         return .lesson(LessonRoute(unitKey: skill.unitKey, skillKey: skill.skillKey, practice: true))
     }
 
