@@ -49,6 +49,9 @@ public struct LearnTab: View {
         .onReceive(shell.$bootstrap.compactMap { $0 }) { bootstrap in
             Task { await host.bootstrapChanged(bootstrap) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: ReaderCompletionRefresh.notification)) { _ in
+            Task { await shell.refresh() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: LessonSubmitRefresh.notification)) { note in
             if let key = LessonSubmitRefresh.completedSkillKey(in: note) { host.lessonFinished(key) }
             if let key = LessonSubmitRefresh.stowCleared(in: note) {

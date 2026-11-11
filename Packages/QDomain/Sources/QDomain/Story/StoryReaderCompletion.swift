@@ -1,7 +1,7 @@
 import Foundation
 
-// Story reader completion (Qamooscheh-Web#146). PROVISIONAL: the backend path is not built and the contract is not
-// final, so names and shape may change. Nothing here is a wire type, URL or network call.
+// Story reader completion (POST /v1/skills/complete-reading, API_SPEC.md 2.3a). Nothing here is a wire type, URL or network
+// call: the transport is QData's ReadingCompletionQueue, reached through StoryReaderCompletionSubmitting.
 
 /// A finished read of one story skill: recorded server side as an ungraded completion for the course version,
 /// touching no card state. Carries no items. `submissionId` is the offline-queue identity (like a session submit).
@@ -21,13 +21,13 @@ public struct StoryReaderCompletionRequest: Equatable, Sendable {
     }
 }
 
-/// Hands a completion to the app. The real implementation (a later item) enqueues it on the offline queue the way a
-/// session submit is queued; callers neither wait nor see failures.
+/// Hands a completion to the app. The real implementation (QFeatures) queues it durably and replays it until the server
+/// answers; callers neither wait nor see failures.
 public protocol StoryReaderCompletionSubmitting: AnyObject {
     func submitCompletion(_ request: StoryReaderCompletionRequest)
 }
 
-/// Stub transport: records requests in memory and never touches the network.
+/// Records requests in memory and never touches the network (tests, previews).
 public final class RecordingStoryReaderCompletionSubmitter: StoryReaderCompletionSubmitting, @unchecked Sendable {
     private let lock = NSLock()
     private var stored: [StoryReaderCompletionRequest] = []

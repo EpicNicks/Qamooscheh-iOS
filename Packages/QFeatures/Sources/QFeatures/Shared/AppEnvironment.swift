@@ -206,6 +206,18 @@ public struct AppEnvironment: @unchecked Sendable {
             try? await cardStore.clear(userId: uid)
             try? await completedStore.clear(userId: uid)
         }
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        // Story completions queue apart from session submits; a Recorded answer reloads the Journey.
+        let readingQueue = ReadingCompletionQueue(
+            storage: FileOfflineQueueStorage(directory: support.appendingPathComponent("reader-completions", isDirectory: true)),
+            completer: ReadingCompletionRepository(client: client),
+            onRecorded: { _, _ in ReaderCompletionRefresh.announce() })
+        let readingSubmitter = QueuedStoryReaderCompletionSubmitter(queue: readingQueue, userId: userId)
+        let flushAll: @Sendable (String) async -> Void = { uid in
+            await flushQueue?(uid)
+            _ = try? await readingQueue.flush(userId: uid)
+        }
         #if canImport(AVFoundation)
         let storySpeech: SpeechService? = SpeechService(synthesizer: AVSpeechSynthesizerAdapter())
         #else
@@ -243,11 +255,10 @@ public struct AppEnvironment: @unchecked Sendable {
                     guard let uid else { return }
                     // Forget the signed-out user's prefs and card mirror so the next account starts clean.
                     await forget(uid)
-                    let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                        ?? URL(fileURLWithPath: NSTemporaryDirectory())
                     let queue = OfflineQueue(storage: FileOfflineQueueStorage(
                         directory: support.appendingPathComponent("offline-queue", isDirectory: true)))
                     try? await queue.clear(userId: uid)
+                    try? await readingQueue.clear(userId: uid)
                     LessonDraftStore.removeAll(
                         directory: support.appendingPathComponent("lesson-drafts", isDirectory: true), userId: uid)
                 }.value
@@ -261,7 +272,7 @@ public struct AppEnvironment: @unchecked Sendable {
             race: LiveRaceService(repository: RaceRepository(client: client), afterFinish: afterFlashcardSubmit),
             reminders: reminders,
             path: PathServices.live(
-                client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushQueue,
+                client: client, contentStore: contentStore, cdnBaseURL: cdnBaseURL, flushQueue: flushAll,
                 completedStore: completedStore, userId: userId),
             storyReader: StoryReaderServices.live(
                 reader: reader, course: pinned,
@@ -269,7 +280,7 @@ public struct AppEnvironment: @unchecked Sendable {
                     guard let uid = await userId() else { return nil }
                     return await prefsProvider.sync(userId: uid, courseCode: code).prefs?.preferredVoice
                 },
-                files: contentStore, speech: storySpeech))
+                files: contentStore, speech: storySpeech, submitter: readingSubmitter))
     }
 }
 
