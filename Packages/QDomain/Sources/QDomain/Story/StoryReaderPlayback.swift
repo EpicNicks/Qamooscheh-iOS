@@ -28,6 +28,9 @@ public final class StoryReaderPlayback {
     public private(set) var playingLine: Int?
     /// Fires when the chain runs past its last clip.
     public var onFinished: (() -> Void)?
+    /// Fires each time the timeline lands on the last line (seek or chain) and when the chain finishes; the
+    /// receiver dedupes (see StoryReaderCompletionTrigger).
+    public var onReachedEnd: (() -> Void)?
 
     public init(lines: [StoryReaderLine], player: StoryClipPlayer) {
         self.lines = lines
@@ -81,6 +84,7 @@ public final class StoryReaderPlayback {
     public func seek(to line: Int) {
         guard lines.indices.contains(line) else { return }
         position = line
+        if line == lines.count - 1 { onReachedEnd?() }
         if isMainPlaying {
             stopCurrent()
             run(from: line)
@@ -118,6 +122,7 @@ public final class StoryReaderPlayback {
             return
         }
         position = index
+        if index == lines.count - 1 { onReachedEnd?() }
         generation += 1
         let mine = generation
         player.play(clip: clip, onEnd: { [weak self] end in
@@ -130,6 +135,7 @@ public final class StoryReaderPlayback {
     private func finish() {
         isMainPlaying = false
         position = lines.count
+        onReachedEnd?()
         onFinished?()
     }
 }
