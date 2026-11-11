@@ -63,6 +63,18 @@ public struct CourseContentReader: Sendable {
         return try decode(SkillArtifact.self, course: course, path: path)
     }
 
+    /// lexemes.json, or nil when it is not on disk.
+    public func lexemeIndex(_ course: CourseRef) throws -> [String: LexemeIndexEntry]? {
+        guard let manifest = try manifest(course) else { return nil }
+        return try decode([String: LexemeIndexEntry].self, course: course, path: manifest.lexemeIndexPath)
+    }
+
+    /// audio.json (voices and story speakers), or nil when the course has none on disk.
+    public func audioIndex(_ course: CourseRef) throws -> AudioIndexArtifact? {
+        guard let manifest = try manifest(course), let path = manifest.audioIndexPath else { return nil }
+        return try decode(AudioIndexArtifact.self, course: course, path: path)
+    }
+
     /// Units, skills and the lexeme index, or nil when the manifest, a unit or the lexeme index is missing.
     public func vocabContent(_ course: CourseRef) throws -> VocabContent? {
         guard let manifest = try manifest(course) else { return nil }
