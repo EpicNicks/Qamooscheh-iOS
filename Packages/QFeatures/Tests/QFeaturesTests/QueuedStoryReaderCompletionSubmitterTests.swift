@@ -66,6 +66,29 @@ final class QueuedStoryReaderCompletionSubmitterTests: XCTestCase {
         XCTAssertEqual(queued[0].request.skillKey, "s1")
     }
 
+    func testForegroundFlushSendsQueuedCompletionPastBackoff() async throws {
+        let completer = FakeCompleter(.success(ReadingCompletionResponse(outcome: .recorded)))
+        let recorded = RecordedCount()
+        let (submitter, queue) = make(completer, recorded: recorded)
+        let request = QueuedStoryReaderCompletionSubmitter.wire(completion())
+        try await queue.enqueue(userId: "me", submissionId: "id-1", request: request)
+        await submitter.flushPending(ignoreBackoff: true)
+        let left = try await queue.records(userId: "me")
+        XCTAssertEqual(completer.requests.count, 1)
+        XCTAssertEqual(recorded.value, 1)
+        XCTAssertTrue(left.isEmpty)
+    }
+
+    func testFailedForegroundFlushKeepsTheEntry() async throws {
+        let down = FakeCompleter(.failure(URLError(.notConnectedToInternet)))
+        let (submitter, queue) = make(down)
+        try await queue.enqueue(userId: "me", submissionId: "id-1", request: QueuedStoryReaderCompletionSubmitter.wire(completion()))
+        await submitter.flushPending(ignoreBackoff: true)
+        let left = try await queue.records(userId: "me")
+        XCTAssertEqual(left.count, 1)
+        XCTAssertEqual(left[0].attempts, 1)
+    }
+
     func testNoUserSendsNothing() async throws {
         let completer = FakeCompleter(.success(ReadingCompletionResponse(outcome: .recorded)))
         let (submitter, _) = make(completer, user: nil)

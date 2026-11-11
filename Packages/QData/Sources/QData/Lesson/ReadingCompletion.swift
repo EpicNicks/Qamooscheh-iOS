@@ -173,9 +173,13 @@ public actor ReadingCompletionQueue {
         return report
     }
 
-    /// Deletes the user's queue (sign-out cleanup).
+    /// Deletes the user's queue and any quarantined `.corrupt` leftovers (sign-out cleanup, like OfflineQueue.clear).
     public func clear(userId: String) throws {
-        try storage.remove(ReadingCompletionQueue.fileName(userId))
+        let name = ReadingCompletionQueue.fileName(userId)
+        for leftover in try storage.list() where leftover.hasPrefix(name + ".corrupt") {
+            try storage.remove(leftover)
+        }
+        try storage.remove(name)
     }
 
     /// Contract: errors are definitive (drop) except a network failure or 5xx. 408 and 429 say "try later", so they retry too.

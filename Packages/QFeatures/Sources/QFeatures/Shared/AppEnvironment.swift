@@ -55,6 +55,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let path: PathServices?
     /// The story reader's chapter, clips and completion hand-off; nil in tests and previews.
     public let storyReader: StoryReaderServices?
+    /// Sends reader completions an earlier run left queued; the app calls it when it becomes active. No-op in tests.
+    public let flushReaderCompletions: @Sendable () async -> Void
 
     public init(
         profile: ProfileService,
@@ -81,8 +83,10 @@ public struct AppEnvironment: @unchecked Sendable {
         race: RaceService? = nil,
         reminders: ReminderService? = nil,
         path: PathServices? = nil,
-        storyReader: StoryReaderServices? = nil
+        storyReader: StoryReaderServices? = nil,
+        flushReaderCompletions: @escaping @Sendable () async -> Void = {}
     ) {
+        self.flushReaderCompletions = flushReaderCompletions
         self.storyReader = storyReader
         self.path = path
         self.reminders = reminders
@@ -280,7 +284,8 @@ public struct AppEnvironment: @unchecked Sendable {
                     guard let uid = await userId() else { return nil }
                     return await prefsProvider.sync(userId: uid, courseCode: code).prefs?.preferredVoice
                 },
-                files: contentStore, speech: storySpeech, submitter: readingSubmitter))
+                files: contentStore, speech: storySpeech, submitter: readingSubmitter),
+            flushReaderCompletions: { await readingSubmitter.flushPending(ignoreBackoff: true) })
     }
 }
 
