@@ -92,7 +92,10 @@ struct RootTabView: View {
             Task { await shell.refresh() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await shell.refresh() } }
+            if phase == .active {
+                Task { await shell.refresh() }
+                if let flush = app?.flushReaderCompletions { Task { await flush() } }
+            }
         }
     }
 

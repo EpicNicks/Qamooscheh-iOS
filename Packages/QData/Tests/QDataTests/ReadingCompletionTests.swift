@@ -260,6 +260,24 @@ final class ReadingCompletionTests: XCTestCase {
         XCTAssertEqual(two.count, 1)
     }
 
+    func testClearRemovesLiveAndCorruptFilesOfThatUserOnly() async throws {
+        let storage = InMemoryOfflineQueueStorage()
+        let queue = makeQueue(MockCompleter(), storage: storage)
+        try await queue.enqueue(userId: user, submissionId: "a", request: request())
+        try await queue.enqueue(userId: "u2", submissionId: "b", request: request())
+        let mine = ReadingCompletionQueue.fileName(user)
+        let theirs = ReadingCompletionQueue.fileName("u2")
+        try storage.write(mine + ".corrupt", Data("x".utf8))
+        try storage.write(mine + ".corrupt.1", Data("y".utf8))
+        try storage.write(theirs + ".corrupt", Data("z".utf8))
+        try await queue.clear(userId: user)
+        XCTAssertNil(try storage.read(mine))
+        XCTAssertNil(try storage.read(mine + ".corrupt"))
+        XCTAssertNil(try storage.read(mine + ".corrupt.1"))
+        XCTAssertNotNil(try storage.read(theirs))
+        XCTAssertNotNil(try storage.read(theirs + ".corrupt"))
+    }
+
     func testUnreadableFileIsKeptAsideNotOverwritten() async throws {
         let storage = InMemoryOfflineQueueStorage()
         let name = ReadingCompletionQueue.fileName(user)

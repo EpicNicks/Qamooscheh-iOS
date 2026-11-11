@@ -29,9 +29,10 @@ public final class QueuedStoryReaderCompletionSubmitter: StoryReaderCompletionSu
     }
 
     /// Sends whatever an earlier run left queued (app start, Stow, opening a reader). Failures stay queued.
-    public func flushPending() async {
+    /// `ignoreBackoff` is true when the app just became active: the learner is back, so try now.
+    public func flushPending(ignoreBackoff: Bool = false) async {
         guard let uid = await userId(), !uid.isEmpty else { return }
-        _ = try? await queue.flush(userId: uid)
+        _ = try? await queue.flush(userId: uid, ignoreBackoff: ignoreBackoff)
     }
 
     /// The wire body: an empty unit key is sent as absent, which the server resolves course-wide.
