@@ -89,6 +89,7 @@ public struct CheckpointResultView: View {
     private let outcome: CheckpointOutcome
     private let onBack: () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.lessonBackLabel) private var backLabel
 
     public init(outcome: CheckpointOutcome, onBack: @escaping () -> Void) {
         self.outcome = outcome
@@ -109,7 +110,7 @@ public struct CheckpointResultView: View {
                     .font(.system(size: 17))
                     .foregroundColor(Color(argb: p.textMuted))
                     .multilineTextAlignment(.center)
-                checkpointButton(CheckpointLogic.backToPath, primary: true, p: p, action: onBack)
+                checkpointButton(backLabel, primary: true, p: p, action: onBack)
                     .frame(maxWidth: 420)
             }
             .padding(Spacing.standard.s4)

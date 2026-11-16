@@ -156,21 +156,28 @@ struct AppRouteDestination: View {
     let route: AppRoute
     @ObservedObject var shell: SignedInShell
     @Binding var path: [AppRoute]
-    @Environment(\.startLesson) private var startLesson
+    @Environment(\.startLesson) private var rootStartLesson
+
+    /// Opens a lesson from this tab, first putting the stack where the lesson's origin returns to (a library page
+    /// pops the story reader above it instead of leaving it behind the cover).
+    private func startLesson(_ lesson: LessonRoute) {
+        path = lesson.origin.stackForLesson(path)
+        rootStartLesson(lesson)
+    }
 
     var body: some View {
         switch route {
         case .themes:
             LibraryView(
                 model: shell.library, onOpenTopic: { path.append(.topic($0)) },
-                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0)) },
+                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0).from(.themes)) },
                 onOpenSideLibrary: { path.append(.sideLibrary($0)) })
         case .sideLibrary(let kind):
             SideLibraryDestination(
                 shell: shell, kind: kind,
-                navigator: AppPathNavigator(startLesson: startLesson, push: { path.append($0) }))
+                navigator: AppPathNavigator(origin: .sideLibrary(kind), startLesson: startLesson, push: { path.append($0) }))
         case .topic(let id):
-            TopicDestination(themeId: id, shell: shell)
+            TopicDestination(themeId: id, shell: shell, startLesson: startLesson)
         case .glossary:
             GlossaryDestination(shell: shell)
         case .flashcards:
@@ -191,8 +198,10 @@ struct AppRouteDestination: View {
             HelpView()
         case .about:
             AboutView(version: appVersion())
-        case .storyReader(let unitKey, let skillKey, let practice):
-            StoryReaderDestination(shell: shell, unitKey: unitKey, skillKey: skillKey, practice: practice)
+        case .storyReader(let unitKey, let skillKey, let practice, let origin):
+            StoryReaderDestination(
+                shell: shell, unitKey: unitKey, skillKey: skillKey, practice: practice, origin: origin,
+                startLesson: startLesson)
         case .shareStreak:
             ShareCardPreview(content: ShareCardContent(kind: .streak, streakDays: shell.streakDays))
                 .navigationTitle(route.title)
@@ -210,10 +219,16 @@ struct StoryReaderDestination: View {
     private let unitKey: String
     private let skillKey: String
     private let practice: Bool
-    @Environment(\.startLesson) private var startLesson
+    private let origin: LessonOrigin
+    private let startLesson: (LessonRoute) -> Void
 
-    init(shell: SignedInShell, unitKey: String, skillKey: String, practice: Bool = false) {
+    init(
+        shell: SignedInShell, unitKey: String, skillKey: String, practice: Bool = false, origin: LessonOrigin = .path,
+        startLesson: @escaping (LessonRoute) -> Void
+    ) {
         self.practice = practice
+        self.origin = origin
+        self.startLesson = startLesson
         self.unitKey = unitKey
         self.skillKey = skillKey
         let app = shell.app
@@ -223,7 +238,7 @@ struct StoryReaderDestination: View {
     }
 
     var body: some View {
-        StoryReaderScreen(model: model, onCloze: { startLesson(LessonRoute(unitKey: unitKey, skillKey: skillKey, practice: practice)) })
+        StoryReaderScreen(model: model, onCloze: { startLesson(LessonRoute(unitKey: unitKey, skillKey: skillKey, practice: practice, origin: origin)) })
     }
 }
 
@@ -246,14 +261,15 @@ struct SideLibraryDestination: View {
 
 struct TopicDestination: View {
     @StateObject private var model: TopicModel
-    @Environment(\.startLesson) private var startLesson
+    private let startLesson: (LessonRoute) -> Void
 
-    init(themeId: String, shell: SignedInShell) {
+    init(themeId: String, shell: SignedInShell, startLesson: @escaping (LessonRoute) -> Void) {
+        self.startLesson = startLesson
         _model = StateObject(wrappedValue: TopicModel(themeId: themeId, source: shell.app?.themes))
     }
 
     var body: some View {
-        TopicView(model: model, onStartLesson: { startLesson(LessonRoute(skillKey: $0)) })
+        TopicView(model: model, onStartLesson: { startLesson(LessonRoute(skillKey: $0, origin: .topic)) })
     }
 }
 

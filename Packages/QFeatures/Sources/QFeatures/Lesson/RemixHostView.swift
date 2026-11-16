@@ -7,6 +7,7 @@ public struct RemixHostView: View {
     @StateObject private var model: RemixHostModel
     private let onExit: () -> Void
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.lessonBackLabel) private var backLabel
 
     public init(model: @autoclosure @escaping () -> RemixHostModel, onExit: @escaping () -> Void) {
         _model = StateObject(wrappedValue: model())
@@ -43,7 +44,7 @@ public struct RemixHostView: View {
                         .foregroundColor(Color(argb: p.textMuted))
                         .multilineTextAlignment(.center)
                     Button("Try again") { model.retry() }.buttonStyle(.bordered)
-                    Button(LessonScreenLogic.backToPath, action: onExit).buttonStyle(.bordered)
+                    Button(backLabel, action: onExit).buttonStyle(.bordered)
                 }
                 .padding(Spacing.standard.s4)
             }

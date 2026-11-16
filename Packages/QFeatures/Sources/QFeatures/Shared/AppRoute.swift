@@ -16,7 +16,8 @@ public enum AppRoute: Hashable, Sendable {
     case about
     case shareStreak
     /// A story skill, read on the Learn tab (its cloze lessons stay behind the reader's button).
-    case storyReader(unitKey: String, skillKey: String, practice: Bool = false)
+    /// `origin` is where its cloze lessons return to (the Library's story page, or the Journey).
+    case storyReader(unitKey: String, skillKey: String, practice: Bool = false, origin: LessonOrigin = .path)
     /// The Library's story page or listening page: that category's lessons by unit.
     case sideLibrary(SideLibraryKind)
 
