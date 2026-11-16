@@ -137,19 +137,153 @@ public func roadEdgeGeometries(_ layout: RoadLayout) -> [RoadEdgeGeometry] {
     return result
 }
 
+/// How a road line is drawn: grey ahead of the cursor or locked, blue while open, green once walked or done.
+public enum RoadLineTone: Equatable, Sendable {
+    case locked
+    case open
+    case done
+
+    public func argb(palette: AppPalette) -> UInt32 {
+        switch self {
+        case .locked: return palette.border
+        case .open: return palette.current
+        case .done: return palette.primary
+        }
+    }
+
+    init(status: SkillStatus) {
+        switch status {
+        case .locked: self = .locked
+        case .unlocked: self = .done
+        case .current: self = .open
+        }
+    }
+}
+
+/// A side lesson's node on the road: where it is drawn, and whether it can be opened yet.
+public struct SideNodeGeometry: Equatable, Sendable {
+    public var skill: PathSkill
+    public var side: SidePathSide
+    public var x: Double
+    public var y: Double
+    public var locked: Bool
+}
+
+/// A road line that touches a junction (or leads out to a side node), with its tone resolved.
+public struct SideEdgeGeometry: Equatable, Sendable {
+    public var fromX: Double
+    public var fromY: Double
+    public var toX: Double
+    public var toY: Double
+    public var tone: RoadLineTone
+    /// The horizontal connector out to a side node, as against a stretch of the road itself.
+    public var isBranch: Bool
+}
+
+/// A junction dot on the road, where a side lesson branches off.
+public struct JunctionGeometry: Equatable, Sendable {
+    public var skillKey: String
+    public var x: Double
+    public var y: Double
+    public var tone: RoadLineTone
+}
+
 /// One unit's road, laid out for a width class. Forks collapse to one node on compact screens.
+/// With side lessons (stories, listening) the rows carry short junction rows between positions; `layout` then holds
+/// the position nodes at their shifted y and the stretches of road between two positions, while the stretches that
+/// touch a junction, the junction dots and the side nodes are in `sideEdges`, `junctions` and `sideNodes`.
 public struct UnitRoad: Equatable, Sendable {
     public var positions: [PathPosition]
     public var layout: RoadLayout
     public var config: RoadLayoutConfig
     public var collapseForks: Bool
+    public var rows: [RoadRow]
+    public private(set) var sideNodes: [SideNodeGeometry] = []
+    public private(set) var junctions: [JunctionGeometry] = []
+    public private(set) var sideEdges: [SideEdgeGeometry] = []
 
-    public init(positions: [PathPosition], config: RoadLayoutConfig, collapseForks: Bool) {
+    /// - Parameter lockedSideKeys: the skill keys of side lessons still locked (see `sidePathLocked`).
+    public init(
+        positions: [PathPosition], config: RoadLayoutConfig, collapseForks: Bool,
+        rows: [RoadRow]? = nil, sideLane: SideRoadConfig = PathTheme.standard.sideLane, lockedSideKeys: Set<String> = []
+    ) {
         self.positions = positions
         self.config = config
         self.collapseForks = collapseForks
-        self.layout = computeRoadLayout(positions.map { collapseForks ? 1 : $0.skills.count }, config: config)
+        let rows = rows ?? positions.indices.map { RoadRow.position($0) }
+        self.rows = rows
+        if !rows.contains(where: { $0.isSide }) {
+            self.layout = computeRoadLayout(positions.map { collapseForks ? 1 : $0.skills.count }, config: config)
+            return
+        }
+        let inputs: [RoadRowInput] = rows.map { row in
+            switch row {
+            case .position(let index): return .position(count: collapseForks ? 1 : positions[index].skills.count)
+            case .side(_, let side): return .side(side)
+            }
+        }
+        let laid = computeRowsLayout(inputs, config: config, side: sideLane)
+        // The position-to-position stretches keep the bare road's edge handling (forks, finished branches).
+        var roadEdges: [RoadEdge] = []
+        for e in laid.edges where !e.isBranch {
+            guard let from = e.fromPositionIndex, let to = e.toPositionIndex else { continue }
+            roadEdges.append(RoadEdge(d: "M \(e.x1),\(e.y1) L \(e.x2),\(e.y2)", fromPositionIndex: from, toPositionIndex: to))
+        }
+        self.layout = RoadLayout(
+            nodes: laid.nodes.compactMap { n -> RoadNode? in
+                guard n.kind == .skill, let p = n.positionIndex, let s = n.skillIndex else { return nil }
+                return RoadNode(positionIndex: p, skillIndex: s, x: n.x, y: n.y)
+            },
+            edges: roadEdges, totalHeight: laid.totalHeight)
+
+        // What a stretch of road looks like where it leads: the next position's status, or the side lesson's own state at the road's end.
+        func sideTone(_ skill: PathSkill) -> RoadLineTone {
+            if lockedSideKeys.contains(skill.skillKey) { return .locked }
+            return skill.completed ? .done : .open
+        }
+        func throughTone(junctionRow: Int) -> RoadLineTone {
+            for row in rows[(junctionRow + 1)...] {
+                if case .position(let index) = row { return RoadLineTone(status: positions[index].status) }
+            }
+            if case .side(let skill, _) = rows[junctionRow] { return sideTone(skill) }
+            return .locked
+        }
+        for node in laid.nodes {
+            guard case .side(let skill, let side) = rows[node.rowIndex] else { continue }
+            switch node.kind {
+            case .junction:
+                junctions.append(JunctionGeometry(skillKey: skill.skillKey, x: node.x, y: node.y, tone: throughTone(junctionRow: node.rowIndex)))
+            case .side:
+                sideNodes.append(SideNodeGeometry(skill: skill, side: side, x: node.x, y: node.y, locked: lockedSideKeys.contains(skill.skillKey)))
+            case .skill:
+                break
+            }
+        }
+        for e in laid.edges {
+            if !e.isBranch && e.fromPositionIndex != nil && e.toPositionIndex != nil { continue }
+            let tone: RoadLineTone
+            if e.isBranch {
+                guard case .side(let skill, _) = rows[e.toRowIndex] else { continue }
+                tone = sideTone(skill)
+            } else if let to = e.toPositionIndex {
+                tone = RoadLineTone(status: positions[to].status)
+            } else {
+                tone = throughTone(junctionRow: e.toRowIndex)
+            }
+            sideEdges.append(SideEdgeGeometry(fromX: e.x1, fromY: e.y1, toX: e.x2, toY: e.y2, tone: tone, isBranch: e.isBranch))
+        }
     }
+
+    /// A unit's road with its side lessons hung off it.
+    public init(unit: PathUnit, config: RoadLayoutConfig, collapseForks: Bool, sideLane: SideRoadConfig = PathTheme.standard.sideLane) {
+        let locked = Set(unit.otherSkills.filter { sidePathLocked($0, in: unit) }.map { $0.skillKey })
+        self.init(
+            positions: unit.standardPositions, config: config, collapseForks: collapseForks,
+            rows: buildRoadRows(unit), sideLane: sideLane, lockedSideKeys: locked)
+    }
+
+    /// Whether any side lesson hangs off this road.
+    public var hasSides: Bool { !sideNodes.isEmpty }
 
     /// The current position's node y, if this unit has one: what the screen scrolls to.
     public var currentNodeY: Double? {
@@ -215,4 +349,24 @@ public func allBranchesFinished(_ position: PathPosition) -> Bool {
 public func groupDoneNote(_ position: PathPosition) -> String {
     let done = position.skills.filter { $0.completed }.count
     return done > 0 ? ", \(done) of \(position.skills.count) done" : ""
+}
+
+/// The colors a side lesson's round node draws with: grey while locked, a blue border while open and still to do,
+/// the walked-road green border once done (web SkillNode "story" layout).
+public func sideNodeColors(locked: Bool, completed: Bool, palette c: AppPalette) -> NodeColors {
+    if locked { return nodeColors(status: .locked, palette: c) }
+    var colors = nodeColors(status: .unlocked, palette: c)
+    if !completed {
+        colors.accent = c.current
+        colors.flapDark = c.current
+        colors.flapLight = lerpARGB(c.surface, c.current, 0.45)
+    }
+    return colors
+}
+
+/// The spoken label of a side node (web: "Story: title, done" / "Listening: title, locked").
+public func sideNodeLabel(_ skill: PathSkill, locked: Bool) -> String {
+    let kind = skill.category == .listening ? "Listening" : "Story"
+    let state = skill.completed ? ", done" : (locked ? ", locked" : "")
+    return "\(kind): \(skill.title)\(state)"
 }

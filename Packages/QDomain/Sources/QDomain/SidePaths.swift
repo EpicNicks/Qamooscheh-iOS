@@ -17,10 +17,20 @@ public extension SkillCategory {
     var isKnown: Bool { self != .unknown }
 }
 
-/// Which side of the road a side lesson hangs on: a stable hash of its key (the same FNV-1a plus fmix32 the voice pick
-/// uses), so it never moves between visits or launches.
-public func sidePathSide(skillKey: String) -> SidePathSide {
-    Recordings.voiceHash("side:" + skillKey) % 2 == 0 ? .left : .right
+/// Which side of the road a side lesson hangs on: a stable hash of its unit and skill keys, so it never moves between
+/// visits or launches. The same FNV-1a plus final avalanche as web's `storySide` (roadRows.ts), over the same
+/// "unitKey/skillKey" string, so a lesson hangs on the same side on every surface.
+public func sidePathSide(unitKey: String, skillKey: String) -> SidePathSide {
+    var h: UInt32 = 0x811c9dc5
+    for scalar in "\(unitKey)/\(skillKey)".unicodeScalars {
+        // JS charCodeAt(0) of a code point: the code unit, or the high surrogate of an astral one.
+        let unit = String(scalar).utf16.first ?? 0
+        h = (h ^ UInt32(unit)) &* 0x01000193
+    }
+    h ^= h >> 15
+    h = h &* 0x2c1b3c6d
+    h ^= h >> 12
+    return h & 1 == 0 ? .left : .right
 }
 
 /// A side lesson of the unit, in published order, that branches off the road.
@@ -30,14 +40,19 @@ public func sidePathSkills(_ unit: PathUnit, category: SkillCategory) -> [PathSk
 
 /// Whether a side lesson on the road is still locked: its unit has not been reached, or the Parsle it follows is not
 /// passed yet (every standard position before the cursor reads `.unlocked`). One following no Parsle opens with its unit.
+/// Web's storyRoadStatus also opens it once the lesson itself is done, or once its Parsle is done (the cursor clamps on
+/// the course's last lesson, so a trailing side lesson would otherwise stay locked for good).
 public func sidePathLocked(_ skill: PathSkill, in unit: PathUnit) -> Bool {
     if skill.status == .locked { return true }
+    if skill.completed { return false }
     guard let anchor = skill.afterPosition, unit.standardPositions.indices.contains(anchor) else { return false }
-    return unit.standardPositions[anchor].status != .unlocked
+    let position = unit.standardPositions[anchor]
+    if position.skills.contains(where: { $0.completed }) { return false }
+    return position.status != .unlocked
 }
 
-/// The listening library page: listening lessons by unit. Unlocked by the unit (reached), not by the road's Parsle.
-public struct ListeningLibraryUnit: Equatable, Sendable {
+/// A library page of one side category: its lessons by unit. Unlocked by the unit (reached), not by the road's Parsle.
+public struct SideLibraryUnit: Equatable, Sendable {
     public var unitKey: String
     public var heading: String
     public var lessons: [PathSkill]
@@ -51,13 +66,26 @@ public struct ListeningLibraryUnit: Equatable, Sendable {
     }
 }
 
-/// Units that have a listening lesson, in course order; units without one are left out.
-public func listeningLibrary(_ path: [PathUnit]) -> [ListeningLibraryUnit] {
+public typealias ListeningLibraryUnit = SideLibraryUnit
+
+/// Units that have a lesson of `category`, in course order; units without one are left out. Only the categories that
+/// branch off the road (story, listening) have a library page built from here.
+public func sideLibrary(_ path: [PathUnit], category: SkillCategory) -> [SideLibraryUnit] {
     path.compactMap { unit in
-        let lessons = sidePathSkills(unit, category: .listening)
+        let lessons = sidePathSkills(unit, category: category)
         if lessons.isEmpty { return nil }
-        return ListeningLibraryUnit(
+        return SideLibraryUnit(
             unitKey: unit.unitKey, heading: unit.heading, lessons: lessons,
             unlocked: lessons.contains { $0.status != .locked })
     }
+}
+
+/// The listening library page: listening lessons by unit.
+public func listeningLibrary(_ path: [PathUnit]) -> [SideLibraryUnit] {
+    sideLibrary(path, category: .listening)
+}
+
+/// The story library page: stories by unit.
+public func storyLibrary(_ path: [PathUnit]) -> [SideLibraryUnit] {
+    sideLibrary(path, category: .story)
 }

@@ -12,6 +12,7 @@ public struct SkillRoadView: View {
     private let palette: AppPalette?
     private let onSkillTap: (PathSkill) -> Void
     private let onGroupTap: (PathPosition) -> Void
+    private let onSideTap: (PathSkill) -> Void
     private let openPopoverId: String?
     private let popoverContent: ((PathSkill) -> AnyView)?
     private let onPopoverDismiss: () -> Void
@@ -26,6 +27,7 @@ public struct SkillRoadView: View {
         palette: AppPalette? = nil,
         onSkillTap: @escaping (PathSkill) -> Void = { _ in },
         onGroupTap: @escaping (PathPosition) -> Void = { _ in },
+        onSideTap: @escaping (PathSkill) -> Void = { _ in },
         openPopoverId: String? = nil,
         popoverContent: ((PathSkill) -> AnyView)? = nil,
         onPopoverDismiss: @escaping () -> Void = {}
@@ -35,13 +37,14 @@ public struct SkillRoadView: View {
         self.palette = palette
         self.onSkillTap = onSkillTap
         self.onGroupTap = onGroupTap
+        self.onSideTap = onSideTap
         self.openPopoverId = openPopoverId
         self.popoverContent = popoverContent
         self.onPopoverDismiss = onPopoverDismiss
     }
 
     public var body: some View {
-        if road.positions.isEmpty {
+        if road.positions.isEmpty && road.sideNodes.isEmpty {
             EmptyView()
         } else {
             GeometryReader { proxy in
@@ -93,8 +96,27 @@ public struct SkillRoadView: View {
                         )
                     }
                 }
+                // Stretches of road through a junction, and the connectors out to the side lessons.
+                for edge in road.sideEdges {
+                    var line = Path()
+                    line.move(to: CGPoint(x: mirrored(CGFloat(edge.fromX) * scale, width: width), y: CGFloat(edge.fromY)))
+                    line.addLine(to: CGPoint(x: mirrored(CGFloat(edge.toX) * scale, width: width), y: CGFloat(edge.toY)))
+                    context.stroke(
+                        line,
+                        with: .color(Color(argb: edge.tone.argb(palette: p))),
+                        style: StrokeStyle(lineWidth: theme.strokeWidth, lineCap: .round)
+                    )
+                }
+                for junction in road.junctions {
+                    let radius = theme.strokeWidth
+                    let centre = CGPoint(x: mirrored(CGFloat(junction.x) * scale, width: width), y: CGFloat(junction.y))
+                    let dot = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius, width: radius * 2, height: radius * 2))
+                    context.fill(dot, with: .color(Color(argb: junction.tone.argb(palette: p))))
+                }
             }
             .frame(width: width, height: CGFloat(road.layout.totalHeight))
+
+            sideLayer(width: width, scale: scale, palette: p)
 
             ForEach(Array(road.layout.nodes.enumerated()), id: \.offset) { entry in
                 let node = entry.element
@@ -108,6 +130,26 @@ public struct SkillRoadView: View {
             }
         }
         .frame(width: width, height: CGFloat(road.layout.totalHeight), alignment: .topLeading)
+    }
+
+    /// The side lessons' round nodes, centred on their lane. Tapping opens the lesson directly (no popover); a locked one does nothing.
+    @ViewBuilder
+    private func sideLayer(width: CGFloat, scale: CGFloat, palette p: AppPalette) -> some View {
+        let side = theme.sideNodeSize
+        ForEach(Array(road.sideNodes.enumerated()), id: \.offset) { entry in
+            let node = entry.element
+            let centre = mirrored(CGFloat(node.x) * scale, width: width)
+            let left = min(max(centre - side / 2, 0), max(width - side, 0))
+            SideNodeView(
+                skill: node.skill,
+                locked: node.locked,
+                icon: theme.icons[node.skill.category],
+                theme: theme,
+                palette: p,
+                onTap: { onSideTap(node.skill) }
+            )
+            .offset(x: left, y: CGFloat(node.y) - side / 2)
+        }
     }
 
     /// How strongly the node is pulsing because its skill just unlocked (0 at rest).

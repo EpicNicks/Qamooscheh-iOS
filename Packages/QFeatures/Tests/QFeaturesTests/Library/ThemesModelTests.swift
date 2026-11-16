@@ -184,7 +184,8 @@ final class ThemesModelTests: XCTestCase {
     }
 
     func testPlaceholderSectionsFollowThemes() {
-        XCTAssertEqual(LibraryPlaceholders.sectionTitles, ["Stories", "Conversations", "Songs"])
+        XCTAssertEqual(LibraryPlaceholders.sectionTitles, ["Conversations", "Songs"])
+        XCTAssertEqual(LibraryPlaceholders.sideSections, [.story, .listening])
         XCTAssertEqual(LibraryPlaceholders.comingSoon, "Coming soon")
     }
 

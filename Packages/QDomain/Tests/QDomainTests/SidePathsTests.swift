@@ -32,9 +32,41 @@ final class SidePathsTests: XCTestCase {
     }
 
     func testSideIsStableAndBothSidesOccur() {
-        XCTAssertEqual(sidePathSide(skillKey: "l1"), sidePathSide(skillKey: "l1"))
-        let sides = Set((0..<40).map { sidePathSide(skillKey: "lesson-\($0)") })
+        XCTAssertEqual(sidePathSide(unitKey: "u1", skillKey: "l1"), sidePathSide(unitKey: "u1", skillKey: "l1"))
+        let sides = Set((0..<40).map { sidePathSide(unitKey: "u1", skillKey: "lesson-\($0)") })
         XCTAssertEqual(sides, [.left, .right])
+    }
+
+    /// Values computed with web's `storySide` (src/domain/roadRows.ts) so the sides agree across surfaces.
+    func testSideMatchesWebsHash() {
+        let expected: [(String, String, SidePathSide)] = [
+            ("u1", "l1", .right), ("u1", "l0", .left), ("u1", "st", .left), ("u2", "l2", .right),
+            ("unit-1", "story-1", .right), ("unit-1", "listening-1", .left),
+            ("cafe", "cafe-1", .right), ("cafe", "cafe-2", .left), ("cafe", "cafe-3", .right),
+        ]
+        for (unit, skill, side) in expected {
+            XCTAssertEqual(sidePathSide(unitKey: unit, skillKey: skill), side, "\(unit)/\(skill)")
+        }
+    }
+
+    func testASideLessonOpensOnceItIsDoneOrItsParsleIsDone() {
+        // The cursor clamps on the course's last lesson: the review stays current even once it is passed.
+        var p = path(position: PositionKey(unitKey: "u1", skillKey: "review"))
+        var l1 = p[0].otherSkills.first { $0.skillKey == "l1" }!
+        XCTAssertTrue(sidePathLocked(l1, in: p[0]))
+        l1.completed = true
+        XCTAssertFalse(sidePathLocked(l1, in: p[0]))
+        l1.completed = false
+        p[0].standardPositions[2].skills[0].completed = true
+        XCTAssertFalse(sidePathLocked(l1, in: p[0]))
+    }
+
+    func testStoryLibraryListsOnlyStories() {
+        let p = path(position: PositionKey(unitKey: "u1", skillKey: "a"))
+        let library = storyLibrary(p)
+        XCTAssertEqual(library.map { $0.unitKey }, ["u1"])
+        XCTAssertEqual(library[0].lessons.map { $0.skillKey }, ["st"])
+        XCTAssertTrue(library[0].unlocked)
     }
 
     func testLockedUntilTheParsleItFollowsIsPassed() {

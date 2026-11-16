@@ -31,6 +31,18 @@ public extension PathNavigator {
     }
 }
 
+public extension PathNavigator {
+    /// A side lesson tapped on the road or in its library page: nothing while locked, local practice once done, else
+    /// the lesson (a story's reader, a listening lesson's player).
+    func openSide(_ skill: PathSkill, locked: Bool) {
+        switch pathSideTapAction(skill, locked: locked) {
+        case .startLesson: startLesson(skill)
+        case .practice: practice(skill)
+        case .retryStowed, nil: break
+        }
+    }
+}
+
 /// For screens and tests that need a navigator that goes nowhere.
 public struct NoopPathNavigator: PathNavigator {
     public init() {}
