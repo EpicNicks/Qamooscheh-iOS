@@ -443,6 +443,7 @@ public struct LessonResultsView: View {
     private let onShare: (() -> Void)?
     private let onPracticeAgain: (() -> Void)?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.lessonBackLabel) private var backLabel
 
     public init(
         end: LessonEndKind,
@@ -505,7 +506,7 @@ public struct LessonResultsView: View {
                         if !copy.passed, let again = retry {
                             actionButton("Try again", primary: true, p: p, action: again)
                         }
-                        actionButton(savedPractice ? "Back to vocabulary" : "Back to path", primary: copy.passed || retry == nil, p: p, action: onBack)
+                        actionButton(savedPractice ? "Back to vocabulary" : backLabel, primary: copy.passed || retry == nil, p: p, action: onBack)
                         if copy.passed, end != .practice, !savedPractice, let share = onShare {
                             actionButton("Share", primary: false, p: p, action: share)
                         }

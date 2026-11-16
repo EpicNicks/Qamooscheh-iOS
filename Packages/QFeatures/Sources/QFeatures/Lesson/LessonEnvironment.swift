@@ -30,8 +30,10 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var remixContents: RemixContents?
     /// Fill in the blank without typo tolerance; only read when the remix holds cloze cards.
     public var hardcore: Bool
+    /// Where the lesson was launched from: names the "Back to ..." buttons. Defaults to the Journey.
+    public var origin: LessonOrigin
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, deepDiveLessonKey: String? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, deepDiveLessonKey: String? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false, origin: LessonOrigin = .path) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -44,6 +46,14 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
         self.deepDiveLessonKey = deepDiveLessonKey
         self.remixContents = remixContents
         self.hardcore = hardcore
+        self.origin = origin
+    }
+
+    /// This route launched from `origin`.
+    public func from(_ origin: LessonOrigin) -> LessonRoute {
+        var tagged = self
+        tagged.origin = origin
+        return tagged
     }
 
     /// Whether this route is a remix of topics, picked or found from a lesson (a Deep Dive).
@@ -394,6 +404,7 @@ public extension View {
                     )
                 }
             }
+            .environment(\.lessonBackLabel, current.origin.backLabel)
             // A cover is its own hierarchy, so the shell's strip does not reach it.
             .offlineStrip(connectivity)
         }

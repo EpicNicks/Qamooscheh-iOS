@@ -29,6 +29,7 @@ public struct LessonScreen: View {
     @Environment(\.colorScheme) private var colorScheme
     /// The report form for the exercise still being asked is open.
     @State private var reportingAsked = false
+    @Environment(\.lessonBackLabel) private var backLabel
 
     public init(session: LessonSession, onExit: @escaping () -> Void) {
         self.session = session
@@ -123,7 +124,7 @@ public struct LessonScreen: View {
             .buttonStyle(.plain)
             .frame(maxWidth: 420)
             Button(action: onBack) {
-                Text(LessonScreenLogic.backToPath)
+                Text(backLabel)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(Color(argb: p.primary))
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -336,6 +337,7 @@ public struct LessonHostView: View {
     private let onExit: () -> Void
     @State private var state: Load = .loading
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.lessonBackLabel) private var backLabel
 
     public init(load: @escaping () async throws -> LessonSession?, onExit: @escaping () -> Void) {
         self.load = load
@@ -388,7 +390,7 @@ public struct LessonHostView: View {
                 .foregroundColor(Color(argb: p.textMuted))
                 .multilineTextAlignment(.center)
             Button(action: onExit) {
-                Text(LessonScreenLogic.backToPath)
+                Text(backLabel)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(Color(argb: p.primaryContrast))
                     .frame(maxWidth: .infinity, minHeight: 48)
