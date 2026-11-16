@@ -17,6 +17,8 @@ public enum AppRoute: Hashable, Sendable {
     case shareStreak
     /// A story skill, read on the Learn tab (its cloze lessons stay behind the reader's button).
     case storyReader(unitKey: String, skillKey: String, practice: Bool = false)
+    /// The Library's story page or listening page: that category's lessons by unit.
+    case sideLibrary(SideLibraryKind)
 
     public var title: String {
         switch self {
@@ -32,6 +34,7 @@ public enum AppRoute: Hashable, Sendable {
         case .about: return "About"
         case .shareStreak: return "Share your streak"
         case .storyReader: return "Story"
+        case .sideLibrary(let kind): return kind.title
         }
     }
 

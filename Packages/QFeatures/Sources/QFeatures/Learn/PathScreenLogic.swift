@@ -79,6 +79,13 @@ public func pathPrimaryAction(_ skill: PathSkill) -> PathPrimaryAction {
     return .practice
 }
 
+/// What tapping a side lesson (story, listening) does: nothing while locked, local practice once it is done (nothing is
+/// submitted), else the lesson itself. Side lessons never offer a Stow, skip or Deep Dive, so there is no popover.
+public func pathSideTapAction(_ skill: PathSkill, locked: Bool) -> PathPrimaryAction? {
+    if locked { return nil }
+    return skill.completed ? .practice : .startLesson
+}
+
 /// The widest the road's column grows; wider screens keep a phone-like column.
 public let pathColumnMaxWidth: Double = 560
 

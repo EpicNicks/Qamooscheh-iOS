@@ -73,9 +73,12 @@ public func makeLibraryTopics(_ data: ThemeLibraryData) -> LibraryTopics {
 }
 
 /// Library sections that are not built yet: a header plus a "Coming soon" row (Android LibraryScreen).
+/// Stories and Listening are built (`SideLibraryKind`); Conversations and Songs are not.
 public enum LibraryPlaceholders {
     public static let comingSoon = "Coming soon"
-    public static let sectionTitles: [String] = ["Stories", "Conversations", "Songs"]
+    public static let sectionTitles: [String] = ["Conversations", "Songs"]
+    /// The built side-lesson sections, shown ahead of the placeholders; each opens its own page.
+    public static let sideSections: [SideLibraryKind] = [.story, .listening]
 }
 
 public enum LibraryState: Equatable, Sendable {

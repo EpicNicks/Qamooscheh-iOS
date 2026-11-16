@@ -13,6 +13,12 @@ public struct PathTheme: Equatable, Sendable {
     /// The square card's side; `nodeHalfWidth` is this halved, in logical units.
     public var nodeSize: CGFloat
     public var strokeWidth: CGFloat
+    /// The lane a side lesson (story, listening) hangs in off the road, in the road's logical units (web's
+    /// spurRowHeight, storyOffset, storyHalfWidth). Below `compactBreakpoint` it is `compactSideLane`.
+    public var sideLane: SideRoadConfig
+    public var compactSideLane: SideRoadConfig
+    /// The round side node's diameter; `sideHalfWidth` is this halved, in logical units.
+    public var sideNodeSize: CGFloat
 
     /// Phones and portrait tablets: compact road, collapsed forks.
     public static let compactBreakpoint: CGFloat = 768
@@ -23,7 +29,10 @@ public struct PathTheme: Equatable, Sendable {
         compactLayout: RoadLayoutConfig?,
         icons: [SkillCategory: String],
         nodeSize: CGFloat,
-        strokeWidth: CGFloat
+        strokeWidth: CGFloat,
+        sideLane: SideRoadConfig = SideRoadConfig(spurRowHeight: 130, sideOffset: 110, sideHalfWidth: 36),
+        compactSideLane: SideRoadConfig = SideRoadConfig(spurRowHeight: 108, sideOffset: 110, sideHalfWidth: 36),
+        sideNodeSize: CGFloat = 72
     ) {
         self.id = id
         self.layout = layout
@@ -31,6 +40,13 @@ public struct PathTheme: Equatable, Sendable {
         self.icons = icons
         self.nodeSize = nodeSize
         self.strokeWidth = strokeWidth
+        self.sideLane = sideLane
+        self.compactSideLane = compactSideLane
+        self.sideNodeSize = sideNodeSize
+    }
+
+    public func sideLaneFor(compact: Bool) -> SideRoadConfig {
+        compact ? compactSideLane : sideLane
     }
 
     public func layoutFor(compact: Bool) -> RoadLayoutConfig {

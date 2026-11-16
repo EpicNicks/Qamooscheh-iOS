@@ -273,7 +273,8 @@ private struct PathReadyView: View {
         GeometryReader { proxy in
             let compact = pathIsCompact(width: Double(proxy.size.width))
             let config = theme.layoutFor(compact: compact)
-            let roads = state.units.map { UnitRoad(positions: $0.standardPositions, config: config, collapseForks: compact) }
+            let lane = theme.sideLaneFor(compact: compact)
+            let roads = state.units.map { UnitRoad(unit: $0, config: config, collapseForks: compact, sideLane: lane) }
             let target = currentRoadTarget(roads)
             let viewport = Double(proxy.size.height)
             let scrollKey = pathScrollKey(course: state.course, units: state.units)
@@ -386,6 +387,8 @@ private struct PathReadyView: View {
             palette: palette,
             onSkillTap: { skill in onTogglePopover(pathPopoverId(unitKey: skill.unitKey, skillKey: skill.skillKey)) },
             onGroupTap: { position in groupPosition = position },
+            // A side lesson (story, listening) opens straight away: no popover, and it never moves the cursor.
+            onSideTap: { skill in navigator.openSide(skill, locked: sidePathLocked(skill, in: unit)) },
             openPopoverId: state.openPopoverId,
             popoverContent: { skill in popoverContent(skill) },
             onPopoverDismiss: onClosePopover

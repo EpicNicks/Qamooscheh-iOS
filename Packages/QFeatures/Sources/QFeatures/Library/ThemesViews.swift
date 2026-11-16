@@ -2,23 +2,28 @@ import SwiftUI
 import QDesign
 
 /// The Library topics screen (web ThemesPage, Android LibraryScreen): a grid of Deep Dive topics
-/// and a Remix button. Stories, conversations and songs are a follow-up.
+/// and a Remix button, then the Stories and Listening pages. Conversations and songs are a follow-up.
 public struct LibraryView: View {
     @ObservedObject private var model: LibraryModel
     private let onOpenTopic: (String) -> Void
     private let onRemix: ([String]) -> Void
+    private let onOpenSideLibrary: (SideLibraryKind) -> Void
     @StateObject private var picker = RemixPickerModel(allTopics: [])
     @State private var picking = false
 
-    public init(model: LibraryModel, onOpenTopic: @escaping (String) -> Void, onRemix: @escaping ([String]) -> Void) {
+    public init(
+        model: LibraryModel, onOpenTopic: @escaping (String) -> Void, onRemix: @escaping ([String]) -> Void,
+        onOpenSideLibrary: @escaping (SideLibraryKind) -> Void = { _ in }
+    ) {
         self.model = model
         self.onOpenTopic = onOpenTopic
         self.onRemix = onRemix
+        self.onOpenSideLibrary = onOpenSideLibrary
     }
 
     public var body: some View {
         ScrollView {
-            LibraryContent(model: model, onOpenTopic: onOpenTopic, onRemixTapped: { picking = true })
+            LibraryContent(model: model, onOpenTopic: onOpenTopic, onRemixTapped: { picking = true }, onOpenSideLibrary: onOpenSideLibrary)
                 .padding(16)
         }
         .navigationTitle("Library")
@@ -39,6 +44,7 @@ struct LibraryContent: View {
     @ObservedObject var model: LibraryModel
     let onOpenTopic: (String) -> Void
     let onRemixTapped: () -> Void
+    var onOpenSideLibrary: (SideLibraryKind) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -58,12 +64,41 @@ struct LibraryContent: View {
                     .frame(minHeight: 44)
             case .ready(let ready):
                 topics(ready, p)
+                ForEach(LibraryPlaceholders.sideSections, id: \.self) { kind in
+                    sideSection(kind, p)
+                }
                 ForEach(LibraryPlaceholders.sectionTitles, id: \.self) { title in
                     placeholderSection(title, p)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A built section: its header over one row that opens the page.
+    @ViewBuilder
+    private func sideSection(_ kind: SideLibraryKind, _ p: AppPalette) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radii.standard.md)
+        Text(kind.title).font(.title2.weight(.bold)).foregroundColor(Color(argb: p.text))
+            .padding(.top, 8)
+            .accessibilityAddTraits(.isHeader)
+        Button(action: { onOpenSideLibrary(kind) }) {
+            HStack(spacing: 8) {
+                Text(kind.icon).accessibilityHidden(true)
+                Text("Browse by unit").font(.body.weight(.semibold)).foregroundColor(Color(argb: p.text))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").foregroundColor(Color(argb: p.textMuted)).accessibilityHidden(true)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(Color(argb: p.surface))
+            .clipShape(shape)
+            .overlay(shape.stroke(Color(argb: p.border), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(kind.title), browse by unit")
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder

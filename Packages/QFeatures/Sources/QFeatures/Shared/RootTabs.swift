@@ -163,7 +163,12 @@ struct AppRouteDestination: View {
         case .themes:
             LibraryView(
                 model: shell.library, onOpenTopic: { path.append(.topic($0)) },
-                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0)) })
+                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0)) },
+                onOpenSideLibrary: { path.append(.sideLibrary($0)) })
+        case .sideLibrary(let kind):
+            SideLibraryDestination(
+                shell: shell, kind: kind,
+                navigator: AppPathNavigator(startLesson: startLesson, push: { path.append($0) }))
         case .topic(let id):
             TopicDestination(themeId: id, shell: shell)
         case .glossary:
@@ -219,6 +224,23 @@ struct StoryReaderDestination: View {
 
     var body: some View {
         StoryReaderScreen(model: model, onCloze: { startLesson(LessonRoute(unitKey: unitKey, skillKey: skillKey, practice: practice)) })
+    }
+}
+
+/// A story or listening page. A lesson opens like a tap on the road: a story in its reader, a listening lesson in the
+/// lesson player, a finished one as local practice. The library is unlocked by unit, so the rows it lets through are open.
+struct SideLibraryDestination: View {
+    @StateObject private var model: SideLibraryModel
+    private let navigator: PathNavigator
+
+    init(shell: SignedInShell, kind: SideLibraryKind, navigator: PathNavigator) {
+        self.navigator = navigator
+        _model = StateObject(wrappedValue: SideLibraryModel(
+            kind: kind, repository: shell.app?.path?.repository, bootstrap: { [weak shell] in shell?.bootstrap }))
+    }
+
+    var body: some View {
+        SideLibraryView(model: model, onOpen: { navigator.openSide($0, locked: false) })
     }
 }
 
