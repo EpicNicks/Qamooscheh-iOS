@@ -80,4 +80,14 @@ public enum SkillCategory: String, Codable, Equatable, Hashable, Sendable, CaseI
     case story = "story"
     case conversation = "conversation"
     case song = "song"
+    /// A side lesson of listen_type exercises only (2026-10-28). Never moves the cursor; played in the lesson player.
+    case listening = "listening"
+    /// A category this build doesn't know (one added after the release). Any unrecognised name decodes to it, so a newer
+    /// course still loads; the skill is declined (kept off the path, never opened), never shown as a story or standard lesson.
+    case unknown = "unknown"
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = SkillCategory(rawValue: raw) ?? .unknown
+    }
 }

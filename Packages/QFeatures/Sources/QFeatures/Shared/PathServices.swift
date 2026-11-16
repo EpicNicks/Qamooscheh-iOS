@@ -167,6 +167,13 @@ struct UnavailablePathRepository: PathRepository {
     func activity(courseCode: String) async throws -> ActivityResponse { throw URLError(.notConnectedToInternet) }
 }
 
+/// The path's category for a skill artifact (QModel's as QDomain's); a skill whose file is missing counts as standard.
+/// A category this build doesn't know maps to `.unknown`, which the path leaves out.
+func pathCategory(of header: SkillArtifact?) -> QDomain.SkillCategory {
+    guard let header = header else { return .standard }
+    return QDomain.SkillCategory(rawValue: header.category.rawValue) ?? .unknown
+}
+
 public extension CourseContentReader {
     /// The course's units as path inputs (web `useCoursePath`, Android `buildPathUnitInputs`): only standard skills
     /// form positions, in published order; the rest are the unit's other skills. nil when the manifest or a unit is missing.
@@ -182,11 +189,13 @@ public extension CourseContentReader {
                 for skillRef in position.skills {
                     let header = try skill(course, path: skillRef.path)
                     // The artifact's category (QModel) as the path's own (QDomain).
-                    var category = QDomain.SkillCategory.standard
-                    if let found = header, let mapped = QDomain.SkillCategory(rawValue: found.category.rawValue) { category = mapped }
+                    let category = pathCategory(of: header)
+                    // A category this build doesn't know is declined: left off the path, never shown as a story or a lesson.
+                    if category == .unknown { continue }
                     let input = PathSkillInput(
                         skillKey: skillRef.id, title: header?.title ?? skillRef.id,
-                        category: category, arc: header?.arc)
+                        category: category, arc: header?.arc,
+                        afterPosition: standard.isEmpty ? nil : standard.count - 1)
                     if category == QDomain.SkillCategory.standard {
                         lessons.append(input)
                     } else {

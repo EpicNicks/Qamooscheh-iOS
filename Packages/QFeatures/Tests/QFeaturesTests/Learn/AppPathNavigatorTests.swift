@@ -37,6 +37,16 @@ final class AppPathNavigatorTests: XCTestCase {
         }
     }
 
+    func testAListeningLessonOpensTheLessonPlayerNotTheStoryReader() {
+        let listening = skill("l1", unit: "u2", category: .listening)
+        XCTAssertEqual(
+            Opened(AppPathNavigator.start(listening)),
+            .lesson(unitKey: "u2", skillKey: "l1", practice: false, checkpoint: false, deepDive: nil))
+        XCTAssertEqual(
+            Opened(AppPathNavigator.practice(listening)),
+            .lesson(unitKey: "u2", skillKey: "l1", practice: true, checkpoint: false, deepDive: nil))
+    }
+
     func testAStoryOpensTheReaderDirectly() {
         let story = skill("s1", unit: "u2", category: .story)
         XCTAssertEqual(Opened(AppPathNavigator.start(story)), .push(.storyReader(unitKey: "u2", skillKey: "s1")))
