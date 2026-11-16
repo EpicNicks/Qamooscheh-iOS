@@ -7,6 +7,10 @@ public enum SkillCategory: String, Equatable, Hashable, Sendable {
     case story
     case conversation
     case song
+    /// A side lesson of listen_type exercises only; branches off the road like a story but plays in the lesson player.
+    case listening
+    /// A category this build doesn't know. Such a skill is declined: left off the path, never shown as a story.
+    case unknown
 }
 
 public enum SkillStatus: String, Equatable, Hashable, Sendable {
@@ -21,12 +25,16 @@ public struct PathSkillInput: Equatable, Sendable {
     public var category: SkillCategory
     /// The narrative this skill is a chapter of, if any.
     public var arc: String?
+    /// For a side lesson (story, listening): the index in the unit's standard positions of the Parsle it follows,
+    /// or nil when no standard position comes before it. Unused by standard skills.
+    public var afterPosition: Int?
 
-    public init(skillKey: String, title: String, category: SkillCategory, arc: String? = nil) {
+    public init(skillKey: String, title: String, category: SkillCategory, arc: String? = nil, afterPosition: Int? = nil) {
         self.skillKey = skillKey
         self.title = title
         self.category = category
         self.arc = arc
+        self.afterPosition = afterPosition
     }
 }
 
@@ -72,6 +80,8 @@ public struct PathSkill: Equatable, Sendable {
     /// Whether the learner stowed this lesson and has not passed it yet. It sits behind the cursor,
     /// so `status` says nothing about it: draw it from this flag. Comes from the Stowage, never from position.
     public var stowed: Bool
+    /// For a side lesson: the standard position it follows (see `PathSkillInput.afterPosition`).
+    public var afterPosition: Int?
 
     public init(
         skillKey: String,
@@ -82,7 +92,8 @@ public struct PathSkill: Equatable, Sendable {
         status: SkillStatus,
         completed: Bool,
         positionIndex: Int?,
-        stowed: Bool = false
+        stowed: Bool = false,
+        afterPosition: Int? = nil
     ) {
         self.skillKey = skillKey
         self.title = title
@@ -93,6 +104,7 @@ public struct PathSkill: Equatable, Sendable {
         self.completed = completed
         self.positionIndex = positionIndex
         self.stowed = stowed
+        self.afterPosition = afterPosition
     }
 }
 
@@ -238,7 +250,8 @@ public func computePathProgress(
                 unitKey: unit.unitKey,
                 status: otherStatus,
                 completed: completedSkillKeys.contains(s.skillKey),
-                positionIndex: nil
+                positionIndex: nil,
+                afterPosition: s.afterPosition
             )
         }
 

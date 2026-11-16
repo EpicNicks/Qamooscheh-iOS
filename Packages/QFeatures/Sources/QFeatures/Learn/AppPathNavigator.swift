@@ -37,8 +37,9 @@ public struct AppPathNavigator: PathNavigator {
 
     // MARK: The mapping
 
-    /// Standard skills play from the cursor's plan; stories, conversations and songs are played by name. Both are the
-    /// same route on iOS: the loader reads the skill's category from the course and picks the story setup itself.
+    /// Standard skills play from the cursor's plan; stories, conversations, songs and listening lessons are played by
+    /// name. All are the same route on iOS: the loader reads the skill's category from the course and picks the setup
+    /// itself. A story opens its reader; a listening lesson opens the lesson player and is submitted like any lesson.
     public static func start(_ skill: PathSkill) -> PathDestination {
         if skill.category == .story { return storyReader(skill) }
         return .lesson(LessonRoute(unitKey: skill.unitKey, skillKey: skill.skillKey))

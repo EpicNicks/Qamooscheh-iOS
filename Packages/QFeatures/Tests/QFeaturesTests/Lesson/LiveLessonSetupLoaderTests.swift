@@ -107,6 +107,38 @@ final class LiveLessonSetupLoaderTests: XCTestCase {
         XCTAssertEqual(setup?.courseVersion, 5)
     }
 
+    func testListeningSkillPlaysInTheLessonPlayerNotAsAChapter() async throws {
+        let heard = ExerciseArtifact(type: .listenType, scriptMode: .native, prompt: "p", answer: ["a"], tags: ["a"], promptAudio: ["v": ["a.mp3"]])
+        let lesson = SkillArtifact(id: "l", title: "Listen", category: .listening, exercises: [heard, heard])
+        let loader = makeLoader(skills: ["u1/l": lesson])
+        let setup = try await loader.setup(for: LessonRoute(unitKey: "u1", skillKey: "l"))
+        XCTAssertNil(setup?.story)
+        XCTAssertNil(setup?.checkpoint)
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["u1/l/0", "u1/l/1"])
+        XCTAssertEqual(setup?.exerciseCountBySkill, ["l": 2])
+        XCTAssertEqual(setup?.practice, false)
+    }
+
+    func testListeningSkillWithAnUnrecordedPromptIsDeclined() async throws {
+        let bare = ExerciseArtifact(type: .listenType, scriptMode: .native, prompt: "p", answer: ["a"], tags: ["a"])
+        let loader = makeLoader(skills: ["u1/l": SkillArtifact(id: "l", title: "Listen", category: .listening, exercises: [bare])])
+        let route = LessonRoute(unitKey: "u1", skillKey: "l")
+        let setup = try await loader.setup(for: route)
+        XCTAssertThrowsError(try LessonEnvironment.screened(XCTUnwrap(setup), route: route)) { error in
+            XCTAssertEqual(error as? LessonLoadError, .unplayable)
+        }
+    }
+
+    func testUnknownCategoryIsDeclinedNeverOpenedAsAStory() async {
+        let loader = makeLoader(skills: ["u1/x": SkillArtifact(id: "x", title: "X", category: .unknown, exercises: [bank("a")])])
+        do {
+            _ = try await loader.setup(for: LessonRoute(unitKey: "u1", skillKey: "x"))
+            XCTFail("an unknown category must be declined")
+        } catch {
+            XCTAssertEqual(error as? LessonLoadError, .unplayable)
+        }
+    }
+
     func testStorySkillBecomesAChapter() async throws {
         let story = SkillArtifact(id: "s", title: "Chapter 1", category: .story, exercises: [bank("a"), bank("b")])
         let loader = makeLoader(skills: ["u1/s": story])

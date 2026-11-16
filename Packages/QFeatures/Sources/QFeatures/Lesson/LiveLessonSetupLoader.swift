@@ -117,8 +117,18 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         if route.isRemix { return try await remixSetup(route, contents: route.remixContents ?? .all) }
         if let refs = route.exerciseRefs { return try await exercisesSetup(refs, pickedVersion: route.exerciseCourseVersion) }
         if let unitKey = route.unitKey, let found = try await course() {
-            if let skill = try content.skill(found, unitKey, route.skillKey), skill.category == .story {
-                return await storySetup(course: found, unitKey: unitKey, skillKey: route.skillKey, skill: skill)
+            if let skill = try content.skill(found, unitKey, route.skillKey) {
+                switch skill.category {
+                case .story:
+                    return await storySetup(course: found, unitKey: unitKey, skillKey: route.skillKey, skill: skill)
+                case .listening:
+                    return await listeningSetup(course: found, unitKey: unitKey, skillKey: route.skillKey, skill: skill)
+                case .unknown:
+                    // A category added after this build: declined, never opened as a story or a standard lesson.
+                    throw LessonLoadError.unplayable
+                case .standard, .conversation, .song:
+                    break
+                }
             }
         }
         return try await fallback.setup(for: route)
@@ -165,6 +175,19 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             instances: buildInstances(skills: [(ref: ref, skill: skill)], cards: held),
             exerciseCountBySkill: [skillKey: skill.exercises.count],
             story: StoryChapter(title: skill.title, exercises: skill.exercises)
+        )
+    }
+
+    /// A listening lesson plays in the ordinary lesson player (no story chapter) and is submitted like any lesson. It
+    /// never moves the cursor; a recording missing from one of its exercises is declined later by `screened`.
+    private func listeningSetup(course found: CourseRef, unitKey: String, skillKey: String, skill: SkillArtifact) async -> LessonSetup {
+        let held = await cardsForUser()
+        let ref = SkillRef(unitKey: unitKey, skillKey: skillKey)
+        return LessonSetup(
+            courseCode: found.code,
+            courseVersion: found.version,
+            instances: buildInstances(skills: [(ref: ref, skill: skill)], cards: held),
+            exerciseCountBySkill: [skillKey: skill.exercises.count]
         )
     }
 

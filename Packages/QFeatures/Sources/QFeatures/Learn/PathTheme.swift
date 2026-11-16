@@ -47,6 +47,7 @@ public struct PathTheme: Equatable, Sendable {
             .story: "\u{1F4D6}",
             .conversation: "\u{1F4AC}",
             .song: "\u{1F3B5}",
+            .listening: "\u{1F3A7}",
         ],
         nodeSize: 100,
         strokeWidth: 6
