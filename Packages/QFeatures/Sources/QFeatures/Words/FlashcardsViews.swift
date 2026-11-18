@@ -241,20 +241,27 @@ public struct VocabularyShowcase: View {
         let salam = "\u{0633}\u{0644}\u{0627}\u{0645}"
         let khoda = "\u{062E}\u{062F}\u{0627}\u{062D}\u{0627}\u{0641}\u{0638}"
         let nan = "\u{0646}\u{0627}\u{0646}<n>"
+        let lemma = VerbFormsSample.infinitive
+        let kharidan = lemma + "<v>"
+        let kharidam = "\u{062E}\u{0631}\u{06CC}\u{062F}\u{0645}<v>"
         let lexemes: [String: LexemeIndexEntry] = [
             salam: LexemeIndexEntry(gloss: "hello", romanization: "salam", romanizationIsAuthored: true),
             khoda: LexemeIndexEntry(gloss: "goodbye", romanization: "khodahafez", romanizationIsAuthored: true),
             nan: LexemeIndexEntry(gloss: "bread", romanization: "nan", romanizationIsAuthored: true),
+            kharidan: LexemeIndexEntry(
+                gloss: "to buy", pos: "verb", verbForm: "infinitive", lemma: lemma, romanization: "kharidan", romanizationIsAuthored: true),
+            kharidam: LexemeIndexEntry(
+                gloss: "I bought", pos: "verb", verbForm: "conjugated", lemma: lemma, romanization: "kharidam", romanizationIsAuthored: true),
         ]
         let units = [UnitVocab(unitKey: "u1", title: "Greetings", lessons: [
-            LessonVocab(unitKey: "u1", skillKey: "s1", title: "Hello and goodbye", tags: [salam, khoda, nan]),
+            LessonVocab(unitKey: "u1", skillKey: "s1", title: "Hello and goodbye", tags: [salam, khoda, nan, kharidan, kharidam]),
         ])]
         let now = Date()
         let cards = [
             salam: CardState(lexemeTag: salam, stability: 20, difficulty: 5, lastReviewedAt: now, dueAt: now.addingTimeInterval(86400), reviewCount: 4, lapseCount: 0),
             khoda: CardState(lexemeTag: khoda, stability: 3, difficulty: 5, lastReviewedAt: now, dueAt: now.addingTimeInterval(-3600), reviewCount: 1, lapseCount: 0),
         ]
-        let store = VocabularyStore.preview(content: VocabContent(courseCode: "fa", units: units, lexemes: lexemes), cards: cards, starred: [salam])
+        let store = VocabularyStore.preview(content: VocabContent(courseCode: "fa", units: units, lexemes: lexemes, verbs: [lemma: VerbFormsSample.entry]), cards: cards, starred: [salam])
         _list = StateObject(wrappedValue: SkillVocabularyModel(store: store, unitKey: "u1", skillKey: "s1", now: { now }))
         card = FlashcardWord(tag: salam, surface: salam, entry: lexemes[salam]!)
         word2 = FlashcardWord(tag: khoda, surface: khoda, entry: lexemes[khoda]!)
@@ -264,6 +271,10 @@ public struct VocabularyShowcase: View {
         let p = colorScheme == .dark ? AppPalette.dark : AppPalette.light
         VStack(alignment: .leading, spacing: 24) {
             SkillVocabularyContent(model: list)
+            Divider()
+            VerbFormsView(entry: VerbFormsSample.entry, courseCode: "fa", vowelMarks: true)
+            Divider()
+            VerbFormsView(entry: VerbFormsSample.entry, courseCode: "fa", vowelMarks: false, tense: "simplePast", negative: true)
             Divider()
             FlashcardView(word: word2, courseCode: "fa", kind: .translation, p: p, flipped: true, typed: "goodbye", graded: true) { _ in }
             FlashcardView(word: card, courseCode: "fa", kind: .selfRated, p: p) { _ in }

@@ -24,7 +24,7 @@ extension ShellSnapshotTests {
     }
 
     private func renderVocabulary(name: String, dark: Bool, large: Bool) throws {
-        let size = CGSize(width: 390, height: large ? 5200 : 1900)
+        let size = CGSize(width: 390, height: large ? 9800 : 3600)
         let controller = UIHostingController(rootView: VocabularyShowcase(large: large))
         controller.overrideUserInterfaceStyle = dark ? .dark : .light
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
