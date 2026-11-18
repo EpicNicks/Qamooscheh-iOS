@@ -75,7 +75,8 @@ public struct CourseContentReader: Sendable {
         return try decode(AudioIndexArtifact.self, course: course, path: path)
     }
 
-    /// Units, skills and the lexeme index, or nil when the manifest, a unit or the lexeme index is missing.
+    /// Units, skills, the lexeme index and the verb index, or nil when the manifest, a unit or the lexeme index is missing.
+    /// No verb index path, or no verbs.json on disk, gives no verbs rather than no content.
     public func vocabContent(_ course: CourseRef) throws -> VocabContent? {
         guard let manifest = try manifest(course) else { return nil }
         var units: [UnitArtifact] = []
@@ -90,7 +91,12 @@ public struct CourseContentReader: Sendable {
             }
         }
         guard let lexemes = try decode([String: LexemeIndexEntry].self, course: course, path: manifest.lexemeIndexPath) else { return nil }
-        return VocabContent(courseCode: course.code, units: buildCourseVocabulary(units: units, skills: skills), lexemes: lexemes)
+        var verbs: [String: VerbIndexEntry] = [:]
+        if let path = manifest.verbIndexPath, let decoded = try decode([String: VerbIndexEntry].self, course: course, path: path) {
+            verbs = decoded
+        }
+        return VocabContent(
+            courseCode: course.code, units: buildCourseVocabulary(units: units, skills: skills), lexemes: lexemes, verbs: verbs)
     }
 
     /// The course's voices (audio.json), default first, each with a word it recorded for the Play button.

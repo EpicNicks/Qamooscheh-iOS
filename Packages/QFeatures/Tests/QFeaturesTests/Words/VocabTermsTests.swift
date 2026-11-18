@@ -82,6 +82,90 @@ final class VocabTermsTests: XCTestCase {
         XCTAssertEqual(filterVocabTerms(terms, query: "zzz").count, 0)
     }
 
+    // vocab-search-verbs: a search also lists every course infinitive it matches.
+    private let kharidan = "\u{062E}\u{0631}\u{06CC}\u{062F}\u{0646}<v>"
+    private let kharidam = "\u{062E}\u{0631}\u{06CC}\u{062F}\u{0645}<v>"
+    private let keshidan = "\u{06A9}\u{0634}\u{06CC}\u{062F}\u{0646}<v>"
+    private let kharidanLemma = "\u{062E}\u{0631}\u{06CC}\u{062F}\u{0646}"
+
+    private var verbLexemes: [String: LexemeIndexEntry] {
+        [
+            kharidan: LexemeIndexEntry(
+                gloss: "to buy", pos: "verb", verbForm: "infinitive", lemma: kharidanLemma,
+                romanization: "khar\u{012B}dan", romanizationIsAuthored: true),
+            kharidam: LexemeIndexEntry(
+                gloss: "I bought", pos: "verb", verbForm: "conjugated", lemma: kharidanLemma,
+                romanization: "khar\u{012B}dam", romanizationIsAuthored: true),
+            keshidan: LexemeIndexEntry(
+                gloss: "to pull", pos: "verb", verbForm: "infinitive", lemma: "\u{06A9}\u{0634}\u{06CC}\u{062F}\u{0646}",
+                romanization: "kesh\u{012B}dan", romanizationIsAuthored: true),
+            "ketab<n>": LexemeIndexEntry(gloss: "book", pos: "noun", romanization: "ket\u{0101}b", romanizationIsAuthored: true),
+        ]
+    }
+
+    /// verbs.json has only kharidan.
+    private var verbIndex: [String: VerbIndexEntry] {
+        [kharidanLemma: VerbIndexEntry(
+            infinitive: kharidanLemma, presentStem: "\u{062E}\u{0631}",
+            pastStem: "\u{062E}\u{0631}\u{06CC}\u{062F}", principalParts: [], table: [:], gloss: "to buy")]
+    }
+
+    private func search(taughtTags: [String], _ query: String) -> [VocabTerm] {
+        let taught = vocabTerms(tags: taughtTags, lexemes: verbLexemes, cards: [:], starred: [], now: now, verbs: verbIndex)
+        return searchVocabTerms(
+            taught: taught, query: query, lexemes: verbLexemes, verbs: verbIndex, cards: [:], starred: [], now: now)
+    }
+
+    func testBlankSearchReturnsTaughtTermsUnchanged() {
+        let taught = vocabTerms(tags: ["ketab<n>", kharidam], lexemes: verbLexemes, cards: [:], starred: [], now: now, verbs: verbIndex)
+        XCTAssertEqual(search(taughtTags: ["ketab<n>", kharidam], ""), taught)
+        XCTAssertEqual(search(taughtTags: ["ketab<n>", kharidam], "   "), taught)
+    }
+
+    func testGlossMatchAddsTheInfinitive() {
+        XCTAssertEqual(search(taughtTags: ["ketab<n>"], "PULL").map { $0.tag }, [keshidan])
+    }
+
+    func testRomanizationMatchAddsOnlyInfinitivesAfterTaughtMatches() {
+        // "kharid" matches both kharidam (a conjugated form, not added) and kharidan (added).
+        XCTAssertEqual(search(taughtTags: ["ketab<n>"], "kharid").map { $0.tag }, [kharidan])
+        // A taught match comes first; the infinitive follows it.
+        XCTAssertEqual(search(taughtTags: ["ketab<n>", kharidam], "kharid").map { $0.tag }, [kharidam, kharidan])
+    }
+
+    func testWrittenFormMatchFoldsArabicLettersAndDiacritics() {
+        // Arabic-keyboard kaf and yeh, with a fatha, find keshidan's written form.
+        let query = "\u{0643}\u{064E}\u{0634}\u{064A}\u{062F}"
+        XCTAssertEqual(search(taughtTags: [], query).map { $0.tag }, [keshidan])
+    }
+
+    func testInfinitiveAlreadyTaughtIsNotListedTwice() {
+        XCTAssertEqual(search(taughtTags: [kharidan, "ketab<n>"], "buy").map { $0.tag }, [kharidan])
+    }
+
+    func testSearchAppendsInfinitivesInTagOrder() {
+        XCTAssertEqual(search(taughtTags: [], "dan").map { $0.tag }, [kharidan, keshidan].sorted())
+    }
+
+    func testVerbKeyOnlyWhenVerbsJsonHasTheVerb() {
+        let terms = vocabTerms(
+            tags: [kharidan, kharidam, keshidan, "ketab<n>"], lexemes: verbLexemes, cards: [:], starred: [], now: now, verbs: verbIndex)
+        XCTAssertEqual(terms[0].verbKey, kharidanLemma)
+        // A conjugated form has no verbKey of its own; its base-verb row carries the infinitive's.
+        XCTAssertNil(terms[1].verbKey)
+        XCTAssertEqual(terms[1].baseVerb?.verbKey, kharidanLemma)
+        // verbs.json lacks this lemma.
+        XCTAssertNil(terms[2].verbKey)
+        XCTAssertNil(terms[3].verbKey)
+        // No verbs.json at all.
+        let bare = vocabTerms(tags: [kharidan, kharidam], lexemes: verbLexemes, cards: [:], starred: [], now: now)
+        XCTAssertNil(bare[0].verbKey)
+        XCTAssertNotNil(bare[1].baseVerb)
+        XCTAssertNil(bare[1].baseVerb?.verbKey)
+        // An added infinitive carries its verbKey too.
+        XCTAssertEqual(search(taughtTags: [], "buy").first?.verbKey, kharidanLemma)
+    }
+
     func testScopeLabelShortensLongTitles() {
         XCTAssertEqual(scopeLabel("Short"), "Short")
         XCTAssertEqual(scopeLabel("A very long lesson title indeed"), "A very long lesso\u{2026}")

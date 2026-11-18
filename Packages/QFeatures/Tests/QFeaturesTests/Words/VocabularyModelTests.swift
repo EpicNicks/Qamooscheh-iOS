@@ -2,6 +2,7 @@ import XCTest
 import QModel
 import QDomain
 import QNetwork
+import QData
 @testable import QFeatures
 
 final class FakeVocabSource: VocabularySource, @unchecked Sendable {
@@ -82,6 +83,31 @@ final class VocabularyModelTests: XCTestCase {
         XCTAssertEqual(model.scope, .course)
         XCTAssertEqual(model.query, "char")
         XCTAssertEqual(model.terms.map { $0.tag }, ["c"])
+    }
+
+    func testSearchAddsCourseInfinitivesInEveryScopeAndBlankQueryDoesNot() async {
+        var content = sampleContent
+        content.lexemes["raftan<v>"] = LexemeIndexEntry(
+            gloss: "to go", pos: "verb", verbForm: "infinitive", lemma: "raftan", romanizationIsAuthored: false)
+        content.verbs = ["raftan": VerbIndexEntry(
+            infinitive: "raftan", presentStem: "rav", pastStem: "raft", principalParts: [], table: [:], gloss: "to go")]
+        let ready = content
+        let source = FakeVocabSource()
+        source.loadHandler = { .ready(ready) }
+        let store = VocabularyStore(source: source)
+        let model = SkillVocabularyModel(store: store, unitKey: "u1", skillKey: "s1")
+        await model.refresh()
+        XCTAssertEqual(model.terms.map { $0.tag }, ["a", "b"])
+        model.query = "go"
+        XCTAssertEqual(model.terms.map { $0.tag }, ["raftan<v>"])
+        XCTAssertEqual(model.terms.first?.verbKey, "raftan")
+        model.query = "a"
+        XCTAssertEqual(model.terms.map { $0.tag }, ["a", "b", "raftan<v>"])
+        model.setScope(.unit)
+        XCTAssertEqual(model.terms.map { $0.tag }, ["a", "b", "c", "raftan<v>"])
+        model.setScope(.course)
+        model.query = "TO GO"
+        XCTAssertEqual(model.terms.map { $0.tag }, ["raftan<v>"])
     }
 
     func testMissingLessonFallsThroughToWidestScope() async {
@@ -221,5 +247,46 @@ final class GateBox: @unchecked Sendable {
         continuation = nil
         lock.unlock()
         c?.resume()
+    }
+}
+
+final class VocabContentReaderTests: XCTestCase {
+    private let course = CourseRef(code: "fa", version: 3, manifestSha256: "abc")
+
+    private func put<T: Encodable>(_ store: InMemoryContentStore, _ key: String, _ value: T) throws {
+        try store.write(try QJSON.makeEncoder().encode(value), to: key)
+    }
+
+    private func seeded(verbIndexPath: String?) throws -> InMemoryContentStore {
+        let store = InMemoryContentStore()
+        try put(store, "course/fa/v3/manifest.json", CourseManifest(
+            courseCode: "fa", version: 3, units: [ManifestRef(id: "u1", path: "units/u1.json")],
+            lexemeIndexPath: "lexemes.json", verbIndexPath: verbIndexPath))
+        try put(store, "course/fa/v3/units/u1.json", UnitArtifact(
+            id: "u1", title: "Unit 1", positions: [UnitPosition(skills: [ManifestRef(id: "s1", path: "skills/s1.json")])]))
+        let exercise = ExerciseArtifact(type: .typeIn, scriptMode: .native, prompt: "p", answer: ["a"], tags: ["raftan<v>"])
+        try put(store, "course/fa/v3/skills/s1.json", SkillArtifact(id: "s1", title: "Going", exercises: [exercise]))
+        try put(store, "course/fa/v3/lexemes.json", ["raftan<v>": LexemeIndexEntry(
+            gloss: "to go", pos: "verb", verbForm: "infinitive", lemma: "raftan", romanizationIsAuthored: false)])
+        return store
+    }
+
+    func testVocabContentCarriesVerbsJson() throws {
+        let store = try seeded(verbIndexPath: "verbs.json")
+        try put(store, "course/fa/v3/verbs.json", ["raftan": VerbIndexEntry(
+            infinitive: "raftan", presentStem: "rav", pastStem: "raft", principalParts: [], table: [:], gloss: "to go")])
+        let content = try CourseContentReader(store: store).vocabContent(course)
+        XCTAssertEqual(content?.verbs["raftan"]?.gloss, "to go")
+        XCTAssertEqual(content?.lexemes["raftan<v>"]?.gloss, "to go")
+    }
+
+    func testVocabContentLoadsWithoutVerbsJson() throws {
+        let missingFile = try CourseContentReader(store: try seeded(verbIndexPath: "verbs.json")).vocabContent(course)
+        XCTAssertNotNil(missingFile)
+        XCTAssertEqual(missingFile?.verbs, [:])
+        XCTAssertEqual(missingFile?.units.first?.lessons.first?.tags, ["raftan<v>"])
+        let noPath = try CourseContentReader(store: try seeded(verbIndexPath: nil)).vocabContent(course)
+        XCTAssertNotNil(noPath)
+        XCTAssertEqual(noPath?.verbs, [:])
     }
 }
