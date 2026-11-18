@@ -290,18 +290,35 @@ public struct ThemeIndexArtifact: Codable, Equatable, Sendable {
     }
 }
 
-/// One conjugation cell.
+/// One conjugation cell. The four romanizations (added 2026-10-22) are nil in older files.
 public struct VerbFormCell: Codable, Equatable, Sendable {
     public var written: String
     public var spoken: String?
     public var negative: String
     public var negativeSpoken: String?
+    public var writtenRomanization: String?
+    public var spokenRomanization: String?
+    public var negativeRomanization: String?
+    public var negativeSpokenRomanization: String?
 
-    public init(written: String, spoken: String? = nil, negative: String, negativeSpoken: String? = nil) {
+    public init(
+        written: String,
+        spoken: String? = nil,
+        negative: String,
+        negativeSpoken: String? = nil,
+        writtenRomanization: String? = nil,
+        spokenRomanization: String? = nil,
+        negativeRomanization: String? = nil,
+        negativeSpokenRomanization: String? = nil
+    ) {
         self.written = written
         self.spoken = spoken
         self.negative = negative
         self.negativeSpoken = negativeSpoken
+        self.writtenRomanization = writtenRomanization
+        self.spokenRomanization = spokenRomanization
+        self.negativeRomanization = negativeRomanization
+        self.negativeSpokenRomanization = negativeSpokenRomanization
     }
 }
 
@@ -313,13 +330,16 @@ public struct VerbIndexEntry: Codable, Equatable, Sendable {
     public var pastStem: String
     public var principalParts: [String]
     public var table: [String: [String: VerbFormCell]]
+    /// The infinitive's English meaning ("to buy"); nil where the course authors none, or in older files.
+    public var gloss: String?
 
-    public init(infinitive: String, prefix: String? = nil, presentStem: String, pastStem: String, principalParts: [String], table: [String: [String: VerbFormCell]]) {
+    public init(infinitive: String, prefix: String? = nil, presentStem: String, pastStem: String, principalParts: [String], table: [String: [String: VerbFormCell]], gloss: String? = nil) {
         self.infinitive = infinitive
         self.prefix = prefix
         self.presentStem = presentStem
         self.pastStem = pastStem
         self.principalParts = principalParts
         self.table = table
+        self.gloss = gloss
     }
 }

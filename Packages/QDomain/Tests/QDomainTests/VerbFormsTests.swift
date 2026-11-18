@@ -39,6 +39,33 @@ final class VerbFormsTests: XCTestCase {
         XCTAssertEqual(verbRows(e, tense: "present", negative: true), [VerbRow(person: "1s", label: "I", written: "nw", spoken: "ns")])
     }
 
+    func testPastPerfectIsListedRightAfterPresentPerfect() {
+        let keys = verbTenses.map { $0.tense }
+        guard let i = keys.firstIndex(of: "presentPerfect") else { return XCTFail("no presentPerfect") }
+        XCTAssertEqual(keys[i + 1], "pastPerfect")
+        XCTAssertEqual(verbTenses[i + 1].label, "Past perfect")
+        let e = entry(["pastPerfect": ["1s": cell("a", negative: "b")], "presentPerfect": ["1s": cell("a", negative: "b")]])
+        XCTAssertEqual(availableTenses(e).map { $0.tense }, ["presentPerfect", "pastPerfect"])
+    }
+
+    func testRowsCarryTheMatchingRomanizations() {
+        let c = VerbFormCell(
+            written: "w", spoken: "s", negative: "nw", negativeSpoken: "ns",
+            writtenRomanization: "wr", spokenRomanization: "sr",
+            negativeRomanization: "nwr", negativeSpokenRomanization: "nsr"
+        )
+        let e = entry(["present": ["1s": c, "2s": cell("x", negative: "nx")]])
+        let pos = verbRows(e, tense: "present", negative: false)
+        XCTAssertEqual(pos[0].writtenRomanization, "wr")
+        XCTAssertEqual(pos[0].spokenRomanization, "sr")
+        XCTAssertNil(pos[1].writtenRomanization)
+        XCTAssertNil(pos[1].spokenRomanization)
+        let neg = verbRows(e, tense: "present", negative: true)
+        XCTAssertEqual(neg[0], VerbRow(person: "1s", label: "I", written: "nw", spoken: "ns", writtenRomanization: "nwr", spokenRomanization: "nsr"))
+        XCTAssertNil(neg[1].writtenRomanization)
+        XCTAssertNil(neg[1].spokenRomanization)
+    }
+
     func testAMissingTenseHasNoRows() {
         XCTAssertEqual(verbRows(entry([:]), tense: "present", negative: false), [])
     }

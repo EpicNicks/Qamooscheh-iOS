@@ -443,5 +443,29 @@ final class GoldenTests: XCTestCase {
          "table":{"present":{"1sg":{"written":"miravam","spoken":"miram","negative":"nemiravam","negativeSpoken":"nemiram"}}}}
         """)
         XCTAssertEqual(v.table["present"]?["1sg"]?.spoken, "miram")
+        XCTAssertNil(v.gloss)
+        XCTAssertNil(v.table["present"]?["1sg"]?.writtenRomanization)
+        XCTAssertNil(v.table["present"]?["1sg"]?.negativeSpokenRomanization)
+
+        let r = try golden(VerbIndexEntry.self, """
+        {"infinitive":"raftan","gloss":"to go","presentStem":"rav","pastStem":"raft","principalParts":["raftan","raft","rav"],
+         "table":{"present":{
+           "1s":{"written":"miravam","spoken":"miram","negative":"nemiravam","negativeSpoken":"nemiram",
+                 "writtenRomanization":"mīravam","spokenRomanization":"mīram",
+                 "negativeRomanization":"nemīravam","negativeSpokenRomanization":"nemīram"},
+           "2s":{"written":"miravi","negative":"nemiravi"}}}}
+        """)
+        XCTAssertEqual(r.gloss, "to go")
+        let withRoman = r.table["present"]?["1s"]
+        XCTAssertEqual(withRoman?.writtenRomanization, "mīravam")
+        XCTAssertEqual(withRoman?.spokenRomanization, "mīram")
+        XCTAssertEqual(withRoman?.negativeRomanization, "nemīravam")
+        XCTAssertEqual(withRoman?.negativeSpokenRomanization, "nemīram")
+        let without = r.table["present"]?["2s"]
+        XCTAssertEqual(without?.written, "miravi")
+        XCTAssertNil(without?.writtenRomanization)
+        XCTAssertNil(without?.spokenRomanization)
+        XCTAssertNil(without?.negativeRomanization)
+        XCTAssertNil(without?.negativeSpokenRomanization)
     }
 }
