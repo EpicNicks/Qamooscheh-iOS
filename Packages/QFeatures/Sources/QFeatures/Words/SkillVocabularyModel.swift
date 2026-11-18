@@ -77,9 +77,13 @@ public final class SkillVocabularyModel: ObservableObject {
         case .unit: tags = unitVocabTags(content.units, unitKey: unitKey)
         case .course: tags = courseVocabTags(content.units)
         }
-        let all = vocabTerms(
-            tags: tags, lexemes: content.lexemes, cards: store.cards, starred: Set(store.starredTags), now: now())
-        return filterVocabTerms(all, query: query)
+        let starred = Set(store.starredTags)
+        let date = now()
+        let taught = vocabTerms(
+            tags: tags, lexemes: content.lexemes, cards: store.cards, starred: starred, now: date, verbs: content.verbs)
+        return searchVocabTerms(
+            taught: taught, query: query, lexemes: content.lexemes, verbs: content.verbs,
+            cards: store.cards, starred: starred, now: date)
     }
 
     public var emptyText: String {

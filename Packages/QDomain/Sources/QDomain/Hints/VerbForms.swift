@@ -32,6 +32,7 @@ public let verbTenses: [VerbTenseLabel] = [
     VerbTenseLabel(tense: "simplePast", label: "Simple past"),
     VerbTenseLabel(tense: "pastContinuous", label: "Past continuous"),
     VerbTenseLabel(tense: "presentPerfect", label: "Present perfect"),
+    VerbTenseLabel(tense: "pastPerfect", label: "Past perfect"),
     VerbTenseLabel(tense: "subjunctive", label: "Subjunctive"),
     VerbTenseLabel(tense: "imperative", label: "Imperative"),
     VerbTenseLabel(tense: "future", label: "Future"),
@@ -57,12 +58,18 @@ public struct VerbRow: Equatable, Sendable {
     public var written: String
     /// Nil where the course authors no spoken stems for this verb (and always, for the future).
     public var spoken: String?
+    /// The romanization of `written` (the cell's writtenRomanization, or negativeRomanization for the negative); nil where none is authored.
+    public var writtenRomanization: String?
+    /// The romanization of `spoken` (the cell's spokenRomanization, or negativeSpokenRomanization for the negative); nil where none is authored.
+    public var spokenRomanization: String?
 
-    public init(person: String, label: String, written: String, spoken: String?) {
+    public init(person: String, label: String, written: String, spoken: String?, writtenRomanization: String? = nil, spokenRomanization: String? = nil) {
         self.person = person
         self.label = label
         self.written = written
         self.spoken = spoken
+        self.writtenRomanization = writtenRomanization
+        self.spokenRomanization = spokenRomanization
     }
 }
 
@@ -76,7 +83,9 @@ public func verbRows(_ entry: VerbIndexEntry, tense: String, negative: Bool) -> 
             person: p.person,
             label: p.label,
             written: negative ? cell.negative : cell.written,
-            spoken: negative ? cell.negativeSpoken : cell.spoken
+            spoken: negative ? cell.negativeSpoken : cell.spoken,
+            writtenRomanization: negative ? cell.negativeRomanization : cell.writtenRomanization,
+            spokenRomanization: negative ? cell.negativeSpokenRomanization : cell.spokenRomanization
         ))
     }
     return rows

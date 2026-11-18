@@ -9,11 +9,14 @@ public struct VocabContent: Equatable, Sendable {
     public var courseCode: String
     public var units: [UnitVocab]
     public var lexemes: [String: LexemeIndexEntry]
+    /// verbs.json, keyed by written infinitive (a lexeme's `lemma`); empty when the course has none on disk.
+    public var verbs: [String: VerbIndexEntry]
 
-    public init(courseCode: String, units: [UnitVocab], lexemes: [String: LexemeIndexEntry]) {
+    public init(courseCode: String, units: [UnitVocab], lexemes: [String: LexemeIndexEntry], verbs: [String: VerbIndexEntry] = [:]) {
         self.courseCode = courseCode
         self.units = units
         self.lexemes = lexemes
+        self.verbs = verbs
     }
 }
 
