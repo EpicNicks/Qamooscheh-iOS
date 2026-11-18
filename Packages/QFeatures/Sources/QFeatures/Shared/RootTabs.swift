@@ -2,6 +2,7 @@ import SwiftUI
 import QModel
 import QDomain
 import QDesign
+import QData
 import Combine
 
 // The five tab bodies behind the app's TabView. Each owns its NavigationStack path; pushes use `AppRoute`.
@@ -275,7 +276,13 @@ struct VocabularyDestination: View {
 
     /// An empty `unitKey` offers the whole course.
     init(shell: SignedInShell, unitKey: String, skillKey: String?) {
-        _model = StateObject(wrappedValue: SkillVocabularyModel(store: shell.vocabulary, unitKey: unitKey, skillKey: skillKey))
+        var vowelMarks: (@Sendable () async -> Bool)?
+        if let app = shell.app {
+            let live = ClozeSettings.live(app: app)
+            vowelMarks = { await live.load().prefs.showVowelMarks }
+        }
+        _model = StateObject(wrappedValue: SkillVocabularyModel(
+            store: shell.vocabulary, unitKey: unitKey, skillKey: skillKey, vowelMarks: vowelMarks))
     }
 
     var body: some View {

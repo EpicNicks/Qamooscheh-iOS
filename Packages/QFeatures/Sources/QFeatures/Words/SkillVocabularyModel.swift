@@ -30,20 +30,34 @@ public final class SkillVocabularyModel: ObservableObject {
     public let skillKey: String?
     @Published public private(set) var requestedScope: VocabScope
     @Published public var query: String = ""
+    /// The learner's lesson setting for vowel and ezafe marks, which the verb forms view follows.
+    @Published public private(set) var vowelMarks: Bool = true
 
     private let now: () -> Date
+    private let readVowelMarks: (@Sendable () async -> Bool)?
     private var forwarding: AnyCancellable?
 
-    public init(store: VocabularyStore, unitKey: String, skillKey: String?, now: @escaping () -> Date = { Date() }) {
+    public init(
+        store: VocabularyStore, unitKey: String, skillKey: String?, now: @escaping () -> Date = { Date() },
+        vowelMarks: (@Sendable () async -> Bool)? = nil
+    ) {
         self.store = store
         self.unitKey = unitKey
         self.skillKey = skillKey
         self.now = now
+        self.readVowelMarks = vowelMarks
         self.requestedScope = skillKey != nil ? .lesson : .unit
         forwarding = store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     public func refresh() async { await store.refresh() }
+
+    /// Re-reads the vowel-marks setting (on every appearance, so a change in Settings shows); keeps the default without a reader.
+    public func loadVowelMarks() async {
+        guard let read = readVowelMarks else { return }
+        let on = await read()
+        if on != vowelMarks { vowelMarks = on }
+    }
 
     public func setScope(_ scope: VocabScope) { requestedScope = scope }
 

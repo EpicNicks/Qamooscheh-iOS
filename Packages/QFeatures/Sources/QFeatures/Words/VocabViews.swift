@@ -50,24 +50,37 @@ struct StarButton: View {
 }
 
 /// A verb form's infinitive with its own star (verb-base-form-saveable): saving it practises every form of the verb.
+/// Only the star saves; the rest of the row opens the verb's forms when verbs.json has them, and is inert otherwise.
 struct BaseVerbRow: View {
     let verb: BaseVerbTerm
     let courseCode: String?
     let p: AppPalette
     let onToggleStar: () -> Void
+    var onShowForms: (String) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Verb").font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.textMuted))
-                    vocabCourseText(verb.surface, courseCode: courseCode, size: 15, weight: .semibold, color: Color(argb: p.text))
+            OpensVerbForms(verbKey: verb.verbKey, label: "Show forms of \(verb.surface)", onShowForms: onShowForms) {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Verb").font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.textMuted))
+                            vocabCourseText(verb.surface, courseCode: courseCode, size: 15, weight: .semibold, color: Color(argb: p.text))
+                        }
+                        Text(verb.starred ? "Saved \u{2014} practice uses every form" : verb.gloss)
+                            .font(.caption)
+                            .foregroundColor(Color(argb: verb.starred ? p.info : p.textMuted))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if verb.verbKey != nil {
+                        Image(systemName: "chevron.forward")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Color(argb: p.textMuted))
+                            .accessibilityHidden(true)
+                    }
                 }
-                Text(verb.starred ? "Saved \u{2014} practice uses every form" : verb.gloss)
-                    .font(.caption)
-                    .foregroundColor(Color(argb: verb.starred ? p.info : p.textMuted))
+                .padding(.vertical, 6)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             StarButton(
                 starred: verb.starred, p: p, baseVerb: true,
                 label: verb.starred ? "Unsave the verb \(verb.surface)" : "Save the verb \(verb.surface) to practise all its forms",
@@ -75,6 +88,34 @@ struct BaseVerbRow: View {
         }
         .padding(.leading, 10)
         .background(RoundedRectangle(cornerRadius: Radii.standard.md).fill(Color(argb: verb.starred ? p.infoBg : p.bg)))
+    }
+}
+
+/// `content` as a plain button that opens the forms of `verbKey`; with no key, just `content` (not tappable, no button trait).
+struct OpensVerbForms<Content: View>: View {
+    let verbKey: String?
+    /// Replaces the button's spoken label; nil keeps the content's own text.
+    var label: String?
+    let onShowForms: (String) -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if let key = verbKey {
+            if let label = label {
+                button(key).accessibilityLabel(Text(label))
+            } else {
+                button(key).accessibilityHint(Text("Shows the verb's forms"))
+            }
+        } else {
+            content()
+        }
+    }
+
+    private func button(_ key: String) -> some View {
+        Button { onShowForms(key) } label: {
+            content().contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -118,6 +159,8 @@ struct VocabTermCard: View {
     let p: AppPalette
     let onToggleStar: () -> Void
     var onToggleBaseStar: (String) -> Void = { _ in }
+    /// Opens a verb's forms by its verbs.json key: the infinitive's own (`term.verbKey`) or its base verb's.
+    var onShowForms: (String) -> Void = { _ in }
     @ScaledMetric(relativeTo: .body) private var surfaceSize: CGFloat = 18
 
     var body: some View {
@@ -125,23 +168,27 @@ struct VocabTermCard: View {
         let savedVerb = term.isBaseVerb && term.starred
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    vocabCourseText(term.surface, courseCode: courseCode, size: surfaceSize, weight: .bold, color: Color(argb: p.text))
-                    Text(term.gloss).font(.subheadline).foregroundColor(Color(argb: p.text))
-                    if let roman = term.romanization {
-                        Text(roman).font(.footnote.italic()).foregroundColor(Color(argb: p.textMuted))
+                OpensVerbForms(verbKey: term.verbKey, onShowForms: onShowForms) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        vocabCourseText(term.surface, courseCode: courseCode, size: surfaceSize, weight: .bold, color: Color(argb: p.text))
+                        Text(term.gloss).font(.subheadline).foregroundColor(Color(argb: p.text))
+                        if let roman = term.romanization {
+                            Text(roman).font(.footnote.italic()).foregroundColor(Color(argb: p.textMuted))
+                        }
+                        if savedVerb {
+                            Text("Saved verb \u{2014} practice uses every form")
+                                .font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.info))
+                        }
+                        StrengthMeter(strength: term.strength, p: p).padding(.top, 2)
                     }
-                    if savedVerb {
-                        Text("Saved verb \u{2014} practice uses every form")
-                            .font(.caption.weight(.semibold)).foregroundColor(Color(argb: p.info))
-                    }
-                    StrengthMeter(strength: term.strength, p: p).padding(.top, 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 StarButton(starred: term.starred, p: p, baseVerb: term.isBaseVerb, action: onToggleStar)
             }
             if let verb = term.baseVerb {
-                BaseVerbRow(verb: verb, courseCode: courseCode, p: p) { onToggleBaseStar(verb.tag) }
+                BaseVerbRow(
+                    verb: verb, courseCode: courseCode, p: p,
+                    onToggleStar: { onToggleBaseStar(verb.tag) }, onShowForms: onShowForms)
             }
         }
         .padding(.leading, 24).padding(.trailing, 8).padding(.vertical, 16)
@@ -197,6 +244,7 @@ public struct SkillVocabularyScreen: View {
 
 struct SkillVocabularyContent: View {
     @ObservedObject var model: SkillVocabularyModel
+    @State private var forms: VerbFormsTarget?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -226,13 +274,22 @@ struct SkillVocabularyContent: View {
                     VocabTermCard(
                         term: term, courseCode: model.store.content?.courseCode, p: p,
                         onToggleStar: { Task { await model.store.toggleStar(term.tag) } },
-                        onToggleBaseStar: { tag in Task { await model.store.toggleStar(tag) } })
+                        onToggleBaseStar: { tag in Task { await model.store.toggleStar(tag) } },
+                        onShowForms: { key in forms = VerbFormsTarget(id: key) })
                 }
             } else {
                 VocabStatusView(status: status, p: p) { Task { await model.refresh() } }
             }
         }
         .frame(maxWidth: vocabColumnWidth, alignment: .leading)
+        .sheet(item: $forms) { target in
+            if let entry = model.store.content?.verbs[target.id] {
+                VerbFormsSheet(
+                    entry: entry, courseCode: model.store.content?.courseCode, vowelMarks: model.vowelMarks,
+                    onDone: { forms = nil })
+            }
+        }
+        .task { await model.loadVowelMarks() }
     }
 }
 
