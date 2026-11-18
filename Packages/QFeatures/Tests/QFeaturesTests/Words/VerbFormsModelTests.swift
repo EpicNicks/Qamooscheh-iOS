@@ -59,12 +59,17 @@ final class VerbFormsModelTests: XCTestCase {
         XCTAssertFalse(VerbFormsTable(entry: entry(), requestedTense: "imperative", negative: false, vowelMarks: true).showsSpoken)
     }
 
+    /// Whether `s` holds a fatha scalar (a Character search misses it inside a letter's cluster).
+    private func hasFatha(_ s: String) -> Bool {
+        return s.unicodeScalars.contains { $0.value == 0x064E }
+    }
+
     func testVowelMarksOffStripsEveryPersianString() {
         let table = VerbFormsTable(entry: entry(), requestedTense: "present", negative: false, vowelMarks: false)
-        XCTAssertFalse(table.infinitive.contains(fatha))
+        XCTAssertFalse(hasFatha(table.infinitive))
         XCTAssertEqual(table.infinitive, kh + "\u{0631}\u{06CC}\u{062F}\u{0646}")
-        XCTAssertFalse(table.principalParts.contains { $0.contains(fatha) })
-        XCTAssertFalse(table.rows.contains { $0.written.contains(fatha) || ($0.spoken ?? "").contains(fatha) })
+        XCTAssertFalse(table.principalParts.contains { hasFatha($0) })
+        XCTAssertFalse(table.rows.contains { hasFatha($0.written) || hasFatha($0.spoken ?? "") })
         XCTAssertEqual(table.rows[1].spoken, "s3" + kh + "\u{0631}")
         // Romanizations are left alone.
         XCTAssertEqual(table.rows[1].writtenRomanization, "mikharad")
@@ -72,8 +77,8 @@ final class VerbFormsModelTests: XCTestCase {
 
     func testVowelMarksOnKeepsThem() {
         let table = VerbFormsTable(entry: entry(), requestedTense: "present", negative: false, vowelMarks: true)
-        XCTAssertTrue(table.infinitive.contains(fatha))
-        XCTAssertTrue(table.rows[0].written.contains(fatha))
+        XCTAssertTrue(hasFatha(table.infinitive))
+        XCTAssertTrue(hasFatha(table.rows[0].written))
     }
 
     func testBlankGlossIsNil() {
