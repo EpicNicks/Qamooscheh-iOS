@@ -17,7 +17,10 @@ let package = Package(
         .package(path: "../QKeyboard"),
     ],
     targets: [
-        .target(name: "QFeatures", dependencies: ["QModel", "QDomain", "QNetwork", "QData", "QGrader", "QDesign", "QKeyboard"]),
+        .target(
+            name: "QFeatures",
+            dependencies: ["QModel", "QDomain", "QNetwork", "QData", "QGrader", "QDesign", "QKeyboard"],
+            resources: [.process("Resources")]),
         .testTarget(name: "QFeaturesTests", dependencies: ["QFeatures"]),
     ]
 )

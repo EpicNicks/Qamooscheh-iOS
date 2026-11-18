@@ -245,6 +245,7 @@ public struct SkillVocabularyScreen: View {
 struct SkillVocabularyContent: View {
     @ObservedObject var model: SkillVocabularyModel
     @State private var forms: VerbFormsTarget?
+    @State private var browser: BrowserTarget?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -268,7 +269,13 @@ struct SkillVocabularyContent: View {
                 }
                 let terms = model.terms
                 if terms.isEmpty {
-                    Text(model.emptyText).font(.subheadline).foregroundColor(Color(argb: p.textMuted))
+                    let empty = model.emptyKind
+                    Text(empty.text).font(.subheadline).foregroundColor(Color(argb: p.textMuted))
+                    if let lookup = empty.lookupQuery {
+                        DictionaryLookupView(
+                            query: lookup, links: model.dictionaryLookups, p: p,
+                            onOpen: { url in browser = BrowserTarget(url: url) })
+                    }
                 }
                 ForEach(terms, id: \.tag) { term in
                     VocabTermCard(
@@ -289,6 +296,7 @@ struct SkillVocabularyContent: View {
                     onDone: { forms = nil })
             }
         }
+        .inAppBrowser($browser)
         .task { await model.loadVowelMarks() }
     }
 }
