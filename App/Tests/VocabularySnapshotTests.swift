@@ -28,6 +28,10 @@ extension ShellSnapshotTests {
         try renderVocabularyVariants(base: "vocabulary-flashcards", section: .flashcards, height: 1300)
     }
 
+    func testVocabularyCourseMissSnapshots() throws {
+        try renderVocabularyVariants(base: "vocabulary-course-miss", section: .courseMiss, height: 700)
+    }
+
     func testSnapshotBlankCheckFlagsSingleColour() throws {
         let size = CGSize(width: 60, height: 200)
         let solid = UIGraphicsImageRenderer(size: size).image { ctx in

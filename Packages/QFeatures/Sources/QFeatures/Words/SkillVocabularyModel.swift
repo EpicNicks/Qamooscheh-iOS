@@ -100,8 +100,14 @@ public final class SkillVocabularyModel: ObservableObject {
             cards: store.cards, starred: starred, now: date)
     }
 
-    public var emptyText: String {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Nothing here yet." : "No words match \"\(trimmed)\"."
+    /// Which empty-list copy applies; a whole-course search miss also offers dictionary links.
+    public var emptyKind: VocabEmptyKind { vocabEmptyKind(query: query, scope: scope) }
+
+    public var emptyText: String { emptyKind.text }
+
+    /// Wiktionary then Vajehyab for a whole-course search miss; empty otherwise.
+    public var dictionaryLookups: [DictionaryLink] {
+        guard let lookup = emptyKind.lookupQuery else { return [] }
+        return dictionaryLinks(query: lookup)
     }
 }

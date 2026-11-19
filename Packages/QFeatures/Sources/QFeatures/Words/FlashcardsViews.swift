@@ -240,6 +240,8 @@ public enum VocabularyShowcaseSection: String, CaseIterable, Sendable {
     case verbFormsPastNegative
     /// A graded translation card and a self-rated card.
     case flashcards
+    /// A whole-course search that matches nothing: "Word not found in course." and the dictionary buttons.
+    case courseMiss
 }
 
 /// Fixed-content vocabulary list and flashcards for snapshot tests. `large` renders at an accessibility Dynamic Type size.
@@ -279,7 +281,12 @@ public struct VocabularyShowcase: View {
             khoda: CardState(lexemeTag: khoda, stability: 3, difficulty: 5, lastReviewedAt: now, dueAt: now.addingTimeInterval(-3600), reviewCount: 1, lapseCount: 0),
         ]
         let store = VocabularyStore.preview(content: VocabContent(courseCode: "fa", units: units, lexemes: lexemes, verbs: [lemma: VerbFormsSample.entry]), cards: cards, starred: [salam])
-        _list = StateObject(wrappedValue: SkillVocabularyModel(store: store, unitKey: "u1", skillKey: section == .verbs ? "s2" : "s1", now: { now }))
+        let listModel = SkillVocabularyModel(store: store, unitKey: "u1", skillKey: section == .verbs ? "s2" : "s1", now: { now })
+        if section == .courseMiss {
+            listModel.setScope(.course)
+            listModel.query = "\u{06A9}\u{062A}\u{0627}\u{0628}"
+        }
+        _list = StateObject(wrappedValue: listModel)
         card = FlashcardWord(tag: salam, surface: salam, entry: lexemes[salam]!)
         word2 = FlashcardWord(tag: khoda, surface: khoda, entry: lexemes[khoda]!)
     }
@@ -288,7 +295,7 @@ public struct VocabularyShowcase: View {
         let p = colorScheme == .dark ? AppPalette.dark : AppPalette.light
         VStack(alignment: .leading, spacing: 24) {
             switch section {
-            case .list, .verbs:
+            case .list, .verbs, .courseMiss:
                 SkillVocabularyContent(model: list)
             case .verbFormsPresent:
                 VerbFormsView(entry: VerbFormsSample.entry, courseCode: "fa", vowelMarks: true)
