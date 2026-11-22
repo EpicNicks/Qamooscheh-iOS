@@ -30,8 +30,10 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     public var remixContents: RemixContents?
     /// Fill in the blank without typo tolerance; only read when the remix holds cloze cards.
     public var hardcore: Bool
+    /// A remix that opens with the learner's rough spots (the server's words they keep missing); alone, or ahead of the picked topics.
+    public var includeRoughSpots: Bool
 
-    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, deepDiveLessonKey: String? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false) {
+    public init(id: UUID = UUID(), unitKey: String? = nil, skillKey: String, practice: Bool = false, checkpointSummary: String? = nil, checkpoint: Bool = false, remixThemeIds: [String]? = nil, exerciseRefs: [StarredPracticeExercise]? = nil, exerciseCourseVersion: Int? = nil, deepDiveLessonKey: String? = nil, remixContents: RemixContents? = nil, hardcore: Bool = false, includeRoughSpots: Bool = false) {
         self.id = id
         self.unitKey = unitKey
         self.skillKey = skillKey
@@ -44,9 +46,10 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
         self.deepDiveLessonKey = deepDiveLessonKey
         self.remixContents = remixContents
         self.hardcore = hardcore
+        self.includeRoughSpots = includeRoughSpots
     }
 
-    /// Whether this route is a remix of topics, picked or found from a lesson (a Deep Dive).
+    /// Whether this route is a remix of topics, picked or found from a lesson (a Deep Dive), or of rough spots.
     public var isRemix: Bool { return remixThemeIds != nil || deepDiveLessonKey != nil }
 
     /// A remix whose contents the learner hasn't chosen yet: the cover shows the contents picker first.
@@ -68,8 +71,13 @@ public struct LessonRoute: Identifiable, Equatable, Sendable {
     }
 
     /// The route the Library's remix picker leads to.
-    public static func forRemix(themeIds: [String], contents: RemixContents? = nil, hardcore: Bool = false) -> LessonRoute {
-        return LessonRoute(skillKey: "remix", remixThemeIds: themeIds, remixContents: contents, hardcore: hardcore)
+    public static func forRemix(themeIds: [String], includeRoughSpots: Bool = false, contents: RemixContents? = nil, hardcore: Bool = false) -> LessonRoute {
+        return LessonRoute(skillKey: includeRoughSpots ? "remix-rough-spots" : "remix", remixThemeIds: themeIds, remixContents: contents, hardcore: hardcore, includeRoughSpots: includeRoughSpots)
+    }
+
+    /// A remix of the rough spots alone: no topics.
+    public static func forRoughSpots(contents: RemixContents? = nil, hardcore: Bool = false) -> LessonRoute {
+        return forRemix(themeIds: [], includeRoughSpots: true, contents: contents, hardcore: hardcore)
     }
 
     /// The route a Deep Dive sheet's "Remix all topics" leads to: more like `lessonKey`, from the topics it touches.

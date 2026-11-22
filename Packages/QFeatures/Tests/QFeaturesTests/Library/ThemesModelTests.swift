@@ -177,10 +177,38 @@ final class ThemesModelTests: XCTestCase {
         picker.toggle("Drinks")
         picker.toggle("Food")
         picker.toggle("Travel")
-        XCTAssertEqual(picker.start() ?? [], ["Drinks", "Food"])
+        XCTAssertEqual(picker.start(), RemixPickerChoice(themeIds: ["Drinks", "Food"], includeRoughSpots: false))
         picker.toggle("Drinks")
         XCTAssertEqual(picker.selected, ["Food"])
         XCTAssertEqual(picker.startTitle, "Start remix")
+    }
+
+    func testPickerStartsWithRoughSpotsAloneTopicsAloneOrBoth() {
+        let all = makeLibraryTopics(sampleData()).allTopics
+        let picker = RemixPickerModel(allTopics: all, roughSpotsAvailable: true)
+        XCTAssertFalse(picker.canStart)
+        picker.toggleRoughSpots()
+        XCTAssertTrue(picker.canStart)
+        XCTAssertEqual(picker.start(), RemixPickerChoice(themeIds: [], includeRoughSpots: true))
+        picker.toggle("Food")
+        XCTAssertEqual(picker.start(), RemixPickerChoice(themeIds: ["Food"], includeRoughSpots: true))
+        picker.toggleRoughSpots()
+        XCTAssertEqual(picker.start(), RemixPickerChoice(themeIds: ["Food"], includeRoughSpots: false))
+    }
+
+    func testRoughSpotsCannotBeSelectedWhileUnavailableAndDropOutWhenTheyVanish() {
+        let all = makeLibraryTopics(sampleData()).allTopics
+        let picker = RemixPickerModel(allTopics: all)
+        picker.toggleRoughSpots()
+        XCTAssertFalse(picker.roughSpotsSelected)
+        XCTAssertFalse(picker.canStart)
+        XCTAssertNil(picker.start())
+        picker.setRoughSpotsAvailable(true)
+        picker.toggleRoughSpots()
+        XCTAssertTrue(picker.canStart)
+        picker.setRoughSpotsAvailable(false)
+        XCTAssertFalse(picker.roughSpotsSelected)
+        XCTAssertFalse(picker.canStart)
     }
 
     func testPlaceholderSectionsFollowThemes() {
