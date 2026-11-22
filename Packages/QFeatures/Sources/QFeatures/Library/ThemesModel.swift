@@ -276,15 +276,31 @@ public final class TopicModel: ObservableObject {
     }
 }
 
+/// What the remix picker hands back: the topics picked, and whether the rough spots come first.
+public struct RemixPickerChoice: Equatable, Sendable {
+    public var themeIds: [String]
+    public var includeRoughSpots: Bool
+
+    public init(themeIds: [String], includeRoughSpots: Bool) {
+        self.themeIds = themeIds
+        self.includeRoughSpots = includeRoughSpots
+    }
+}
+
 /// The remix picker's checklist (web ThemeRemixPage drags tiles between panes; Android uses a checklist).
 @MainActor
 public final class RemixPickerModel: ObservableObject {
     @Published public private(set) var selected: [String] = []
+    /// Whether the rough spots are in the pick; only ever true while `roughSpotsAvailable`.
+    @Published public private(set) var roughSpotsSelected = false
+    /// Whether there are rough spots to practise (the fetched words list is non-empty); a failed fetch counts as no.
+    @Published public private(set) var roughSpotsAvailable: Bool
     public private(set) var topics: [TopicSummary]
 
     /// Only topics with at least one standard lesson can be remixed.
-    public init(allTopics: [TopicSummary]) {
+    public init(allTopics: [TopicSummary], roughSpotsAvailable: Bool = false) {
         self.topics = allTopics.filter { $0.lessonCount > 0 }
+        self.roughSpotsAvailable = roughSpotsAvailable
     }
 
     /// A reload brought a new topic list: the pick survives, minus topics that vanished.
@@ -293,6 +309,12 @@ public final class RemixPickerModel: ObservableObject {
         let ids = Set(topics.map { $0.id })
         selected = selected.filter { ids.contains($0) }
         objectWillChange.send()
+    }
+
+    /// The rough-spots fetch finished: rough spots that are no longer available drop out of the pick.
+    public func setRoughSpotsAvailable(_ available: Bool) {
+        roughSpotsAvailable = available
+        if !available { roughSpotsSelected = false }
     }
 
     public func isSelected(_ id: String) -> Bool { return selected.contains(id) }
@@ -305,10 +327,21 @@ public final class RemixPickerModel: ObservableObject {
         }
     }
 
-    public var canStart: Bool { return !selected.isEmpty }
+    /// Rough spots can't be picked while unavailable.
+    public func toggleRoughSpots() {
+        if roughSpotsSelected {
+            roughSpotsSelected = false
+        } else if roughSpotsAvailable {
+            roughSpotsSelected = true
+        }
+    }
 
-    public var startTitle: String { return selected.isEmpty ? "Pick at least one topic" : "Start remix" }
+    public var canStart: Bool { return !selected.isEmpty || roughSpotsSelected }
 
-    /// The picked ids in pick order, or nil when nothing is picked.
-    public func start() -> [String]? { return selected.isEmpty ? nil : selected }
+    public var startTitle: String { return canStart ? "Start remix" : "Pick at least one topic" }
+
+    /// The pick (topics in pick order), or nil when nothing is picked.
+    public func start() -> RemixPickerChoice? {
+        return canStart ? RemixPickerChoice(themeIds: selected, includeRoughSpots: roughSpotsSelected) : nil
+    }
 }

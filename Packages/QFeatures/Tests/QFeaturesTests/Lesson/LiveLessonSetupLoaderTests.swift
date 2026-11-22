@@ -39,7 +39,8 @@ private func makeLoader(
     paths: [String: SkillArtifact] = [:],
     themes: ThemeLibraryData? = nil,
     planned: Recorder = Recorder(),
-    signedIn: Bool = true
+    signedIn: Bool = true,
+    rough: RoughSpotsSource? = nil
 ) -> LiveLessonSetupLoader {
     LiveLessonSetupLoader(
         course: { course },
@@ -53,8 +54,25 @@ private func makeLoader(
             skill: { _, unitKey, skillKey in skills[unitKey + "/" + skillKey] },
             skillAtPath: { _, path in paths[path] },
             themes: { _ in themes }
-        )
+        ),
+        roughSpots: rough
     )
+}
+
+private struct StubRoughSpots: RoughSpotsSource {
+    var response: StarredPracticeResponse?
+    var error: Error?
+    var asked: Recorder = Recorder()
+
+    func roughSpots(count: Int) async throws -> StarredPracticeResponse {
+        asked.add("\(count)")
+        if let error { throw error }
+        return response ?? StarredPracticeResponse(courseVersion: 4, words: [])
+    }
+}
+
+private func roughWord(_ tag: String, _ refs: [(String, String, Int)], form: String? = nil) -> StarredPracticeWord {
+    StarredPracticeWord(tag: tag, exercises: refs.map { StarredPracticeExercise(unitKey: $0.0, skillKey: $0.1, ordinal: $0.2, form: form) })
 }
 
 final class LiveLessonSetupLoaderTests: XCTestCase {
@@ -424,5 +442,140 @@ final class SavedPracticeRouteTests: XCTestCase {
         let other = LessonRoute.forSavedPractice(SavedPracticeExercises(courseVersion: 4, exercises: "u1/a/2,u1/a/3", count: 2))
         XCTAssertEqual(first.skillKey, again.skillKey)
         XCTAssertNotEqual(first.skillKey, other.skillKey)
+    }
+}
+
+final class RoughSpotsRemixTests: XCTestCase {
+    private func topicLibrary(lessonExercises: [ExerciseArtifact]) -> (ThemeLibraryData, [String: SkillArtifact]) {
+        let library = ThemeLibraryData(
+            index: ThemeIndexArtifact(themes: [ThemeEntry(id: "food", lessons: [ThemeLessonRef(id: "l1", path: "themes/l1.json")])]),
+            headers: ["l1": ThemeLessonHeader(title: "One", category: .standard)])
+        return (library, ["themes/l1.json": SkillArtifact(id: "l1", title: "One", exercises: lessonExercises)])
+    }
+
+    func testRouteForRoughSpotsIsARemixOfNoTopics() {
+        let route = LessonRoute.forRoughSpots()
+        XCTAssertTrue(route.includeRoughSpots)
+        XCTAssertEqual(route.remixThemeIds, [])
+        XCTAssertTrue(route.isRemix)
+        XCTAssertTrue(route.needsContentsChoice)
+        XCTAssertFalse(LessonRoute.forRemix(themeIds: ["a"]).includeRoughSpots)
+        XCTAssertTrue(LessonRoute.forRemix(themeIds: ["a"], includeRoughSpots: true).includeRoughSpots)
+        XCTAssertFalse(LessonRoute(skillKey: "s").includeRoughSpots)
+    }
+
+    func testRoughSpotsAlonePlayOnlyTheirExercisesAtTheResponsesVersion() async throws {
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0"), bank("a1"), bank("a2")])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [
+            roughWord("w1<n>", [("u1", "a", 2), ("u1", "a", 0)], form: "w1<n>"),
+            roughWord("w2<n>", [("u1", "a", 2)]),
+        ]))
+        let loader = makeLoader(skills: ["u1/a": a], rough: source)
+        let route = LessonRoute.forRoughSpots(contents: .all)
+        let setup = try await loader.setup(for: route)
+        XCTAssertEqual(source.asked.values, ["10"])
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["u1/a/2", "u1/a/0"])
+        XCTAssertEqual(setup?.instances.map { $0.focusTag }, ["w1<n>", "w1<n>"])
+        XCTAssertEqual(setup?.instances.map { $0.newLexemes }, [[], []])
+        XCTAssertEqual(setup?.courseVersion, 4)
+        XCTAssertEqual(setup?.exerciseCountBySkill, ["u1/a": 3])
+    }
+
+    func testRoughSpotsOnAnotherPinnedVersionFailInsteadOfPlaying() async {
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0")])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 3, words: [roughWord("w", [("u1", "a", 0)])]))
+        let loader = makeLoader(skills: ["u1/a": a], rough: source)
+        do {
+            _ = try await loader.setup(for: LessonRoute.forRoughSpots(contents: .all))
+            XCTFail("expected a version mismatch")
+        } catch {
+            XCTAssertEqual(error as? LessonLoadError, .courseVersionMismatch)
+        }
+    }
+
+    func testNothingRoughAndNoTopicsPlaysNothing() async throws {
+        let loader = makeLoader(rough: StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [])))
+        let setup = try await loader.setup(for: LessonRoute.forRoughSpots(contents: .all))
+        XCTAssertNil(setup)
+    }
+
+    func testAWordWithNoExercisesIsDropped() async throws {
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0")])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [
+            roughWord("flashcard-only", []),
+            roughWord("w", [("u1", "a", 0)]),
+        ]))
+        let loader = makeLoader(skills: ["u1/a": a], rough: source)
+        let setup = try await loader.setup(for: LessonRoute.forRoughSpots(contents: .all))
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["u1/a/0"])
+        let onlyEmpty = makeLoader(rough: StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [roughWord("x", [])])))
+        let none = try await onlyEmpty.setup(for: LessonRoute.forRoughSpots(contents: .all))
+        XCTAssertNil(none)
+    }
+
+    func testRoughSpotsComeFirstThenTopicsWithoutDuplicates() async throws {
+        let (library, paths) = topicLibrary(lessonExercises: [bank("t0"), bank("t1")])
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0"), bank("a1")])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [
+            roughWord("w", [("u1", "a", 1), ("u1", "a", 0), ("u1", "a", 1)]),
+        ]))
+        let loader = makeLoader(skills: ["u1/a": a], paths: paths, themes: library, rough: source)
+        let route = LessonRoute.forRemix(themeIds: ["food"], includeRoughSpots: true, contents: .all)
+        let setup = try await loader.setup(for: route)
+        XCTAssertEqual(setup?.instances.map { $0.key }, ["u1/a/1", "u1/a/0", "_/l1/0", "_/l1/1"])
+        XCTAssertEqual(setup?.exerciseCountBySkill, ["u1/a": 2, "l1": 2])
+    }
+
+    func testTheCapTrimsTopicsAndKeepsTheRoughSpotsAhead() async throws {
+        let many = (0..<30).map { bank("t\($0)") }
+        let (library, paths) = topicLibrary(lessonExercises: many)
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0"), bank("a1"), bank("a2")])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [
+            roughWord("w", [("u1", "a", 0), ("u1", "a", 1), ("u1", "a", 2)]),
+        ]))
+        let loader = makeLoader(skills: ["u1/a": a], paths: paths, themes: library, rough: source)
+        let route = LessonRoute.forRemix(themeIds: ["food"], includeRoughSpots: true, contents: .all)
+        let setup = try await loader.setup(for: route)
+        XCTAssertEqual(setup?.instances.count, remixMaxExercises)
+        XCTAssertEqual(setup?.instances.prefix(3).map { $0.key }, ["u1/a/0", "u1/a/1", "u1/a/2"])
+    }
+
+    func testContentsFilteringAppliesToRoughSpots() async throws {
+        let typed = ExerciseArtifact(type: .typeIn, scriptMode: .native, prompt: "p", answer: ["a"], tags: ["a"])
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0"), typed])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [roughWord("w", [("u1", "a", 0), ("u1", "a", 1)])]))
+        let loader = makeLoader(skills: ["u1/a": a], rough: source)
+        let typing = try await loader.setup(for: LessonRoute.forRoughSpots(contents: .typeIn))
+        XCTAssertEqual(typing?.instances.map { $0.key }, ["u1/a/1"])
+    }
+
+    func testFailedFetchSurfacesAndAPlainRemixNeverAsks() async throws {
+        let failing = StubRoughSpots(error: URLError(.notConnectedToInternet))
+        let loader = makeLoader(rough: failing)
+        do {
+            _ = try await loader.setup(for: LessonRoute.forRoughSpots(contents: .all))
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertTrue(error is URLError)
+        }
+        let (library, paths) = topicLibrary(lessonExercises: [bank("t0")])
+        let source = StubRoughSpots()
+        let plain = makeLoader(paths: paths, themes: library, rough: source)
+        _ = try await plain.setup(for: LessonRoute.forRemix(themeIds: ["food"], contents: .all))
+        XCTAssertEqual(source.asked.values, [])
+    }
+
+    func testClozePoolAddsTheRoughSpotWordsAndExercisesFirst() async throws {
+        let (library, paths) = topicLibrary(lessonExercises: [bank("t0")])
+        let a = SkillArtifact(id: "a", title: "A", exercises: [bank("a0")])
+        let source = StubRoughSpots(response: StarredPracticeResponse(courseVersion: 4, words: [roughWord("a0", [("u1", "a", 0)])]))
+        let loader = makeLoader(skills: ["u1/a": a], paths: paths, themes: library, rough: source)
+        let route = LessonRoute.forRemix(themeIds: ["food"], includeRoughSpots: true, contents: .cloze)
+        let pool = try await loader.remixCloze(for: route)
+        XCTAssertEqual(pool?.tags, ["a0", "t0"])
+        XCTAssertEqual(pool?.exercises.count, 2)
+        let alone = try await loader.remixCloze(for: LessonRoute.forRoughSpots(contents: .cloze))
+        XCTAssertEqual(alone?.tags, ["a0"])
+        XCTAssertEqual(alone?.exercises.count, 1)
     }
 }

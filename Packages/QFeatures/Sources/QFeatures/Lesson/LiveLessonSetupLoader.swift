@@ -73,6 +73,7 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
     private let plan: @Sendable (_ unitKey: String, _ skillKey: String) async throws -> CheckpointPlanResponse
     private let content: LessonContentSource
     private let fallback: LessonSetupLoading
+    private let roughSpots: RoughSpotsSource?
 
     public init(
         course: @escaping @Sendable () async throws -> CourseRef?,
@@ -80,7 +81,8 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         cards: @escaping @Sendable (String) async -> [String: CardState],
         plan: @escaping @Sendable (String, String) async throws -> CheckpointPlanResponse,
         content: LessonContentSource,
-        fallback: LessonSetupLoading = UnwiredLessonSetupLoader()
+        fallback: LessonSetupLoading = UnwiredLessonSetupLoader(),
+        roughSpots: RoughSpotsSource? = nil
     ) {
         self.course = course
         self.userId = userId
@@ -88,6 +90,7 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         self.plan = plan
         self.content = content
         self.fallback = fallback
+        self.roughSpots = roughSpots
     }
 
     /// The production loader: course files and the card mirror under Application Support/content (where the downloader and the submit pipeline keep them).
@@ -108,7 +111,8 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             userId: { await store.load()?.userId },
             cards: { id in await cardStore.all(userId: id) },
             plan: { unitKey, skillKey in try await checkpoints.plan(unitKey: unitKey, skillKey: skillKey) },
-            content: LessonContentSource.reader(CourseContentReader(store: files))
+            content: LessonContentSource.reader(CourseContentReader(store: files)),
+            roughSpots: LiveRoughSpotsSource(repository: RoughSpotsRepository(client: client))
         )
     }
 
@@ -197,6 +201,13 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         // The server picked ordinals against its course version; against another version they could play the wrong exercises.
         if let pickedVersion, pickedVersion != found.version { throw LessonLoadError.courseVersionMismatch }
         let held = await cardsForUser()
+        let built = try exerciseInstances(refs, found: found, held: held)
+        if built.instances.isEmpty { return nil }
+        return LessonSetup(courseCode: found.code, courseVersion: found.version, instances: built.instances, exerciseCountBySkill: built.counts)
+    }
+
+    /// The instances of server-picked exercises, in the server's order, de-duplicated; ones whose skill file or ordinal is gone are skipped.
+    private func exerciseInstances(_ refs: [StarredPracticeExercise], found: CourseRef, held: [String: CardState]) throws -> (instances: [ExerciseInstance], counts: [String: Int]) {
         var built: [String: [ExerciseInstance]] = [:]
         var counts: [String: Int] = [:]
         var instances: [ExerciseInstance] = []
@@ -214,8 +225,25 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             instance.newLexemes = []
             if seen.insert(instance.key).inserted { instances.append(instance) }
         }
-        if instances.isEmpty { return nil }
-        return LessonSetup(courseCode: found.code, courseVersion: found.version, instances: instances, exerciseCountBySkill: counts)
+        return (instances, counts)
+    }
+
+    /// The rough-spot words of a remix route, as exercises at the response's course version; nothing when the route
+    /// doesn't ask for them, none are rough, or no source is wired. A word with no exercises is dropped (the Repack has no flashcard stage).
+    private struct RoughSpotPlay {
+        var instances: [ExerciseInstance] = []
+        var counts: [String: Int] = [:]
+        var tags: [String] = []
+    }
+
+    private func roughSpotPlay(_ route: LessonRoute, found: CourseRef, held: [String: CardState]) async throws -> RoughSpotPlay {
+        guard route.includeRoughSpots, let source = roughSpots else { return RoughSpotPlay() }
+        let response = try await source.roughSpots(count: roughSpotsWordCount)
+        // The server picked ordinals against its course version; against another version they could play the wrong exercises.
+        if response.courseVersion != found.version { throw LessonLoadError.courseVersionMismatch }
+        let words = response.words.filter { !$0.exercises.isEmpty }
+        let built = try exerciseInstances(words.flatMap { $0.exercises }, found: found, held: held)
+        return RoughSpotPlay(instances: built.instances, counts: built.counts, tags: words.map { $0.tag })
     }
 
     /// The lessons a remix of `themeIds` plays, picked by how well the learner knows them.
@@ -231,8 +259,10 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
     public func remixCloze(for route: LessonRoute) async throws -> RemixClozePool? {
         guard route.isRemix else { return nil }
         let pick = try await pickRemix(route)
-        let exercises = pick.picked.flatMap { $0.skill.exercises }
-        var tags: [String] = []
+        let rough = try await roughSpotPlay(route, found: pick.found, held: pick.held)
+        let exercises = rough.instances.map { $0.exercise } + pick.picked.flatMap { $0.skill.exercises }
+        // The rough-spot words come first.
+        var tags: [String] = rough.tags
         for exercise in exercises { tags.append(contentsOf: exercise.tags) }
         return RemixClozePool(
             courseCode: pick.found.code, exercises: exercises,
@@ -248,15 +278,26 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             played.newLexemes = pick.sourceNewLexemes
             return played
         }
-        let instances = filterRemixExercises(built, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
+        let rough = try await roughSpotPlay(route, found: pick.found, held: pick.held)
+        // Rough spots first, so the cap trims the topics' exercises before them.
+        var merged = rough.instances
+        var seen = Set(merged.map { $0.key })
+        for instance in built where seen.insert(instance.key).inserted { merged.append(instance) }
+        let instances = filterRemixExercises(merged, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
         if instances.isEmpty { return nil }
-        return LessonSetup(courseCode: pick.found.code, courseVersion: pick.found.version, instances: instances, exerciseCountBySkill: pick.counts)
+        let counts = pick.counts.merging(rough.counts) { topic, _ in topic }
+        return LessonSetup(courseCode: pick.found.code, courseVersion: pick.found.version, instances: instances, exerciseCountBySkill: counts)
     }
 
     /// A Deep Dive blends the other lessons under the topics its lesson touches, weighted to how well the learner knows that
     /// lesson; with none to blend it plays the lesson itself (Android LessonViewModel's REMIX mode).
     private func pickRemix(_ route: LessonRoute) async throws -> RemixPick {
         guard let found = try await course() else { throw LessonLoadError.noCourse }
+        // Rough spots alone have no topics to read.
+        if route.deepDiveLessonKey == nil && route.includeRoughSpots && (route.remixThemeIds ?? []).isEmpty {
+            let held = await cardsForUser()
+            return RemixPick(found: found, picked: [], counts: [:], held: held)
+        }
         guard let library = try content.themes(found) else { throw LessonLoadError.contentMissing }
         let source = route.deepDiveLessonKey
         let themeIds = source.map { key in rootThemesForLesson(library.index, lessonKey: key).map { $0.id } } ?? (route.remixThemeIds ?? [])

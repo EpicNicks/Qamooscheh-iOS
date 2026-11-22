@@ -305,7 +305,7 @@ struct RemixPickerContent: View {
                     }
                 }
             }
-            Button(action: { if let ids = model.start() { onStart(ids) } }) {
+            Button(action: { if let choice = model.start() { onStart(choice.themeIds) } }) {
                 Text(model.startTitle).font(.body.weight(.bold))
                     .foregroundColor(Color(argb: p.primaryContrast))
                     .frame(maxWidth: .infinity, minHeight: 44)
