@@ -25,6 +25,8 @@ public struct AppEnvironment: @unchecked Sendable {
     public let flashcards: FlashcardSubmitter
     /// The saved-words remix source; nil in tests.
     public let savedPractice: SavedPracticeSource?
+    /// The rough-spots words (the Library picker and the Review tab read whether there are any); nil in tests.
+    public let roughSpots: RoughSpotsSource?
     /// The lesson exercises a fill-in-the-blank round cuts its sentences from; nil in tests.
     public let clozeSentences: ClozeSentenceSource?
     /// The Repack race endpoints; nil in tests.
@@ -77,6 +79,7 @@ public struct AppEnvironment: @unchecked Sendable {
         forgetUser: @escaping @Sendable (String) async -> Void = { _ in },
         previewer: VoicePreviewing? = nil,
         savedPractice: SavedPracticeSource? = nil,
+        roughSpots: RoughSpotsSource? = nil,
         contacts: ContactsService? = nil,
         contactEmails: ContactEmailReading? = nil,
         clozeSentences: ClozeSentenceSource? = nil,
@@ -95,6 +98,7 @@ public struct AppEnvironment: @unchecked Sendable {
         self.contacts = contacts
         self.contactEmails = contactEmails
         self.savedPractice = savedPractice
+        self.roughSpots = roughSpots
         self.profile = profile
         self.streak = streak
         self.friends = friends
@@ -270,6 +274,7 @@ public struct AppEnvironment: @unchecked Sendable {
             forgetUser: forget,
             previewer: previewer,
             savedPractice: LiveSavedPracticeSource(repository: vocab),
+            roughSpots: LiveRoughSpotsSource(repository: RoughSpotsRepository(client: client)),
             contacts: ContactsRepository(client: client),
             contactEmails: systemContactEmails(),
             clozeSentences: LiveClozeSentenceSource(reader: reader, course: pinned),
