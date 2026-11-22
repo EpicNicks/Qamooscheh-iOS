@@ -6,16 +6,19 @@ import QDesign
 public struct LibraryView: View {
     @ObservedObject private var model: LibraryModel
     private let onOpenTopic: (String) -> Void
-    private let onRemix: ([String]) -> Void
+    private let onRemix: (RemixPickerChoice) -> Void
     private let onOpenSideLibrary: (SideLibraryKind) -> Void
     @StateObject private var picker = RemixPickerModel(allTopics: [])
+    @StateObject private var roughSpots: RoughSpotsAvailability
     @State private var picking = false
 
     public init(
-        model: LibraryModel, onOpenTopic: @escaping (String) -> Void, onRemix: @escaping ([String]) -> Void,
+        model: LibraryModel, onOpenTopic: @escaping (String) -> Void, onRemix: @escaping (RemixPickerChoice) -> Void,
+        roughSpots: RoughSpotsSource? = nil,
         onOpenSideLibrary: @escaping (SideLibraryKind) -> Void = { _ in }
     ) {
         self.model = model
+        _roughSpots = StateObject(wrappedValue: RoughSpotsAvailability(source: roughSpots))
         self.onOpenTopic = onOpenTopic
         self.onRemix = onRemix
         self.onOpenSideLibrary = onOpenSideLibrary
@@ -28,13 +31,20 @@ public struct LibraryView: View {
         }
         .navigationTitle("Library")
         .task { await model.refresh() }
+        .task { await roughSpots.refresh() }
+        .refreshable { await roughSpots.refresh() }
+        // A finished lesson can change which words are rough.
+        .onReceive(NotificationCenter.default.publisher(for: LessonSubmitRefresh.notification)) { _ in
+            Task { await roughSpots.refresh() }
+        }
         .onReceive(model.$state) { state in
             if case .ready(let ready) = state { picker.update(allTopics: ready.allTopics) }
         }
+        .onReceive(roughSpots.$wordCount) { _ in picker.setRoughSpotsAvailable(roughSpots.available) }
         .sheet(isPresented: $picking) {
-            RemixPickerView(model: picker, onStart: { ids in
+            RemixPickerView(model: picker, onStart: { choice in
                 picking = false
-                onRemix(ids)
+                onRemix(choice)
             })
         }
     }
@@ -257,9 +267,9 @@ private struct LessonRow: View {
 /// Pick topics to blend (web ThemeRemixPage, Android RemixPicker).
 public struct RemixPickerView: View {
     @ObservedObject private var model: RemixPickerModel
-    private let onStart: ([String]) -> Void
+    private let onStart: (RemixPickerChoice) -> Void
 
-    public init(model: RemixPickerModel, onStart: @escaping ([String]) -> Void) {
+    public init(model: RemixPickerModel, onStart: @escaping (RemixPickerChoice) -> Void) {
         self.model = model
         self.onStart = onStart
     }
@@ -271,18 +281,19 @@ public struct RemixPickerView: View {
 
 struct RemixPickerContent: View {
     @ObservedObject var model: RemixPickerModel
-    let onStart: ([String]) -> Void
+    let onStart: (RemixPickerChoice) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let p = colorScheme == .dark ? AppPalette.dark : AppPalette.light
         VStack(alignment: .leading, spacing: 8) {
-            Text("Remix topics").font(.title2.weight(.bold)).foregroundColor(Color(argb: p.text))
+            Text("Remix").font(.title2.weight(.bold)).foregroundColor(Color(argb: p.text))
                 .accessibilityAddTraits(.isHeader)
-            Text("Pick the topics to mix into one session.").font(.callout).foregroundColor(Color(argb: p.textMuted))
+            Text("Pick the rough spots and topics to mix into one session.").font(.callout).foregroundColor(Color(argb: p.textMuted))
             ScrollView {
                 VStack(spacing: 0) {
+                    roughSpotsRow(p)
                     ForEach(model.topics, id: \.id) { topic in
                         Button(action: { model.toggle(topic.id) }) {
                             HStack(spacing: 8) {
@@ -305,7 +316,7 @@ struct RemixPickerContent: View {
                     }
                 }
             }
-            Button(action: { if let choice = model.start() { onStart(choice.themeIds) } }) {
+            Button(action: { if let choice = model.start() { onStart(choice) } }) {
                 Text(model.startTitle).font(.body.weight(.bold))
                     .foregroundColor(Color(argb: p.primaryContrast))
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -316,6 +327,34 @@ struct RemixPickerContent: View {
             .disabled(!model.canStart)
         }
         .padding(16)
+    }
+
+    /// The rough spots, above the topics: tickable alongside them, greyed when nothing is rough.
+    private func roughSpotsRow(_ p: AppPalette) -> some View {
+        let available = model.roughSpotsAvailable
+        let ticked = model.roughSpotsSelected
+        return Button(action: { model.toggleRoughSpots() }) {
+            HStack(spacing: 8) {
+                Image(systemName: ticked ? "checkmark.square.fill" : "square")
+                    .foregroundColor(ticked ? Color(argb: p.current) : Color(argb: p.textMuted))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Rough spots").foregroundColor(Color(argb: available ? p.text : p.textMuted))
+                    if !available {
+                        Text(roughSpotsEmptyCaption).font(.caption).foregroundColor(Color(argb: p.textMuted))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(available ? "Rough spots" : "Rough spots, \(roughSpotsEmptyCaption)")
+        .accessibilityValue(ticked ? "Selected" : "Not selected")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -345,6 +384,8 @@ public struct ThemesShowcase: View {
             TopicLesson(id: "food-4", title: "Table manners", commonUsageScore: nil),
         ]))
         let pick = RemixPickerModel(allTopics: all)
+        pick.setRoughSpotsAvailable(true)
+        pick.toggleRoughSpots()
         pick.toggle("Food")
         pick.toggle("Travel")
         _picker = StateObject(wrappedValue: pick)

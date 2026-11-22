@@ -246,6 +246,17 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
         return RoughSpotPlay(instances: built.instances, counts: built.counts, tags: words.map { $0.tag })
     }
 
+    /// As `roughSpotPlay`, but a remix that also has topics plays them alone when the fetch fails.
+    private func roughSpotPlayOrFallback(_ route: LessonRoute, found: CourseRef, held: [String: CardState]) async throws -> RoughSpotPlay {
+        do {
+            return try await roughSpotPlay(route, found: found, held: held)
+        } catch {
+            let hasTopics = route.deepDiveLessonKey != nil || !(route.remixThemeIds ?? []).isEmpty
+            if Task.isCancelled || !hasTopics { throw error }
+            return RoughSpotPlay()
+        }
+    }
+
     /// The lessons a remix of `themeIds` plays, picked by how well the learner knows them.
     private struct RemixPick {
         var found: CourseRef
@@ -259,8 +270,10 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
     public func remixCloze(for route: LessonRoute) async throws -> RemixClozePool? {
         guard route.isRemix else { return nil }
         let pick = try await pickRemix(route)
-        let rough = try await roughSpotPlay(route, found: pick.found, held: pick.held)
-        let exercises = rough.instances.map { $0.exercise } + pick.picked.flatMap { $0.skill.exercises }
+        let rough = try await roughSpotPlayOrFallback(route, found: pick.found, held: pick.held)
+        // An exercise in both the rough spots and a picked topic is drawn once.
+        let roughExercises = rough.instances.map { $0.exercise }
+        let exercises = roughExercises + pick.picked.flatMap { $0.skill.exercises }.filter { !roughExercises.contains($0) }
         // The rough-spot words come first.
         var tags: [String] = rough.tags
         for exercise in exercises { tags.append(contentsOf: exercise.tags) }
@@ -278,12 +291,15 @@ public struct LiveLessonSetupLoader: LessonSetupLoading {
             played.newLexemes = pick.sourceNewLexemes
             return played
         }
-        let rough = try await roughSpotPlay(route, found: pick.found, held: pick.held)
-        // Rough spots first, so the cap trims the topics' exercises before them.
-        var merged = rough.instances
-        var seen = Set(merged.map { $0.key })
-        for instance in built where seen.insert(instance.key).inserted { merged.append(instance) }
-        let instances = filterRemixExercises(merged, contents: contents, max: remixMaxExercises, renderType: { $0.renderType })
+        let rough = try await roughSpotPlayOrFallback(route, found: pick.found, held: pick.held)
+        // Rough spots first, de-duplicated against the topics' exercises.
+        var roughKept = filterRemixExercises(rough.instances, contents: contents, renderType: { $0.renderType })
+        var seen = Set(roughKept.map { $0.key })
+        let topicsKept = filterRemixExercises(built.filter { seen.insert($0.key).inserted }, contents: contents, renderType: { $0.renderType })
+        // Topics keep at least half the cap (or all they have, if fewer) so rough spots can't crowd them out; rough spots take what the topics leave.
+        let topicReserve = min(topicsKept.count, remixMaxExercises / 2)
+        roughKept = Array(roughKept.prefix(max(remixMaxExercises - topicReserve, 0)))
+        let instances = roughKept + Array(topicsKept.prefix(max(remixMaxExercises - roughKept.count, 0)))
         if instances.isEmpty { return nil }
         let counts = pick.counts.merging(rough.counts) { topic, _ in topic }
         return LessonSetup(courseCode: pick.found.code, courseVersion: pick.found.version, instances: instances, exerciseCountBySkill: counts)

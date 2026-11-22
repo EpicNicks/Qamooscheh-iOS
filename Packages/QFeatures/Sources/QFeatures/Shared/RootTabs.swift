@@ -95,16 +95,38 @@ public struct LibraryTab: View {
 public struct ReviewTab: View {
     @ObservedObject private var shell: SignedInShell
     @State private var path: [AppRoute] = []
+    @StateObject private var roughSpots: RoughSpotsAvailability
+    @Environment(\.startLesson) private var startLesson
 
     public init(shell: SignedInShell) {
         self.shell = shell
+        _roughSpots = StateObject(wrappedValue: RoughSpotsAvailability(source: shell.app?.roughSpots))
     }
 
     public var body: some View {
         NavigationStack(path: $path) {
-            List(AppRoute.reviewEntries, id: \.self) { route in
-                NavigationLink(value: route) { Text(route.title) }
-                    .frame(minHeight: 44)
+            List {
+                ForEach(AppRoute.reviewEntries, id: \.self) { route in
+                    NavigationLink(value: route) { Text(route.title) }
+                        .frame(minHeight: 44)
+                }
+                // Not a pushed screen: it opens the Repack cover through the root's lesson cover.
+                Button(action: { startLesson(LessonRoute.forRoughSpots()) }) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Rough spots")
+                        if !roughSpots.available {
+                            Text(roughSpotsEmptyCaption).font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+                .disabled(!roughSpots.available)
+                .accessibilityHint(roughSpots.available ? "Starts a Repack of the words you keep missing" : roughSpotsEmptyCaption)
+            }
+            .task { await roughSpots.refresh() }
+            .refreshable { await roughSpots.refresh() }
+            .onReceive(NotificationCenter.default.publisher(for: LessonSubmitRefresh.notification)) { _ in
+                Task { await roughSpots.refresh() }
             }
             .navigationTitle("Review")
             .navigationDestination(for: AppRoute.self) { route in
@@ -164,7 +186,8 @@ struct AppRouteDestination: View {
         case .themes:
             LibraryView(
                 model: shell.library, onOpenTopic: { path.append(.topic($0)) },
-                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0)) },
+                onRemix: { startLesson(LessonRoute.forRemix(themeIds: $0.themeIds, includeRoughSpots: $0.includeRoughSpots)) },
+                roughSpots: shell.app?.roughSpots,
                 onOpenSideLibrary: { path.append(.sideLibrary($0)) })
         case .sideLibrary(let kind):
             SideLibraryDestination(
