@@ -2,6 +2,8 @@ import Foundation
 
 /// Voice id to that voice takes of one phrase or word, first take first.
 public typealias AudioMap = [String: [String]]
+/// A dedicated slow reading: voice id -> one path, only for voices that have one.
+public typealias SlowAudioMap = [String: String]
 
 
 /// Pointer from a parent artifact to a child JSON file.
@@ -92,8 +94,11 @@ public struct AudioIndexEntry: Codable, Equatable, Sendable {
     public var path: String
     public var lexeme: String?
     public var take: Int?
+    /// True for a voice's dedicated slow take (take 0, not in the normal take lists); nil otherwise.
+    public var slow: Bool?
 
-    public init(text: String, voice: String? = nil, path: String, lexeme: String? = nil, take: Int? = nil) {
+    public init(text: String, voice: String? = nil, path: String, lexeme: String? = nil, take: Int? = nil, slow: Bool? = nil) {
+        self.slow = slow
         self.text = text
         self.voice = voice
         self.path = path
@@ -137,8 +142,13 @@ public struct ExerciseArtifact: Codable, Equatable, Sendable {
     public var answerAudio: AudioMap?
     public var speaker: String?
     public var answerVariantAudio: [AudioMap?]?
+    /// Dedicated slow readings of the prompt and answer, when a voice has one.
+    public var promptSlowAudio: SlowAudioMap?
+    public var answerSlowAudio: SlowAudioMap?
 
-    public init(type: ExerciseType, scriptMode: ExerciseScriptMode, prompt: String, tiles: [String]? = nil, answer: [String], tags: [String] = [], alternativeAnswers: [[String]]? = nil, promptRomanization: String? = nil, answerRomanization: String? = nil, promptAudio: AudioMap? = nil, answerAudio: AudioMap? = nil, speaker: String? = nil, answerVariantAudio: [AudioMap?]? = nil) {
+    public init(type: ExerciseType, scriptMode: ExerciseScriptMode, prompt: String, tiles: [String]? = nil, answer: [String], tags: [String] = [], alternativeAnswers: [[String]]? = nil, promptRomanization: String? = nil, answerRomanization: String? = nil, promptAudio: AudioMap? = nil, answerAudio: AudioMap? = nil, speaker: String? = nil, answerVariantAudio: [AudioMap?]? = nil, promptSlowAudio: SlowAudioMap? = nil, answerSlowAudio: SlowAudioMap? = nil) {
+        self.promptSlowAudio = promptSlowAudio
+        self.answerSlowAudio = answerSlowAudio
         self.type = type
         self.scriptMode = scriptMode
         self.prompt = prompt
@@ -169,6 +179,8 @@ public struct ExerciseArtifact: Codable, Equatable, Sendable {
         self.answerAudio = try c.decodeIfPresent(AudioMap.self, forKey: .answerAudio)
         self.speaker = try c.decodeIfPresent(String.self, forKey: .speaker)
         self.answerVariantAudio = try c.decodeIfPresent([AudioMap?].self, forKey: .answerVariantAudio)
+        self.promptSlowAudio = try c.decodeIfPresent(SlowAudioMap.self, forKey: .promptSlowAudio)
+        self.answerSlowAudio = try c.decodeIfPresent(SlowAudioMap.self, forKey: .answerSlowAudio)
     }
 }
 
@@ -241,8 +253,10 @@ public struct LexemeIndexEntry: Codable, Equatable, Sendable {
     public var romanizationIsAuthored: Bool
     public var forms: [String]?
     public var audio: AudioMap?
+    public var slowAudio: SlowAudioMap?
 
-    public init(gloss: String, register: Register? = nil, pos: String? = nil, verbForm: String? = nil, lemma: String? = nil, romanization: String? = nil, romanizationIsAuthored: Bool, forms: [String]? = nil, audio: AudioMap? = nil) {
+    public init(gloss: String, register: Register? = nil, pos: String? = nil, verbForm: String? = nil, lemma: String? = nil, romanization: String? = nil, romanizationIsAuthored: Bool, forms: [String]? = nil, audio: AudioMap? = nil, slowAudio: SlowAudioMap? = nil) {
+        self.slowAudio = slowAudio
         self.gloss = gloss
         self.register = register
         self.pos = pos

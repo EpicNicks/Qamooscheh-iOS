@@ -659,9 +659,20 @@ public final class LessonSession: ObservableObject {
         listenFailed = false
         let key = current.key
         let take = paths.first
-        player.play(keys: keys, rate: slow ? SpeechService.slowRate : 1) { [weak self] end in
-            self?.listenEnded(end, key: key, take: take)
+        let done: (PlayEnd) -> Void = { [weak self] end in self?.listenEnded(end, key: key, take: take) }
+        let slowRate = SpeechService.slowRate
+        // The slow button plays the playing voice's dedicated slow take at normal speed when it has one; if that file
+        // won't load (or there is none) it slows the normal take down, as before.
+        if slow, let dedicated = Recordings.pickSlowRecording(
+            current.exercise.promptAudio, slowAudio: current.exercise.promptSlowAudio,
+            choice: VoiceChoice(preferredVoice: nil, defaultVoice: nil)),
+           let slowKey = RecordingKeys.storeKey(courseCode: setup.courseCode, version: setup.courseVersion, path: dedicated) {
+            player.play(keys: [slowKey], rate: 1) { end in
+                if end == .failed { player.play(keys: keys, rate: slowRate, onEnd: done) } else { done(end) }
+            }
+            return
         }
+        player.play(keys: keys, rate: slow ? slowRate : 1, onEnd: done)
     }
 
     private func listenEnded(_ end: PlayEnd, key: String, take: String?) {

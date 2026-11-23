@@ -138,4 +138,24 @@ final class RecordingsTests: XCTestCase {
         XCTAssertNil(Recordings.wordRecording(text: "نان", exerciseTags: [], lexemeIndex: index, choice: noPreference))
         XCTAssertNil(Recordings.wordRecording(text: "کتابم", exerciseTags: [], lexemeIndex: index, choice: noPreference))
     }
+
+    // pickSlowRecording
+
+    func testSlowTakeOfThePlayingVoiceIsChosen() {
+        let slow: SlowAudioMap = ["setareh": "s-slow.mp3", "hooman": "h-slow.mp3"]
+        XCTAssertEqual(Recordings.pickSlowRecording(audio, slowAudio: slow, choice: noPreference), "s-slow.mp3")
+        let hooman = VoiceChoice(preferredVoice: "hooman", defaultVoice: "setareh")
+        XCTAssertEqual(Recordings.pickSlowRecording(audio, slowAudio: slow, choice: hooman), "h-slow.mp3")
+    }
+
+    func testSlowTakeIsNeverBorrowedFromAnotherVoice() {
+        XCTAssertNil(Recordings.pickSlowRecording(audio, slowAudio: ["hooman": "h-slow.mp3"], choice: noPreference))
+    }
+
+    func testNoSlowTakeWhenFieldIsNilEmptyOrBlank() {
+        XCTAssertNil(Recordings.pickSlowRecording(audio, slowAudio: nil, choice: noPreference))
+        XCTAssertNil(Recordings.pickSlowRecording(audio, slowAudio: [:], choice: noPreference))
+        XCTAssertNil(Recordings.pickSlowRecording(audio, slowAudio: ["setareh": ""], choice: noPreference))
+        XCTAssertNil(Recordings.pickSlowRecording(nil, slowAudio: ["setareh": "s-slow.mp3"], choice: noPreference))
+    }
 }
