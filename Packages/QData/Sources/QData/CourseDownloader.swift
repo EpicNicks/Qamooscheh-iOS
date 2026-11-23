@@ -237,6 +237,14 @@ public struct CourseDownloader: Sendable {
                     }
                 }
             }
+            // Dedicated slow takes ride along (audio.json lists them too), so the slow button works offline.
+            for slow in [exercise.promptSlowAudio, exercise.answerSlowAudio].compactMap({ $0 }) {
+                if let voice {
+                    if let path = slow[voice] { result.append(path) }
+                } else {
+                    for name in slow.keys.sorted() { if let path = slow[name] { result.append(path) } }
+                }
+            }
         }
         return result
     }
@@ -248,6 +256,8 @@ public struct CourseDownloader: Sendable {
 
     private struct VariantExercise: Decodable {
         var answerVariantAudio: [AudioMap?]?
+        var promptSlowAudio: SlowAudioMap?
+        var answerSlowAudio: SlowAudioMap?
     }
 
     /// Serialises progress callbacks so `done` and `discovered` never go backwards.

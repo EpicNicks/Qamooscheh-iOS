@@ -103,26 +103,36 @@ public enum Recordings {
 
     /// The path of the take to play, relative to the version root, or nil when nothing usable is recorded. Always a voice's first take.
     public static func pickRecording(_ audio: AudioMap?, choice: VoiceChoice) -> String? {
+        guard let voice = pickRecordedVoice(audio, choice: choice) else { return nil }
+        return audio?[voice]?.first
+    }
+
+    /// The voice `pickRecording` plays, or nil when nothing usable is recorded.
+    public static func pickRecordedVoice(_ audio: AudioMap?, choice: VoiceChoice) -> String? {
         guard let audio = audio else { return nil }
-        func takeOf(_ voice: String?) -> String? {
-            guard let voice = voice else { return nil }
-            return audio[voice]?.first
+        func voiceWithTake(_ voice: String?) -> String? {
+            guard let voice = voice, let first = audio[voice]?.first, !first.isEmpty else { return nil }
+            return voice
         }
         if !choice.speakerVoices.isEmpty {
-            if let preferred = choice.preferredVoice, choice.speakerVoices.contains(preferred), let take = takeOf(preferred) {
-                return take
+            if let preferred = choice.preferredVoice, choice.speakerVoices.contains(preferred), let voice = voiceWithTake(preferred) {
+                return voice
             }
             for voice in choice.speakerVoices {
-                if let take = takeOf(voice) { return take }
+                if let found = voiceWithTake(voice) { return found }
             }
         }
-        if let take = takeOf(choice.preferredVoice) { return take }
-        if let take = takeOf(choice.defaultVoice) { return take }
+        if let voice = voiceWithTake(choice.preferredVoice) { return voice }
+        if let voice = voiceWithTake(choice.defaultVoice) { return voice }
         // Dictionary order is unspecified; sort the voices so the fallback is stable.
-        for voice in audio.keys.sorted(by: utf16Less) {
-            if let take = audio[voice]?.first { return take }
-        }
-        return nil
+        return audio.keys.sorted(by: utf16Less).first { voiceWithTake($0) != nil }
+    }
+
+    /// The dedicated slow take of the voice `pickRecording` would play, or nil when that voice has none (the caller then
+    /// slows the normal take down). Another voice's slow take is never borrowed, so the button doesn't change who talks.
+    public static func pickSlowRecording(_ audio: AudioMap?, slowAudio: SlowAudioMap?, choice: VoiceChoice) -> String? {
+        guard let voice = pickRecordedVoice(audio, choice: choice), let slow = slowAudio?[voice], !slow.isEmpty else { return nil }
+        return slow
     }
 
     /// Spelling compared without reading aids, so a vowel-marked tile still finds its lexeme.
